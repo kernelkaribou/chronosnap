@@ -280,6 +280,13 @@ class CaptureScheduler:
                 if row:
                     job = dict_from_row(row)
                     
+                    # Update last_captured_at to the capture time
+                    cursor.execute(
+                        "UPDATE jobs SET last_captured_at = ? WHERE id = ?",
+                        (to_iso(capture_time), job_id)
+                    )
+                    job['last_captured_at'] = to_iso(capture_time)
+                    
                     # Calculate next state (no pending capture now - we just captured)
                     new_status, next_capture, reason = calculate_job_state(job, capture_time, pending_capture_time=None)
                     

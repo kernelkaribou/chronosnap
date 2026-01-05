@@ -127,6 +127,10 @@ def init_db():
         if 'next_scheduled_capture_at' not in columns:
             cursor.execute("ALTER TABLE jobs ADD COLUMN next_scheduled_capture_at TEXT")
         
+        # Migration: Add last_captured_at column if it doesn't exist
+        if 'last_captured_at' not in columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN last_captured_at TEXT")
+        
         # Migration: Add start_time and end_time columns to processed_videos if they don't exist
         cursor.execute("PRAGMA table_info(processed_videos)")
         video_columns = [col[1] for col in cursor.fetchall()]
