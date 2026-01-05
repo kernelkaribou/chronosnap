@@ -34,6 +34,7 @@ jobs:
         safety check -r requirements.txt --json || echo "Vulnerabilities found"
     
     - name: Create Pull Request
+      id: cpr
       uses: peter-evans/create-pull-request@v6
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
@@ -47,3 +48,10 @@ jobs:
           **Security Check:** Run `safety check` to verify no known vulnerabilities.
         branch: update-dependencies
         delete-branch: true
+    
+    - name: Auto-merge Pull Request
+      if: steps.cpr.outputs.pull-request-number
+      run: |
+        gh pr merge ${{ steps.cpr.outputs.pull-request-number }} --auto --squash
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
