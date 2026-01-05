@@ -55,13 +55,13 @@ def is_time_in_window(check_time: time, start_time: time, end_time: time) -> boo
     end_hm = time(end_time.hour, end_time.minute)
     
     if start_hm == end_hm:
-        # Same minute window (e.g., 10:02-10:02)
+        # Same minute window (e.g., 12:00-12:00) - only the exact minute matches
         return current_hm == start_hm
     elif start_hm < end_hm:
         # Normal window (doesn't cross midnight)
         return start_hm <= current_hm <= end_hm
     else:
-        # Window crosses midnight
+        # Window crosses midnight (e.g., 22:00-02:00)
         return current_hm >= start_hm or current_hm <= end_hm
 
 

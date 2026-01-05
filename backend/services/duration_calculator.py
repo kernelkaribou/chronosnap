@@ -54,7 +54,7 @@ def calculate_captures_in_time_range(
     window_end = parse_time(time_window_end)
     
     # Determine if window spans midnight
-    window_spans_midnight = window_start >= window_end
+    window_spans_midnight = window_start > window_end
     
     logger.debug(f"Calculating captures: start={start}, end={end}, interval={interval_seconds}s")
     logger.debug(f"Time window: {time_window_start}-{time_window_end} (spans_midnight={window_spans_midnight})")
