@@ -201,25 +201,45 @@ def calculate_job_state(
         
         # If pending capture is after the last capture (or no captures yet), it hasn't been executed
         if not last_captured or pending_capture_time > last_captured:
-            # Pending capture hasn't been executed yet - validate it's still in window if applicable
+            # Pending capture hasn't been executed yet - validate it's still valid
             if job.get('time_window_enabled'):
                 start_time = parse_time_string(job['time_window_start'])
                 end_time = parse_time_string(job['time_window_end'])
                 
-                # Check if pending capture is within window
+                # Check BOTH: pending capture is in window AND we're currently in (or very close to) that window
                 pending_in_window = is_time_in_window(pending_capture_time.time(), start_time, end_time)
+                current_in_window = is_time_in_window(reference_time.time(), start_time, end_time)
                 
-                if pending_in_window:
-                    # Pending capture is valid and in window - keep it active
+                # For same-minute windows, only allow execution during that exact minute
+                if start_time == end_time and pending_in_window:
+                    # Calculate when this specific window opens and closes
+                    window_start = datetime.combine(pending_capture_time.date(), start_time)
+                    if pending_capture_time.tzinfo:
+                        window_start = window_start.replace(tzinfo=pending_capture_time.tzinfo)
+                    window_close = window_start + timedelta(seconds=59)
+                    
+                    # Only allow execution if we're currently in the window
+                    if window_start <= reference_time <= window_close:
+                        return ('active', pending_capture_time, f'Pending capture at {to_iso(pending_capture_time)}')
+                    else:
+                        # Outside the window - missed it, recalculate for next window
+                        pass  # Fall through to recalculation
+                elif pending_in_window and current_in_window:
+                    # Normal window - both pending and current are in window
                     return ('active', pending_capture_time, f'Pending capture at {to_iso(pending_capture_time)}')
                 else:
-                    # Pending capture is outside window - it's invalid, recalculate
+                    # Outside window - recalculate
                     pass  # Fall through to recalculation
             else:
-                # No time window - pending capture is good
-                return ('active', pending_capture_time, f'Pending capture at {to_iso(pending_capture_time)}')
+                # No time window - allow reasonable catchup (e.g., up to 2x interval for non-windowed jobs)
+                max_delay = timedelta(seconds=job['interval_seconds'] * 2)
+                if reference_time <= pending_capture_time + max_delay:
+                    return ('active', pending_capture_time, f'Pending capture at {to_iso(pending_capture_time)}')
+                else:
+                    # Too delayed, recalculate
+                    pass  # Fall through to recalculation
         
-        # If we get here, pending capture was already executed - recalculate
+        # If we get here, pending capture was already executed or missed - recalculate
     
     # Calculate next capture on grid
     next_capture = calculate_next_capture_on_grid(job, reference_time)
