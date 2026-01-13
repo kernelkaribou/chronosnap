@@ -74,6 +74,7 @@ def parse_time_string(time_str: str) -> time:
 def calculate_next_window_start(reference_time: datetime, start_time: time, end_time: time) -> datetime:
     """Calculate when the time window will next open"""
     current_time = reference_time.time()
+    current_hm = time(current_time.hour, current_time.minute)
     
     # Today's window start - combine date with start_time and preserve timezone from reference_time
     today_start = datetime.combine(reference_time.date(), start_time)
@@ -84,6 +85,16 @@ def calculate_next_window_start(reference_time: datetime, start_time: time, end_
     if is_time_in_window(current_time, start_time, end_time):
         # In window now, next start is tomorrow
         return today_start + timedelta(days=1)
+    
+    # Handle same-minute window (e.g., 12:00-12:00) - must check before crosses-midnight
+    # since start_time == end_time would incorrectly fall into that branch
+    if start_time == end_time:
+        start_hm = time(start_time.hour, start_time.minute)
+        # If we're at or past this minute today, next window is tomorrow
+        if current_hm >= start_hm:
+            return today_start + timedelta(days=1)
+        else:
+            return today_start
     
     if start_time < end_time:
         # Normal window
