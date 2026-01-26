@@ -32,7 +32,7 @@ pydantic-core==2.41.5
     # via pydantic
 python-dotenv==1.2.1
     # via uvicorn
-python-multipart==0.0.21
+python-multipart==0.0.22
     # via -r requirements.in
 pyyaml==6.0.3
     # via uvicorn
