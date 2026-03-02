@@ -14,7 +14,7 @@ anyio==4.12.1
     #   watchfiles
 click==8.3.1
     # via uvicorn
-fastapi==0.131.0
+fastapi==0.135.1
     # via -r requirements.in
 h11==0.16.0
     # via uvicorn
@@ -30,7 +30,7 @@ pydantic==2.12.5
     #   fastapi
 pydantic-core==2.41.5
     # via pydantic
-python-dotenv==1.2.1
+python-dotenv==1.2.2
     # via uvicorn
 python-multipart==0.0.22
     # via -r requirements.in
