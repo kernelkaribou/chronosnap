@@ -1157,10 +1157,17 @@ async function testUrl() {
 }
 
 // Videos
+// Cached video list for client-side filtering
+let allVideos = [];
+let currentFilteredVideos = [];
+const VIDEO_PAGE_SIZE = 24;
+let videosDisplayed = 0;
+
 async function loadVideos() {
     try {
         const response = await fetch(`${API_BASE}/videos/`);
         const videos = await response.json();
+        allVideos = videos;
         
         // Check if any videos are processing
         const hasProcessing = videos.some(v => v.status === 'processing');
@@ -1175,116 +1182,271 @@ async function loadVideos() {
             videoRefreshInterval = null;
         }
         
-        renderVideos(videos);
+        populateVideoFilters(videos);
+        filterVideos();
     } catch (error) {
         console.error('Failed to load videos:', error);
     }
 }
 
-function renderVideos(videos) {
+function populateVideoFilters(videos) {
+    const yearSelect = document.getElementById('video-year-filter');
+    const currentYear = yearSelect.value;
+    const years = [...new Set(videos.map(v => new Date(v.created_at).getFullYear()))].sort((a, b) => b - a);
+    yearSelect.innerHTML = '<option value="">All Years</option>' +
+        years.map(y => `<option value="${y}">${y}</option>`).join('');
+    yearSelect.value = currentYear;
+}
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function onYearFilterChange() {
+    const yearVal = document.getElementById('video-year-filter').value;
+    const monthSelect = document.getElementById('video-month-filter');
+    
+    if (!yearVal) {
+        monthSelect.innerHTML = '<option value="">All Months</option>';
+        monthSelect.value = '';
+        monthSelect.disabled = true;
+    } else {
+        // Populate months that have videos in the selected year
+        const year = parseInt(yearVal);
+        const months = [...new Set(
+            allVideos
+                .filter(v => new Date(v.created_at).getFullYear() === year)
+                .map(v => new Date(v.created_at).getMonth())
+        )].sort((a, b) => a - b);
+        
+        monthSelect.innerHTML = '<option value="">All Months</option>' +
+            months.map(m => `<option value="${m}">${MONTH_NAMES[m]}</option>`).join('');
+        monthSelect.value = '';
+        monthSelect.disabled = false;
+    }
+    
+    filterVideos();
+}
+
+function resetVideoFilters() {
+    document.getElementById('video-search').value = '';
+    document.getElementById('video-year-filter').value = '';
+    document.getElementById('video-month-filter').value = '';
+    document.getElementById('video-month-filter').disabled = true;
+    filterVideos();
+}
+
+function filterVideos() {
+    const search = (document.getElementById('video-search').value || '').toLowerCase();
+    const yearFilter = document.getElementById('video-year-filter').value;
+    const monthFilter = document.getElementById('video-month-filter').value;
+    
+    let filtered = allVideos;
+    
+    if (search) {
+        filtered = filtered.filter(v =>
+            v.name.toLowerCase().includes(search) ||
+            (v.job_name && v.job_name.toLowerCase().includes(search))
+        );
+    }
+    
+    if (yearFilter) {
+        const year = parseInt(yearFilter);
+        filtered = filtered.filter(v => new Date(v.created_at).getFullYear() === year);
+        
+        if (monthFilter !== '') {
+            const month = parseInt(monthFilter);
+            filtered = filtered.filter(v => new Date(v.created_at).getMonth() === month);
+        }
+    }
+    
+    // Show/hide reset button
+    const hasFilters = search || yearFilter || monthFilter !== '';
+    document.getElementById('video-filter-reset').style.display = hasFilters ? '' : 'none';
+    
+    const countEl = document.getElementById('video-count');
+    if (filtered.length !== allVideos.length) {
+        countEl.textContent = `${filtered.length} of ${allVideos.length}`;
+    } else {
+        countEl.textContent = `${allVideos.length} videos`;
+    }
+    
+    currentFilteredVideos = filtered;
+    videosDisplayed = 0;
+    document.getElementById('videos-list').innerHTML = '';
+    showMoreVideos();
+}
+
+function showMoreVideos() {
+    const batch = currentFilteredVideos.slice(videosDisplayed, videosDisplayed + VIDEO_PAGE_SIZE);
+    if (batch.length === 0 && videosDisplayed === 0) {
+        renderVideos([], true);
+        return;
+    }
+    renderVideos(batch, false);
+    videosDisplayed += batch.length;
+    updateLoadMoreButton();
+}
+
+function updateLoadMoreButton() {
+    let btn = document.getElementById('video-load-more');
+    const remaining = currentFilteredVideos.length - videosDisplayed;
+    if (remaining > 0) {
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.id = 'video-load-more';
+            btn.className = 'btn btn-secondary';
+            btn.onclick = showMoreVideos;
+            document.getElementById('videos-list').insertAdjacentElement('afterend', btn);
+        }
+        const next = Math.min(remaining, VIDEO_PAGE_SIZE);
+        btn.textContent = `Load More (${remaining} remaining)`;
+        btn.style.display = '';
+    } else if (btn) {
+        btn.style.display = 'none';
+    }
+}
+
+function renderVideos(videos, isEmpty) {
     const container = document.getElementById('videos-list');
     
-    if (videos.length === 0) {
+    if (isEmpty) {
+        const hasFilter = document.getElementById('video-search').value ||
+            document.getElementById('video-year-filter').value;
         container.innerHTML = `
             <div class="empty-state">
-                <h3>No processed videos</h3>
-                <p>Click <strong>+ Build Timelapse</strong> above to create your first timelapse video</p>
+                <h3>${hasFilter ? 'No matching videos' : 'No processed videos'}</h3>
+                <p>${hasFilter ? 'Try adjusting your search or filters' : 'Click <strong>+ Build Timelapse</strong> above to create your first timelapse video'}</p>
             </div>
         `;
         return;
     }
     
-    container.innerHTML = videos.map((video, idx) => `
-        <div class="video-card" style="--i:${idx}">
-            <div class="video-card-content">
-                <div class="video-card-main">
-                    <div class="video-card-header">
-                        <div class="video-card-title">${escapeHtml(video.name)}</div>
-                        <span class="job-status ${video.status}">${video.status}</span>
-                    </div>
-                    <div class="video-info">
-                        ${video.job_name ? 
-                            `<div><strong>Job:</strong> <a href="#" class="job-link" onclick="event.preventDefault(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a></div>` : 
-                            `<div><strong>Job:</strong> <span class="text-muted">Deleted Job</span></div>`
-                        }
-                        <div><strong>Resolution:</strong> ${video.resolution} | <strong>FPS:</strong> ${video.framerate}</div>
-                        <div><strong>Quality:</strong> ${video.quality}</div>
-                        <div><strong>Frames:</strong> ${video.total_frames} | <strong>Duration:</strong> ${formatDuration(video.duration_seconds)}</div>
-                        ${video.status === 'completed' ? `<div><strong>Size:</strong> ${formatBytes(video.file_size)}</div>` : ''}
-                        ${video.start_time ? `<div><strong>Start:</strong> ${formatDateTimeNoSeconds(video.start_time)}</div>` : ''}
-                        ${video.end_time ? `<div><strong>End:</strong> ${formatDateTimeNoSeconds(video.end_time)}</div>` : ''}
-                        <div><strong>Created:</strong> ${formatDateTime(video.created_at)}</div>
-                    </div>
-                    ${video.status === 'processing' ? `
-                        <div class="video-progress">
-                            <div class="progress-bar">
-                                <div class="progress-fill" style="width: ${video.progress}%"></div>
-                            </div>
-                            <p style="font-size: 0.875rem; margin-top: 0.5rem; color: var(--text-secondary);">${Math.round(video.progress)}% complete</p>
-                        </div>
-                    ` : ''}
-                    <div class="video-actions">
-                        ${video.status === 'completed' ? `
-                            <a href="${API_BASE}/videos/${video.id}/download" class="btn btn-primary btn-sm" onclick="return handleVideoDownload(event, ${video.id})">Download</a>
-                        ` : ''}
-                        <button class="btn btn-danger btn-sm" onclick="deleteVideo(${video.id}, '${escapeHtml(video.name)}')">Delete</button>
-                    </div>
-                </div>
-                ${video.status === 'completed' ? `
-                    <div class="video-preview" id="preview-${video.id}" data-video-id="${video.id}">
-                        <video class="video-thumbnail" preload="metadata" muted playsinline onerror="handleVideoError(${video.id})">
-                            <source src="${API_BASE}/videos/${video.id}/download#t=0.1" type="video/mp4">
-                        </video>
-                        <div class="play-overlay" onclick="playVideo(${video.id}, '${escapeHtml(video.name)}')">
-                            <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M8 5v14l11-7z"/>
-                            </svg>
-                        </div>
-                    </div>
-                ` : ''}
-            </div>
-        </div>
-    `).join('');
+    const playIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+    const filmIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><line x1="17" y1="17" x2="22" y2="17"/></svg>`;
     
-    // Check file accessibility for completed videos
-    videos.filter(v => v.status === 'completed').forEach(video => {
-        checkVideoAccessibility(video.id);
-    });
-}
-
-async function checkVideoAccessibility(videoId) {
-    try {
-        const response = await fetch(`${API_BASE}/videos/${videoId}/check`);
-        const result = await response.json();
+    const html = videos.map((video, idx) => {
+        const globalIdx = videosDisplayed + idx;
+        const isCompleted = video.status === 'completed';
+        const isProcessing = video.status === 'processing';
+        const thumbSrc = video.thumbnail_path ? `${API_BASE}/videos/${video.id}/thumbnail` : '';
         
-        if (!result.accessible) {
-            handleVideoError(videoId, result.reason);
-        }
-    } catch (error) {
-        console.error(`Failed to check video ${videoId} accessibility:`, error);
-    }
-}
-
-function handleVideoError(videoId, reason = 'Video file not found or not accessible') {
-    const preview = document.getElementById(`preview-${videoId}`);
-    if (preview) {
-        preview.innerHTML = `
-            <div class="video-error" title="${escapeHtml(reason)}">
-                <svg class="error-icon" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-                </svg>
-                <p style="font-size: 0.75rem; margin-top: 0.5rem; color: var(--text-secondary);">File Not Found</p>
+        return `
+        <div class="video-gallery-card" style="--i:${globalIdx}" onclick="openVideoDetail(${video.id})" title="${escapeHtml(video.name)}">
+            <div class="video-gallery-thumb">
+                ${thumbSrc ? 
+                    `<img src="${thumbSrc}" alt="" loading="lazy">` : 
+                    `<div class="thumb-placeholder">${filmIcon}</div>`
+                }
+                ${isCompleted ? `<div class="video-gallery-duration">${formatDuration(video.duration_seconds)}</div>` : ''}
+                ${isProcessing ? `<div class="video-gallery-status"><span class="job-status processing">Processing</span></div>` : ''}
+                ${video.status === 'failed' ? `<div class="video-gallery-status"><span class="job-status completed" style="background:var(--danger-color)">Failed</span></div>` : ''}
+                ${isCompleted ? `<div class="video-gallery-play">${playIcon}</div>` : ''}
             </div>
-        `;
-        preview.style.cursor = 'default';
-        preview.onclick = null;
+            ${isProcessing ? `
+                <div class="video-gallery-progress">
+                    <div class="progress-bar"><div class="progress-fill" style="width: ${video.progress}%"></div></div>
+                    <div class="progress-text">${Math.round(video.progress)}%</div>
+                </div>
+            ` : ''}
+            <div class="video-gallery-info">
+                <div class="video-gallery-name">${escapeHtml(video.name)}</div>
+                <div class="video-gallery-job">${video.job_name ? escapeHtml(video.job_name) : 'No job'}</div>
+            </div>
+        </div>`;
+    }).join('');
+    
+    container.insertAdjacentHTML('beforeend', html);
+}
+
+async function openVideoDetail(videoId) {
+    try {
+        const response = await fetch(`${API_BASE}/videos/${videoId}`);
+        if (!response.ok) return;
+        const video = await response.json();
+        
+        const modal = document.getElementById('video-detail-modal');
+        const title = document.getElementById('video-detail-title');
+        const meta = document.getElementById('video-detail-meta');
+        const actions = document.getElementById('video-detail-actions');
+        const player = document.getElementById('video-detail-player');
+        const source = document.getElementById('video-detail-source');
+        
+        title.textContent = video.name;
+        
+        // Set up video player
+        if (video.status === 'completed') {
+            source.src = `${API_BASE}/videos/${video.id}/download`;
+            player.load();
+            player.style.display = 'block';
+        } else {
+            player.style.display = 'none';
+        }
+        
+        // Build metadata in 3 dense rows of 4 columns each
+        let metaHtml = '';
+        
+        // Row 1: Job, Duration, Size, Status
+        const jobVal = video.job_name
+            ? (video.job_id
+                ? `<a href="#" class="job-link" onclick="event.preventDefault(); closeVideoDetail(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a>`
+                : escapeHtml(video.job_name))
+            : 'None';
+        const sizeVal = (video.status === 'completed' && video.file_size) ? formatBytes(video.file_size) : 'N/A';
+        metaHtml += `<dt>Job</dt><dd>${jobVal}</dd><dt>Duration</dt><dd>${formatDuration(video.duration_seconds)}</dd>`;
+        metaHtml += `<dt>Size</dt><dd>${sizeVal}</dd><dt>Status</dt><dd><span class="job-status ${video.status}">${video.status}</span></dd>`;
+        
+        // Row 2: Start, End, Created, Completed
+        metaHtml += `<dt>Start</dt><dd>${video.start_time ? formatDateTimeNoSeconds(video.start_time) : 'N/A'}</dd>`;
+        metaHtml += `<dt>End</dt><dd>${video.end_time ? formatDateTimeNoSeconds(video.end_time) : 'N/A'}</dd>`;
+        metaHtml += `<dt>Created</dt><dd>${formatDateTimeNoSeconds(video.created_at)}</dd>`;
+        metaHtml += `<dt>Completed</dt><dd>${video.completed_at ? formatDateTimeNoSeconds(video.completed_at) : 'N/A'}</dd>`;
+        
+        // Row 3: Resolution, Framerate, Quality, Frames
+        metaHtml += `<dt>Resolution</dt><dd>${video.resolution}</dd><dt>Framerate</dt><dd>${video.framerate} fps</dd>`;
+        metaHtml += `<dt>Quality</dt><dd>${video.quality}</dd><dt>Frames</dt><dd>${video.total_frames.toLocaleString()}</dd>`;
+        
+        meta.innerHTML = metaHtml;
+        
+        // Build actions
+        let actionsHtml = '';
+        if (video.status === 'completed') {
+            actionsHtml += `<a href="${API_BASE}/videos/${video.id}/download" class="btn btn-primary btn-sm">Download</a>`;
+        }
+        actionsHtml += `<button class="btn btn-danger btn-sm" onclick="deleteVideoFromDetail(${video.id}, '${escapeHtml(video.name)}')">Delete</button>`;
+        actions.innerHTML = actionsHtml;
+        
+        modal.classList.add('active');
+    } catch (error) {
+        console.error('Failed to load video details:', error);
     }
 }
 
-function handleVideoDownload(event, videoId) {
-    // Let the browser handle the download naturally
-    // The backend will return appropriate error if file doesn't exist
-    return true;
+function closeVideoDetail() {
+    const modal = document.getElementById('video-detail-modal');
+    const player = document.getElementById('video-detail-player');
+    player.pause();
+    player.currentTime = 0;
+    modal.classList.remove('active');
+}
+
+async function deleteVideoFromDetail(videoId, videoName) {
+    showConfirm(
+        `Are you sure you want to delete "${videoName}"?`,
+        async (confirmed) => {
+            if (!confirmed) return;
+            try {
+                const response = await fetch(`${API_BASE}/videos/${videoId}`, { method: 'DELETE' });
+                if (response.ok) {
+                    closeVideoDetail();
+                    loadVideos();
+                    showNotification(`Video "${videoName}" deleted successfully`);
+                } else {
+                    showNotification(`Failed to delete video "${videoName}"`, 'error');
+                }
+            } catch (error) {
+                showNotification(`Failed to delete video "${videoName}"`, 'error');
+            }
+        }
+    );
 }
 
 async function showProcessVideoModal(jobId, jobName) {
@@ -1295,6 +1457,10 @@ async function showProcessVideoModal(jobId, jobName) {
         document.getElementById('capture-range').style.display = 'none';
         document.getElementById('video-duration-estimate').innerHTML = '';
         document.getElementById('available-range-info').style.display = 'none';
+        const previewImage = document.getElementById('builder-preview-image');
+        const previewPlaceholder = document.getElementById('builder-preview-placeholder');
+        if (previewImage) previewImage.style.display = 'none';
+        if (previewPlaceholder) previewPlaceholder.style.display = 'flex';
         
         const jobSelector = document.getElementById('job-selector-group');
         const jobSelect = document.getElementById('process_job_select');
@@ -1367,6 +1533,12 @@ async function onJobSelectChange() {
     const selectedOption = jobSelect.options[jobSelect.selectedIndex];
     const jobId = jobSelect.value;
     
+    // Hide preview when no job selected
+    const previewImage = document.getElementById('builder-preview-image');
+    const previewPlaceholder = document.getElementById('builder-preview-placeholder');
+    if (previewImage) previewImage.style.display = 'none';
+    if (previewPlaceholder) previewPlaceholder.style.display = 'flex';
+    
     if (!jobId) {
         document.getElementById('process_job_id').value = '';
         document.getElementById('video-duration-estimate').innerHTML = '';
@@ -1392,10 +1564,23 @@ async function onJobSelectChange() {
 }
 
 async function populateVideoFormFromJob(jobId, jobName) {
-    const [job, timeRange] = await Promise.all([
+    const [job, timeRange, latestCaptures] = await Promise.all([
         fetch(`${API_BASE}/jobs/${jobId}`).then(r => r.json()),
-        fetch(`${API_BASE}/captures/job/${jobId}/time-range`).then(r => r.json())
+        fetch(`${API_BASE}/captures/job/${jobId}/time-range`).then(r => r.json()),
+        apiRequest('/captures/', { query: { job_id: jobId, page_size: 1, sort_order: 'desc' } })
     ]);
+    
+    // Show latest capture preview
+    const previewImage = document.getElementById('builder-preview-image');
+    const previewPlaceholder = document.getElementById('builder-preview-placeholder');
+    if (previewImage && latestCaptures.captures && latestCaptures.captures.length > 0) {
+        const cap = latestCaptures.captures[0];
+        const img = document.getElementById('job-preview-img');
+        img.src = `${API_BASE}/captures/${cap.id}/thumbnail`;
+        document.getElementById('job-preview-label').textContent = `Latest capture: ${formatDateTime(cap.captured_at)}`;
+        previewImage.style.display = 'flex';
+        if (previewPlaceholder) previewPlaceholder.style.display = 'none';
+    }
     
     const captureCount = timeRange.count;
     
@@ -1713,26 +1898,11 @@ async function processVideo(event) {
 }
 
 function playVideo(videoId, videoName) {
-    const modal = document.getElementById('video-player-modal');
-    const video = document.getElementById('video-player');
-    const source = document.getElementById('video-source');
-    const title = document.getElementById('video-player-title');
-    
-    title.textContent = videoName;
-    source.src = `${API_BASE}/videos/${videoId}/download`;
-    video.load();
-    
-    modal.classList.add('active');
-    video.play();
+    openVideoDetail(videoId);
 }
 
 function closeVideoPlayer() {
-    const modal = document.getElementById('video-player-modal');
-    const video = document.getElementById('video-player');
-    
-    video.pause();
-    video.currentTime = 0;
-    modal.classList.remove('active');
+    closeVideoDetail();
 }
 
 function navigateToJob(jobId) {
@@ -1743,28 +1913,7 @@ function navigateToJob(jobId) {
 }
 
 async function deleteVideo(videoId, videoName) {
-    showConfirm(
-        `Are you sure you want to delete "${videoName}"?`,
-        async (confirmed) => {
-            if (!confirmed) return;
-            
-            try {
-                const response = await fetch(`${API_BASE}/videos/${videoId}`, {
-                    method: 'DELETE'
-                });
-                
-                if (response.ok) {
-                    loadVideos();
-                    showNotification(`Video "${videoName}" deleted successfully`);
-                } else {
-                    showNotification(`Failed to delete video "${videoName}"`, 'error');
-                }
-            } catch (error) {
-                console.error('Failed to delete video:', error);
-                showNotification(`Failed to delete video "${videoName}"`, 'error');
-            }
-        }
-    );
+    deleteVideoFromDetail(videoId, videoName);
 }
 
 // Modal management
@@ -1831,6 +1980,31 @@ function closeModal(modalId) {
         window.lastCaptureTime = null;
     }
 }
+
+// Close the topmost active modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        // Check custom modals first (video detail, confirm dialog)
+        const videoDetail = document.getElementById('video-detail-modal');
+        if (videoDetail && videoDetail.classList.contains('active')) {
+            closeVideoDetail();
+            return;
+        }
+        
+        const confirmModal = document.getElementById('confirm-modal');
+        if (confirmModal && confirmModal.classList.contains('active')) {
+            confirmModal.classList.remove('active');
+            return;
+        }
+        
+        // Close the last opened standard modal
+        const modals = document.querySelectorAll('.modal.active');
+        if (modals.length > 0) {
+            const topModal = modals[modals.length - 1];
+            closeModal(topModal.id);
+        }
+    }
+});
 
 function showCreateJobModal() {
     // Reset the form to clear any previous values
@@ -3033,7 +3207,7 @@ async function regenerateApiKey() {
 let capturesState = {
     currentPage: 1,
     pageSize: 16,
-    sortOrder: 'asc',
+    sortOrder: 'desc',
     jobFilter: null,
     startTime: null,
     endTime: null,
@@ -3045,7 +3219,7 @@ async function loadCaptures() {
     try {
         // Load job filter options first time
         const jobSelect = document.getElementById('captures-job-filter');
-        if (jobSelect.options.length === 1) { // Only has "All Jobs"
+        if (jobSelect.options.length === 1) {
             const jobs = await apiRequest('/jobs/');
             jobs.forEach(job => {
                 const option = document.createElement('option');
@@ -3266,6 +3440,9 @@ async function loadCapturesPage() {
         
         const data = await apiRequest('/captures/', { query });
         
+        const countEl = document.getElementById('captures-count');
+        countEl.textContent = `${data.total} captures`;
+        
         renderCaptures(data.captures);
         renderPagination(data);
         updateSelectionControls();
@@ -3470,9 +3647,13 @@ function applyCaptureSortAndFilter() {
     capturesState.jobFilter = jobFilter || null;
     capturesState.startTime = startTime ? new Date(startTime).toISOString() : null;
     capturesState.endTime = endTime ? new Date(endTime).toISOString() : null;
-    capturesState.sortOrder = sortOrder || 'asc';
+    capturesState.sortOrder = sortOrder || 'desc';
     capturesState.pageSize = parseInt(pageSize) || 16;
-    capturesState.currentPage = 1; // Reset to first page
+    capturesState.currentPage = 1;
+    
+    // Show/hide reset button
+    const hasFilters = jobFilter || startTime || endTime;
+    document.getElementById('captures-filter-reset').style.display = hasFilters ? '' : 'none';
     
     loadCapturesPage();
 }
@@ -3481,6 +3662,7 @@ function clearCaptureFilters() {
     setValue('captures-job-filter', '');
     setValue('captures-start-time', '');
     setValue('captures-end-time', '');
+    document.getElementById('captures-filter-reset').style.display = 'none';
     capturesState.jobFilter = null;
     capturesState.startTime = null;
     capturesState.endTime = null;

@@ -61,6 +61,11 @@ async def lifespan(app: FastAPI):
     
     # Startup
     init_db()
+    
+    # Backfill thumbnails for existing videos
+    from .services.video_processor import backfill_thumbnails
+    backfill_thumbnails()
+    
     scheduler = CaptureScheduler()
     scheduler.start()
     logger.info("Database initialized")

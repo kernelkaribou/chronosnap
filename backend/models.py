@@ -183,6 +183,7 @@ class VideoResponse(BaseModel):
     progress: float
     created_at: str
     completed_at: Optional[str]
+    thumbnail_path: Optional[str] = None
 
 
 class TestUrlResponse(BaseModel):
