@@ -299,7 +299,7 @@
 
     <!-- Process Video Modal -->
     <div id="process-video-modal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content large">
             <div class="modal-header">
                 <h3>Process Timelapse Video</h3>
                 <span class="close" onclick="closeModal('process-video-modal')">&times;</span>
@@ -414,13 +414,13 @@
 
     <!-- Video Player Modal -->
     <div id="video-player-modal" class="modal">
-        <div class="modal-content large">
+        <div class="modal-content xlarge">
             <div class="modal-header">
                 <h3 id="video-player-title">Video Player</h3>
                 <button class="modal-close" onclick="closeVideoPlayer()">&times;</button>
             </div>
             <div style="padding: 1rem;">
-                <video id="video-player" controls style="width: 100%; max-height: 70vh; background: #000;">
+                <video id="video-player" controls style="width: 100%; max-height: 80vh; background: #000;">
                     <source id="video-source" type="video/mp4">
                     Your browser does not support the video tag.
                 </video>
@@ -430,7 +430,7 @@
 
     <!-- Maintenance Modal -->
     <div id="maintenance-modal" class="modal">
-        <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-content large">
             <div class="modal-header">
                 <h3 id="maintenance-title">File Maintenance</h3>
                 <span class="close" onclick="closeMaintenance()">&times;</span>
@@ -443,14 +443,14 @@
 
     <!-- Capture Preview Modal -->
     <div id="capture-preview-modal" class="modal">
-        <div class="modal-content large">
+        <div class="modal-content xlarge">
             <div class="modal-header">
                 <h3>Capture Details</h3>
                 <button class="modal-close" onclick="closeCapturePreview()">&times;</button>
             </div>
             <div style="padding: 1.5rem;">
                 <div style="text-align: center; margin-bottom: 1rem;">
-                    <img id="capture-preview-image" style="max-width: 100%; max-height: 60vh; background: #000;">
+                    <img id="capture-preview-image" style="max-width: 100%; max-height: 75vh; background: #000; border-radius: var(--radius-md);">
                 </div>
                 <div id="capture-preview-details" class="capture-details">
                     <div class="detail-row">
