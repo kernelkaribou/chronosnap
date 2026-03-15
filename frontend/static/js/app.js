@@ -25,6 +25,8 @@ function toggleTheme() {
     const next = current === 'light' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', next);
     localStorage.setItem('theme', next);
+    // Re-render storage charts with updated theme colors
+    if (currentView === 'storage') loadStorage();
 }
 
 function getTimeFormat() {
@@ -361,6 +363,7 @@ function switchView(view, pushState = true) {
     // Load data for view
     if (view === 'jobs') loadJobs();
     if (view === 'videos') loadVideos();
+    if (view === 'storage') loadStorage();
     if (view === 'settings') loadSettings();
     if (view === 'captures') loadCaptures();
 }
@@ -3295,6 +3298,284 @@ function setDateTimePickerValueWithTimeInput(baseId, datetimeString, hiddenId) {
 
 // Initialize time pickers on page load
 document.addEventListener('DOMContentLoaded', initializeTimePickers);
+
+// Storage Functions
+let storageCharts = {};
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function getChartColors() {
+    const style = getComputedStyle(document.documentElement);
+    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+    return {
+        purple: style.getPropertyValue('--accent-purple').trim() || '#8b5cf6',
+        blue: '#3b82f6',
+        green: '#22c55e',
+        amber: '#f59e0b',
+        rose: '#f43f5e',
+        cyan: '#06b6d4',
+        indigo: '#6366f1',
+        pink: '#ec4899',
+        teal: '#14b8a6',
+        orange: '#f97316',
+        textPrimary: style.getPropertyValue('--text-primary').trim() || '#fff',
+        textSecondary: style.getPropertyValue('--text-secondary').trim() || '#9ca3af',
+        border: style.getPropertyValue('--border-color').trim() || '#374151',
+        cardBg: style.getPropertyValue('--card-bg').trim() || '#1f2937',
+        isDark
+    };
+}
+
+const JOB_CHART_PALETTE = [
+    '#8b5cf6', '#3b82f6', '#22c55e', '#f59e0b', '#f43f5e',
+    '#06b6d4', '#6366f1', '#ec4899', '#14b8a6', '#f97316',
+    '#a78bfa', '#60a5fa', '#4ade80', '#fbbf24', '#fb7185'
+];
+
+function destroyStorageCharts() {
+    Object.values(storageCharts).forEach(chart => {
+        if (chart) chart.destroy();
+    });
+    storageCharts = {};
+}
+
+async function loadStorage() {
+    try {
+        const data = await apiRequest('/storage/stats');
+        renderStorageDashboard(data);
+    } catch (error) {
+        console.error('Failed to load storage:', error);
+        showNotification('Failed to load storage stats', 'error');
+    }
+}
+
+function renderStorageDashboard(data) {
+    // Summary cards
+    document.getElementById('stat-total-captures').textContent = data.captures_total_count.toLocaleString();
+    document.getElementById('stat-total-videos').textContent = data.videos_total_count.toLocaleString();
+    document.getElementById('stat-total-storage').textContent = formatBytes(data.captures_total_size + data.videos_total_size);
+    document.getElementById('stat-disk-free').textContent = data.disk_total > 0 ? formatBytes(data.disk_free) : 'N/A';
+
+    destroyStorageCharts();
+    const colors = getChartColors();
+
+    Chart.defaults.color = colors.textSecondary;
+    Chart.defaults.borderColor = colors.border;
+
+    renderDonutChart(data, colors);
+    renderDiskChart(data, colors);
+    renderJobChart(data, colors);
+}
+
+function renderDonutChart(data, colors) {
+    const ctx = document.getElementById('storage-donut-chart');
+    if (!ctx) return;
+
+    const captureSize = data.captures_total_size;
+    const videoSize = data.videos_total_size;
+
+    if (captureSize === 0 && videoSize === 0) {
+        storageCharts.donut = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['No Data'],
+                datasets: [{ data: [1], backgroundColor: [colors.border], borderWidth: 0 }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: true, position: 'bottom', labels: { color: colors.textSecondary } },
+                    tooltip: { enabled: false }
+                }
+            }
+        });
+        return;
+    }
+
+    storageCharts.donut = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: [`Captures (${formatBytes(captureSize)})`, `Timelapses (${formatBytes(videoSize)})`],
+            datasets: [{
+                data: [captureSize, videoSize],
+                backgroundColor: [colors.purple, colors.blue],
+                borderWidth: 2,
+                borderColor: colors.cardBg,
+                hoverBorderColor: colors.cardBg
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            cutout: '60%',
+            plugins: {
+                legend: { position: 'bottom', labels: { color: colors.textSecondary, padding: 16, usePointStyle: true, pointStyleWidth: 12 } },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => {
+                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : 0;
+                            return ` ${ctx.label}: ${pct}%`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderDiskChart(data, colors) {
+    const ctx = document.getElementById('storage-disk-chart');
+    if (!ctx) return;
+
+    if (data.disk_total === 0) {
+        storageCharts.disk = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Unavailable'],
+                datasets: [{ data: [1], backgroundColor: [colors.border], borderWidth: 0 }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: true, position: 'bottom', labels: { color: colors.textSecondary } },
+                    tooltip: { enabled: false }
+                }
+            }
+        });
+        return;
+    }
+
+    const appUsed = data.captures_total_size + data.videos_total_size;
+    const otherUsed = Math.max(0, data.disk_used - appUsed);
+    const free = data.disk_free;
+
+    storageCharts.disk = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: [
+                `App Data (${formatBytes(appUsed)})`,
+                `Other (${formatBytes(otherUsed)})`,
+                `Free (${formatBytes(free)})`
+            ],
+            datasets: [{
+                data: [appUsed, otherUsed, free],
+                backgroundColor: [colors.purple, colors.amber, colors.green],
+                borderWidth: 2,
+                borderColor: colors.cardBg,
+                hoverBorderColor: colors.cardBg
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            cutout: '60%',
+            plugins: {
+                legend: { position: 'bottom', labels: { color: colors.textSecondary, padding: 16, usePointStyle: true, pointStyleWidth: 12 } },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => {
+                            const pct = ((ctx.parsed / data.disk_total) * 100).toFixed(1);
+                            return ` ${ctx.label}: ${pct}%`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderJobChart(data, colors) {
+    const ctx = document.getElementById('storage-job-chart');
+    if (!ctx) return;
+
+    const jobs = data.jobs.filter(j => j.total_size > 0);
+
+    if (jobs.length === 0) {
+        storageCharts.jobs = new Chart(ctx, {
+            type: 'bar',
+            data: { labels: ['No data'], datasets: [{ data: [0], backgroundColor: [colors.border] }] },
+            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
+        });
+        return;
+    }
+
+    const labels = jobs.map(j => j.job_name);
+    const captureData = jobs.map(j => j.capture_size);
+    const videoData = jobs.map(j => j.video_size);
+
+    storageCharts.jobs = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Captures',
+                    data: captureData,
+                    backgroundColor: colors.purple + 'cc',
+                    borderColor: colors.purple,
+                    borderWidth: 1,
+                    borderRadius: 4
+                },
+                {
+                    label: 'Timelapses',
+                    data: videoData,
+                    backgroundColor: colors.blue + 'cc',
+                    borderColor: colors.blue,
+                    borderWidth: 1,
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { color: colors.textSecondary, usePointStyle: true, pointStyleWidth: 12, padding: 16 }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => ` ${ctx.dataset.label}: ${formatBytes(ctx.parsed.x)}`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    ticks: {
+                        color: colors.textSecondary,
+                        callback: (val) => formatBytes(val)
+                    },
+                    grid: { color: colors.border + '40' }
+                },
+                y: {
+                    stacked: true,
+                    ticks: { color: colors.textSecondary },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+
+    // Dynamically size bar chart height based on job count
+    const container = ctx.closest('.storage-chart-wide');
+    if (container) {
+        const height = Math.max(200, jobs.length * 50 + 80);
+        container.style.maxHeight = height + 'px';
+        ctx.style.maxHeight = height + 'px';
+    }
+}
 
 // Settings Functions
 async function loadSettings() {
