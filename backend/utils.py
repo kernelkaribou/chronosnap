@@ -52,18 +52,25 @@ def to_iso(dt: datetime) -> str:
 
 def parse_iso(iso_string: str) -> datetime:
     """
-    Parse ISO format string to timezone-aware datetime.
+    Parse ISO format string to timezone-aware datetime in the local timezone.
     If the string doesn't have timezone info, assumes local timezone.
+    Always returns a datetime with ZoneInfo (not a fixed UTC offset) so that
+    .time() returns the correct local wall-clock time across DST boundaries.
     
     Args:
         iso_string: ISO format datetime string
         
     Returns:
-        datetime: Timezone-aware datetime object
+        datetime: Timezone-aware datetime object with local ZoneInfo
     """
     dt = datetime.fromisoformat(iso_string)
+    local_tz = get_local_timezone()
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=get_local_timezone())
+        dt = dt.replace(tzinfo=local_tz)
+    else:
+        # Convert from fixed UTC offset to local ZoneInfo so .time() reflects
+        # the correct local wall-clock time (critical for DST transitions)
+        dt = dt.astimezone(local_tz)
     return dt
 
 

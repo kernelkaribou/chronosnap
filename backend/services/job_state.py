@@ -6,7 +6,9 @@ from typing import Optional, Tuple, Literal
 from datetime import datetime, timedelta, time
 import logging
 
-from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware
+from zoneinfo import ZoneInfo
+
+from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware, get_local_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -18,25 +20,36 @@ def calculate_next_capture_on_grid(job: dict, reference_time: datetime) -> Optio
     Calculate next capture time on the schedule grid (start + N * interval).
     Returns None if past end_datetime or before start.
     
-    This is the pure mathematical calculation without time window logic.
+    Grid arithmetic is performed in UTC to maintain correct absolute-time
+    intervals across DST boundaries. The result is converted back to local
+    time so that .time() returns the correct wall-clock time for window checks.
     """
     start_dt = parse_iso(job['start_datetime'])
     end_dt = parse_iso(job['end_datetime']) if job.get('end_datetime') else None
     interval = job['interval_seconds']
+    local_tz = start_dt.tzinfo or get_local_timezone()
     
     # Before start
     if reference_time < start_dt:
         return start_dt
     
-    # Calculate next slot on grid
-    elapsed = (reference_time - start_dt).total_seconds()
+    # Compute grid in UTC where timedelta addition = absolute time addition
+    # (no DST wall-clock drift)
+    utc = ZoneInfo('UTC')
+    start_utc = start_dt.astimezone(utc)
+    ref_utc = reference_time.astimezone(utc)
+    
+    elapsed = (ref_utc - start_utc).total_seconds()
     intervals_passed = int(elapsed / interval)
-    next_capture = start_dt + timedelta(seconds=(intervals_passed + 1) * interval)
+    next_capture_utc = start_utc + timedelta(seconds=(intervals_passed + 1) * interval)
     
     # Keep advancing until we find a future time
-    while next_capture <= reference_time:
+    while next_capture_utc <= ref_utc:
         intervals_passed += 1
-        next_capture = start_dt + timedelta(seconds=(intervals_passed + 1) * interval)
+        next_capture_utc = start_utc + timedelta(seconds=(intervals_passed + 1) * interval)
+    
+    # Convert back to local time for correct .time() in window checks
+    next_capture = next_capture_utc.astimezone(local_tz)
     
     # Check if past end
     if end_dt and next_capture > end_dt:
@@ -72,19 +85,19 @@ def parse_time_string(time_str: str) -> time:
 
 
 def calculate_next_window_start(reference_time: datetime, start_time: time, end_time: time) -> datetime:
-    """Calculate when the time window will next open"""
+    """Calculate when the time window will next open.
+    Uses date arithmetic (not timedelta) for DST-safe day advancement."""
     current_time = reference_time.time()
     current_hm = time(current_time.hour, current_time.minute)
+    local_tz = reference_time.tzinfo or __import__('backend.utils', fromlist=['get_local_timezone']).get_local_timezone()
     
-    # Today's window start - combine date with start_time and preserve timezone from reference_time
-    today_start = datetime.combine(reference_time.date(), start_time)
-    # Replace timezone with the timezone from reference_time to maintain consistency
-    if reference_time.tzinfo:
-        today_start = today_start.replace(tzinfo=reference_time.tzinfo)
+    # Create today's window start using datetime.combine (DST-safe)
+    today_start = datetime.combine(reference_time.date(), start_time, tzinfo=local_tz)
     
     if is_time_in_window(current_time, start_time, end_time):
         # In window now, next start is tomorrow
-        return today_start + timedelta(days=1)
+        tomorrow = reference_time.date() + timedelta(days=1)
+        return datetime.combine(tomorrow, start_time, tzinfo=local_tz)
     
     # Handle same-minute window (e.g., 12:00-12:00) - must check before crosses-midnight
     # since start_time == end_time would incorrectly fall into that branch
@@ -92,7 +105,8 @@ def calculate_next_window_start(reference_time: datetime, start_time: time, end_
         start_hm = time(start_time.hour, start_time.minute)
         # If we're at or past this minute today, next window is tomorrow
         if current_hm >= start_hm:
-            return today_start + timedelta(days=1)
+            tomorrow = reference_time.date() + timedelta(days=1)
+            return datetime.combine(tomorrow, start_time, tzinfo=local_tz)
         else:
             return today_start
     
@@ -101,19 +115,22 @@ def calculate_next_window_start(reference_time: datetime, start_time: time, end_
         if current_time < start_time:
             return today_start
         else:
-            return today_start + timedelta(days=1)
+            tomorrow = reference_time.date() + timedelta(days=1)
+            return datetime.combine(tomorrow, start_time, tzinfo=local_tz)
     else:
         # Crosses midnight
         if current_time >= start_time:
             return today_start
         else:
-            return today_start - timedelta(days=1)
+            yesterday = reference_time.date() - timedelta(days=1)
+            return datetime.combine(yesterday, start_time, tzinfo=local_tz)
 
 
 def find_next_capture_in_window(job: dict, window_start: datetime, start_time: time, end_time: time, max_days: int = 30) -> Optional[datetime]:
     """
     Find the first capture on the grid that falls within a time window.
     Will search across multiple days if needed.
+    Uses date arithmetic (datetime.combine) for DST-safe day advancement.
     
     Args:
         job: Job configuration
@@ -126,26 +143,29 @@ def find_next_capture_in_window(job: dict, window_start: datetime, start_time: t
         First capture time within any window, or None if no captures fit before job ends
     """
     end_dt = parse_iso(job['end_datetime']) if job.get('end_datetime') else None
+    local_tz = window_start.tzinfo or get_local_timezone()
+    base_date = window_start.date()
     
-    # Try each day's window
+    # Try each day's window using date arithmetic (DST-safe)
     for day_offset in range(max_days):
-        current_window_start = window_start + timedelta(days=day_offset)
+        window_date = base_date + timedelta(days=day_offset)
+        current_window_start = datetime.combine(window_date, start_time, tzinfo=local_tz)
         
         # Check if we've gone past the job's end date
         if end_dt and current_window_start > end_dt:
             return None
         
-        # Calculate window end for this day
-        window_end_time = datetime.combine(current_window_start.date(), end_time)
-        if current_window_start.tzinfo:
-            window_end_time = window_end_time.replace(tzinfo=current_window_start.tzinfo)
-        
-        # If window crosses midnight
+        # Calculate window end for this day using date arithmetic
         if end_time < start_time:
-            window_end_time += timedelta(days=1)
-        # If start and end are the same (same minute window), extend to end of that minute
+            # Window crosses midnight — end is the next calendar day
+            next_date = window_date + timedelta(days=1)
+            window_end_dt = datetime.combine(next_date, end_time, tzinfo=local_tz)
         elif end_time == start_time:
-            window_end_time += timedelta(seconds=59)
+            # Same minute window — extend to end of that minute
+            window_end_dt = datetime.combine(window_date, end_time, tzinfo=local_tz) + timedelta(seconds=59)
+        else:
+            # Normal window within a single day
+            window_end_dt = datetime.combine(window_date, end_time, tzinfo=local_tz)
         
         # Start looking from just before the window opens
         search_time = current_window_start - timedelta(seconds=1)
@@ -158,7 +178,7 @@ def find_next_capture_in_window(job: dict, window_start: datetime, start_time: t
                 return None
             
             # If candidate is past this window, try next day
-            if candidate > window_end_time:
+            if candidate > window_end_dt:
                 break
             
             # Check if candidate is within the window
