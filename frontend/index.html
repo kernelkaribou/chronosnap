@@ -42,6 +42,7 @@
             <div id="videos-view" class="view">
                 <div class="view-header">
                     <h2>Timelapses</h2>
+                    <button class="btn btn-purple" onclick="showProcessVideoModal()">+ Build Timelapse</button>
                 </div>
                 <div id="videos-list" class="videos-grid"></div>
             </div>
@@ -289,6 +290,13 @@
             </div>
             <form id="process-video-form" onsubmit="processVideo(event)">
                 <input type="hidden" id="process_job_id">
+
+                <div class="form-group" id="job-selector-group">
+                    <label>Job *</label>
+                    <select id="process_job_select" class="form-control" required onchange="onJobSelectChange()">
+                        <option value="">Select a job...</option>
+                    </select>
+                </div>
                 
                 <div class="form-group">
                     <label>Video Name *</label>
