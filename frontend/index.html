@@ -142,6 +142,19 @@
                             <button class="btn btn-purple" onclick="regenerateApiKey()">Regenerate</button>
                         </div>
                     </div>
+                    
+                    <!-- Display Preferences Section -->
+                    <div class="settings-section">
+                        <h3>Display</h3>
+                        <p class="settings-description">Configure how dates and times are displayed throughout the application.</p>
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem;">
+                            <label style="color: var(--text-secondary); font-size: 0.9rem;">Time Format</label>
+                            <div class="time-format-toggle">
+                                <button id="time-format-24" class="btn btn-sm" onclick="toggleTimeFormat('24')">24-hour</button>
+                                <button id="time-format-12" class="btn btn-sm" onclick="toggleTimeFormat('12')">12-hour</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -426,7 +439,7 @@
     <div id="maintenance-modal" class="modal">
         <div class="modal-content large">
             <div class="modal-header">
-                <h3 id="maintenance-title">File Maintenance</h3>
+                <h3 id="maintenance-title">Capture Sync</h3>
                 <span class="close" onclick="closeMaintenance()">&times;</span>
             </div>
             <div id="maintenance-content" style="padding: 1.5rem;">

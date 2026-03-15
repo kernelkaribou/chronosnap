@@ -27,6 +27,14 @@ function toggleTheme() {
     localStorage.setItem('theme', next);
 }
 
+function getTimeFormat() {
+    return localStorage.getItem('timeFormat') || '24';
+}
+
+function setTimeFormat(format) {
+    localStorage.setItem('timeFormat', format);
+}
+
 // Apply theme immediately (before DOMContentLoaded)
 initTheme();
 
@@ -567,7 +575,7 @@ async function showJobDetails(jobId) {
                                 <circle cx="12" cy="13" r="4"></circle>
                             </svg>
                         </button>
-                        <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); startMaintenance(${job.id}, '${escapeHtml(job.name)}')" title="Maintenance" style="padding: 0.25rem;">
+                        <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); performMaintenanceScan(${job.id}, '${escapeHtml(job.name)}')" title="Sync" style="padding: 0.25rem;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="23 4 23 10 17 10"></polyline>
                                 <polyline points="1 20 1 14 7 14"></polyline>
@@ -1428,6 +1436,7 @@ async function populateVideoFormFromJob(jobId, jobName) {
         const rangeSpan = document.getElementById('capture-time-range');
         
         if (rangeInfo && rangeSpan) {
+            const use12 = getTimeFormat() === '12';
             const formatOptions = { 
                 year: 'numeric', 
                 month: '2-digit', 
@@ -1435,10 +1444,11 @@ async function populateVideoFormFromJob(jobId, jobName) {
                 hour: '2-digit',
                 minute: '2-digit',
                 second: '2-digit',
-                hour12: false
+                hour12: use12
             };
-            const firstFormatted = firstDate.toLocaleString('en-US', formatOptions);
-            const lastFormatted = lastDate.toLocaleString('en-US', formatOptions);
+            const locale = use12 ? 'en-US' : 'en-CA';
+            const firstFormatted = firstDate.toLocaleString(locale, formatOptions);
+            const lastFormatted = lastDate.toLocaleString(locale, formatOptions);
             rangeSpan.textContent = `${firstFormatted} - ${lastFormatted}`;
             rangeInfo.style.display = 'block';
         }
@@ -1938,36 +1948,32 @@ function formatBytes(bytes) {
 
 function formatDateTime(isoString) {
     if (!isoString) return 'N/A';
-    // Parse the ISO string - it should now have timezone info
     const date = new Date(isoString);
-    // If the date is invalid, return the raw string
     if (isNaN(date.getTime())) return isoString;
-    // Force 24-hour format
-    return date.toLocaleString('en-CA', { 
+    const use12 = getTimeFormat() === '12';
+    return date.toLocaleString(use12 ? 'en-US' : 'en-CA', { 
         year: 'numeric', 
         month: '2-digit', 
         day: '2-digit',
         hour: '2-digit', 
         minute: '2-digit', 
         second: '2-digit',
-        hour12: false 
+        hour12: use12 
     });
 }
 
 function formatDateTimeNoSeconds(isoString) {
     if (!isoString) return 'N/A';
-    // Parse the ISO string - it should now have timezone info
     const date = new Date(isoString);
-    // If the date is invalid, return the raw string
     if (isNaN(date.getTime())) return isoString;
-    // Force 24-hour format without seconds
-    return date.toLocaleString('en-CA', { 
+    const use12 = getTimeFormat() === '12';
+    return date.toLocaleString(use12 ? 'en-US' : 'en-CA', { 
         year: 'numeric', 
         month: '2-digit', 
         day: '2-digit',
         hour: '2-digit', 
         minute: '2-digit', 
-        hour12: false 
+        hour12: use12 
     });
 }
 
@@ -2232,30 +2238,19 @@ async function manualCapture(jobId, jobName) {
     );
 }
 
-async function startMaintenance(jobId, jobName) {
-    showConfirm(
-        `This will scan all captures for "${jobName}" to identify files that no longer exist on disk. The scan may take a moment depending on the number of captures. Continue?`,
-        async (confirmed) => {
-            if (confirmed) {
-                await performMaintenanceScan(jobId, jobName);
-            }
-        }
-    );
-}
-
 async function performMaintenanceScan(jobId, jobName) {
     const modal = document.getElementById('maintenance-modal');
     const title = document.getElementById('maintenance-title');
     const content = document.getElementById('maintenance-content');
     
     // Update modal title with job name
-    title.textContent = `${jobName} - Maintenance`;
+    title.textContent = `${jobName} - Capture Sync`;
     
     // Show scanning message
     content.innerHTML = `
         <div style="text-align: center; padding: 2rem;">
             <div style="font-size: 2rem; margin-bottom: 1rem;">🔍</div>
-            <p>Scanning captures for "${escapeHtml(jobName)}"...</p>
+            <p>Scanning database records and disk files for "${escapeHtml(jobName)}"...</p>
             <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                 This may take a moment...
             </p>
@@ -2298,9 +2293,9 @@ function displayMaintenanceResults(jobId, jobName) {
         // No issues found
         content.innerHTML = `
             <div style="text-align: center; padding: 2rem;">
-                <h3 style="margin-bottom: 0.5rem;">Maintenance Results</h3>
+                <h3 style="margin-bottom: 0.5rem;">Sync Results</h3>
                 <p style="color: var(--text-secondary);">
-                    All ${data.total_captures} captures have their files on disk. Database and files are in sync.
+                    All ${data.total_captures} database records match files on disk. Everything is in sync.
                 </p>
                 <button class="btn btn-primary" style="margin-top: 1.5rem;" onclick="closeMaintenance()">Close</button>
             </div>
@@ -2309,7 +2304,7 @@ function displayMaintenanceResults(jobId, jobName) {
         // Issues found - show details
         const missingList = data.missing_files && data.missing_files.length > 0 ? data.missing_files.map(file => `
             <div style="padding: 0.4rem 0.5rem; background: var(--card-bg); border-radius: 3px; margin-bottom: 0.25rem; border-left: 2px solid var(--danger);">
-                <div style="font-size: 0.8rem; color: #000; word-break: break-all; font-family: monospace; line-height: 1.3;">
+                <div style="font-size: 0.8rem; color: var(--text-primary); word-break: break-all; font-family: monospace; line-height: 1.3;">
                     ${escapeHtml(file.file_path)}
                 </div>
                 <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.15rem; line-height: 1.2;">
@@ -2321,25 +2316,25 @@ function displayMaintenanceResults(jobId, jobName) {
         content.innerHTML = `
             <div>
                 <div style="text-align: center; margin-bottom: 1.5rem;">
-                    <h3 style="margin-bottom: 0.5rem;">Maintenance Results</h3>
+                    <h3 style="margin-bottom: 0.5rem;">Sync Results</h3>
                 </div>
                 
                 <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
                         <div>
-                            <div style="font-size: 0.875rem; color: var(--text-secondary);">Total Captures</div>
+                            <div style="font-size: 0.875rem; color: var(--text-secondary);">DB Records</div>
                             <div style="font-size: 1.5rem; font-weight: bold;">${data.total_captures}</div>
                         </div>
                         <div>
-                            <div style="font-size: 0.875rem; color: var(--text-secondary);">Missing Files</div>
+                            <div style="font-size: 0.875rem; color: var(--text-secondary);">Records Without Files</div>
                             <div style="font-size: 1.5rem; font-weight: bold; color: var(--danger);">${data.missing_count}</div>
                         </div>
                         <div>
-                            <div style="font-size: 0.875rem; color: var(--text-secondary);">Orphaned Files</div>
+                            <div style="font-size: 0.875rem; color: var(--text-secondary);">Files Without Records</div>
                             <div style="font-size: 1.5rem; font-weight: bold; color: var(--warning-color);">${data.orphaned_count || 0}</div>
                         </div>
                         <div>
-                            <div style="font-size: 0.875rem; color: var(--text-secondary);">Existing Files</div>
+                            <div style="font-size: 0.875rem; color: var(--text-secondary);">In Sync</div>
                             <div style="font-size: 1.5rem; font-weight: bold; color: var(--success);">${data.existing_count}</div>
                         </div>
                     </div>
@@ -2347,28 +2342,35 @@ function displayMaintenanceResults(jobId, jobName) {
                 
                 ${data.missing_count > 0 ? `
                 <div style="margin-bottom: 1.5rem;">
-                    <h4 style="margin-bottom: 0.5rem;">Missing Files (${data.missing_count}):</h4>
+                    <h4 style="margin-bottom: 0.5rem;">Records Without Files (${data.missing_count}):</h4>
+                    <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 0.5rem;">
+                        These database records reference files that were not found on disk.
+                    </p>
                     <div style="max-height: 300px; overflow-y: auto; padding: 0.4rem; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 6px;">
                         ${missingList}
                     </div>
                 </div>
                 
                 <div style="background: var(--surface-hover); border: 1px solid var(--warning-color); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                    <strong style="color: var(--warning-color);">Important</strong>
-                    <p style="color: var(--warning-color); margin-top: 0.5rem; margin-bottom: 0; font-size: 0.875rem;">
-                        These files are missing from disk. Submitting will remove the database records for these captures. 
-                        Ensure files are truly missing and not temporarily unavailable (e.g., unmounted drive). This action cannot be undone.
+                    <strong style="color: var(--warning-color);">⚠ Caution</strong>
+                    <p style="color: var(--text-secondary); margin-top: 0.5rem; margin-bottom: 0; font-size: 0.875rem;">
+                        Submitting will <strong>permanently remove</strong> these database records. Before proceeding, verify that the files are truly 
+                        gone and not simply inaccessible due to a changed volume mount, unmounted drive, or moved directory. 
+                        This action cannot be undone.
                     </p>
                 </div>
                 ` : ''}
                 
                 ${data.orphaned_count > 0 ? `
                 <div style="margin-bottom: 1.5rem; ${data.missing_count > 0 ? 'padding-top: 1rem; border-top: 2px solid var(--border-color);' : ''}">
-                    <h4 style="margin-bottom: 0.5rem;">Orphaned Files (${data.orphaned_count}):</h4>
+                    <h4 style="margin-bottom: 0.5rem;">Files Without Records (${data.orphaned_count}):</h4>
+                    <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 0.5rem;">
+                        These files exist on disk but have no matching database record.
+                    </p>
                     <div style="max-height: 300px; overflow-y: auto; padding: 0.4rem; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 6px;">
                         ${(data.orphaned_files && data.orphaned_files.length > 0) ? data.orphaned_files.map(f => `
                             <div style="padding: 0.4rem 0.5rem; background: var(--card-bg); border-radius: 3px; margin-bottom: 0.25rem; border-left: 2px solid var(--warning-color);">
-                                <div style="font-size: 0.8rem; color: #000; word-break: break-all; font-family: monospace; line-height: 1.3;">
+                                <div style="font-size: 0.8rem; color: var(--text-primary); word-break: break-all; font-family: monospace; line-height: 1.3;">
                                     ${escapeHtml(f.file_path)}
                                 </div>
                                 <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.15rem; line-height: 1.2;">
@@ -2380,10 +2382,10 @@ function displayMaintenanceResults(jobId, jobName) {
                 </div>
                 
                 <div style="background: var(--surface-hover); border: 1px solid var(--primary-color); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                    <strong style="color: var(--primary-color);">Important</strong>
-                    <p style="color: var(--primary-color); margin-top: 0.5rem; margin-bottom: 0; font-size: 0.875rem;">
-                        Timestamps will be extracted from filenames, EXIF data, or file modification times. 
-                        Submitting will add these files to the database and update job statistics. This action cannot be undone.
+                    <strong style="color: var(--primary-color);">Info</strong>
+                    <p style="color: var(--text-secondary); margin-top: 0.5rem; margin-bottom: 0; font-size: 0.875rem;">
+                        Submitting will create database records for these files so they appear in the capture history. 
+                        Timestamps will be extracted from filenames, EXIF data, or file modification times. This action cannot be undone.
                     </p>
                 </div>
                 ` : ''}
@@ -2406,8 +2408,14 @@ function displayMaintenanceResults(jobId, jobName) {
 }
 
 function confirmMaintenanceSubmit(jobId, jobName) {
+    const data = maintenanceData;
+    const parts = [];
+    if (data.missing_count > 0) parts.push(`remove ${data.missing_count} database record(s) with no matching file`);
+    if (data.orphaned_count > 0) parts.push(`import ${data.orphaned_count} file(s) with no database record`);
+    const summary = parts.join(' and ');
+    
     showConfirm(
-        'Are you sure you want to perform all maintenance tasks? This action cannot be undone.',
+        `This will ${summary}. This cannot be undone.`,
         async (confirmed) => {
             if (confirmed) {
                 await performMaintenanceActions(jobId, jobName);
@@ -2422,7 +2430,7 @@ async function performMaintenanceActions(jobId, jobName) {
     
     content.innerHTML = `
         <div style="text-align: center; padding: 2rem;">
-            <p>Processing maintenance actions...</p>
+            <p>Applying sync changes...</p>
         </div>
     `;
     
@@ -2958,6 +2966,28 @@ async function loadSettings() {
         console.error('Failed to load settings:', error);
         showNotification('Failed to load settings', 'error');
     }
+    
+    // Sync time format toggle state
+    updateTimeFormatButtons();
+}
+
+function updateTimeFormatButtons() {
+    const current = getTimeFormat();
+    const btn24 = document.getElementById('time-format-24');
+    const btn12 = document.getElementById('time-format-12');
+    if (btn24 && btn12) {
+        btn24.className = current === '24' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
+        btn12.className = current === '12' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
+    }
+}
+
+function toggleTimeFormat(format) {
+    setTimeFormat(format);
+    updateTimeFormatButtons();
+    // Refresh visible data to apply new format
+    loadJobs();
+    loadVideos();
+    showNotification(`Time format set to ${format}-hour`, 'success');
 }
 
 async function copyApiKey() {
