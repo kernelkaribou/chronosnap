@@ -210,8 +210,9 @@ def _update_video_completed(video_id: int, file_size: int, total_frames: int, du
     
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT name FROM processed_videos WHERE id = ?", (video_id,))
-        video_name = cursor.fetchone()[0]
+        cursor.execute("SELECT name, file_path FROM processed_videos WHERE id = ?", (video_id,))
+        row = cursor.fetchone()
+        video_name, video_path = row[0], row[1]
     
     update_video_state(
         video_id,
@@ -222,4 +223,57 @@ def _update_video_completed(video_id: int, file_size: int, total_frames: int, du
         duration_seconds=duration_seconds
     )
     
+    # Generate thumbnail after completion
+    generate_thumbnail(video_id, video_path)
+    
     logger.info(f"Completed video '{video_name}' (ID: {video_id}) - Frames: {total_frames}, Duration: {duration_seconds:.2f}s, Size: {file_size / (1024*1024):.2f}MB")
+
+
+def generate_thumbnail(video_id: int, video_path: str):
+    """Extract a thumbnail frame from a completed video"""
+    if not os.path.exists(video_path):
+        logger.warning(f"Cannot generate thumbnail: video file not found at {video_path}")
+        return
+    
+    thumb_path = os.path.splitext(video_path)[0] + "_thumb.jpg"
+    
+    try:
+        cmd = [
+            'ffmpeg', '-loglevel', 'error',
+            '-i', video_path,
+            '-ss', '0.5',
+            '-frames:v', '1',
+            '-q:v', '2',
+            '-y', thumb_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        
+        if result.returncode == 0 and os.path.exists(thumb_path):
+            with get_db() as conn:
+                conn.execute(
+                    "UPDATE processed_videos SET thumbnail_path = ? WHERE id = ?",
+                    (thumb_path, video_id)
+                )
+            logger.info(f"Generated thumbnail for video {video_id}: {thumb_path}")
+        else:
+            logger.warning(f"Thumbnail generation failed for video {video_id}: {result.stderr[:200]}")
+    except Exception as e:
+        logger.warning(f"Thumbnail generation error for video {video_id}: {e}")
+
+
+def backfill_thumbnails():
+    """Generate missing thumbnails for existing completed videos"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, file_path FROM processed_videos
+            WHERE status = 'completed' AND (thumbnail_path IS NULL OR thumbnail_path = '')
+        """)
+        rows = cursor.fetchall()
+    
+    if not rows:
+        return
+    
+    logger.info(f"Backfilling thumbnails for {len(rows)} videos")
+    for row in rows:
+        generate_thumbnail(row[0], row[1])

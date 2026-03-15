@@ -149,6 +149,9 @@ def init_db():
         create_sql = cursor.fetchone()[0]
         if 'ON DELETE CASCADE' in create_sql and 'processed_videos' in create_sql:
             logger.info("Migrating processed_videos: changing ON DELETE CASCADE to ON DELETE SET NULL")
+            # Disable FK enforcement during migration so videos referencing
+            # deleted jobs are preserved (with their job_id set to NULL)
+            cursor.execute("PRAGMA foreign_keys = OFF")
             cursor.execute("ALTER TABLE processed_videos RENAME TO _processed_videos_old")
             cursor.execute("""
                 CREATE TABLE processed_videos (
@@ -173,13 +176,37 @@ def init_db():
                     FOREIGN KEY (job_id) REFERENCES jobs (id) ON DELETE SET NULL
                 )
             """)
+            # Nullify job_id references to deleted jobs during copy
             cursor.execute("""
-                INSERT INTO processed_videos 
-                SELECT * FROM _processed_videos_old
+                INSERT INTO processed_videos
+                SELECT
+                    id, CASE WHEN job_id IN (SELECT id FROM jobs) THEN job_id ELSE NULL END,
+                    name, file_path, file_size, resolution, framerate, quality,
+                    start_capture_id, end_capture_id, start_time, end_time,
+                    total_frames, duration_seconds, status, progress,
+                    created_at, completed_at
+                FROM _processed_videos_old
             """)
             cursor.execute("DROP TABLE _processed_videos_old")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_videos_job_id ON processed_videos(job_id)")
+            cursor.execute("PRAGMA foreign_keys = ON")
             logger.info("Migration complete: processed_videos FK updated to SET NULL")
+        
+        # Migration: Add job_name and thumbnail_path columns to processed_videos
+        cursor.execute("PRAGMA table_info(processed_videos)")
+        video_columns = [col[1] for col in cursor.fetchall()]
+        if 'job_name' not in video_columns:
+            cursor.execute("ALTER TABLE processed_videos ADD COLUMN job_name TEXT")
+            # Backfill job_name from jobs table for existing videos
+            cursor.execute("""
+                UPDATE processed_videos SET job_name = (
+                    SELECT j.name FROM jobs j WHERE j.id = processed_videos.job_id
+                ) WHERE job_id IS NOT NULL AND job_name IS NULL
+            """)
+            logger.info("Migration complete: added job_name column to processed_videos")
+        if 'thumbnail_path' not in video_columns:
+            cursor.execute("ALTER TABLE processed_videos ADD COLUMN thumbnail_path TEXT")
+            logger.info("Migration complete: added thumbnail_path column to processed_videos")
         
         # Initialize API key if not exists
         cursor.execute("SELECT value FROM settings WHERE key = 'api_key'")

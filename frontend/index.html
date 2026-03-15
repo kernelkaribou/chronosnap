@@ -59,6 +59,13 @@
                     <h2>Timelapses</h2>
                     <button class="btn btn-purple" onclick="showProcessVideoModal()">+ Build Timelapse</button>
                 </div>
+                <div class="gallery-filters">
+                    <input type="text" class="gallery-search" id="video-search" placeholder="Search by name or job..." oninput="filterVideos()">
+                    <select class="gallery-filter-select" id="video-job-filter" onchange="filterVideos()">
+                        <option value="">All Jobs</option>
+                    </select>
+                    <span class="gallery-count" id="video-count"></span>
+                </div>
                 <div id="videos-list" class="videos-grid"></div>
             </div>
 
@@ -425,17 +432,22 @@
     </div>
 
     <!-- Video Player Modal -->
-    <div id="video-player-modal" class="modal">
+    <div id="video-detail-modal" class="modal">
         <div class="modal-content xlarge">
             <div class="modal-header">
-                <h3 id="video-player-title">Video Player</h3>
-                <button class="modal-close" onclick="closeVideoPlayer()">&times;</button>
+                <h3 id="video-detail-title">Video Details</h3>
+                <button class="modal-close" onclick="closeVideoDetail()">&times;</button>
             </div>
             <div style="padding: 1rem;">
-                <video id="video-player" controls style="width: 100%; max-height: 80vh; background: #000;">
-                    <source id="video-source" type="video/mp4">
-                    Your browser does not support the video tag.
-                </video>
+                <div class="video-detail-layout">
+                    <div class="video-detail-player">
+                        <video id="video-detail-player" controls>
+                            <source id="video-detail-source" type="video/mp4">
+                        </video>
+                    </div>
+                    <dl class="video-detail-meta" id="video-detail-meta"></dl>
+                    <div class="video-detail-actions" id="video-detail-actions"></div>
+                </div>
             </div>
         </div>
     </div>

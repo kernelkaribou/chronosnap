@@ -62,12 +62,12 @@ async def create_video(video: VideoCreate, background_tasks: BackgroundTasks):
         
         cursor.execute("""
             INSERT INTO processed_videos (
-                job_id, name, file_path, file_size, resolution,
+                job_id, job_name, name, file_path, file_size, resolution,
                 framerate, quality, start_capture_id, end_capture_id,
                 start_time, end_time, total_frames, duration_seconds, status, created_at
-            ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'processing', ?)
+            ) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'processing', ?)
         """, (
-            video.job_id, video.name, output_path, video.resolution,
+            video.job_id, job_dict['name'], video.name, output_path, video.resolution,
             video.framerate, video.quality, video.start_capture_id,
             video.end_capture_id, video.start_time, video.end_time, now
         ))
@@ -107,7 +107,7 @@ async def list_videos(
         cursor = conn.cursor()
         
         query = """
-            SELECT v.*, j.name as job_name
+            SELECT v.*, COALESCE(v.job_name, j.name) as job_name
             FROM processed_videos v
             LEFT JOIN jobs j ON v.job_id = j.id
             WHERE 1=1
@@ -135,7 +135,7 @@ async def get_video(video_id: int):
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT v.*, j.name as job_name
+            SELECT v.*, COALESCE(v.job_name, j.name) as job_name
             FROM processed_videos v
             LEFT JOIN jobs j ON v.job_id = j.id
             WHERE v.id = ?
@@ -173,6 +173,25 @@ async def check_video_file(video_id: int):
         return {"accessible": True, "reason": None}
 
 
+@router.get("/{video_id}/thumbnail")
+async def get_video_thumbnail(video_id: int):
+    """Get the thumbnail image for a video"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT thumbnail_path, status FROM processed_videos WHERE id = ?", (video_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="Video not found")
+        
+        thumbnail_path, status = row
+        
+        if not thumbnail_path or not os.path.exists(thumbnail_path):
+            raise HTTPException(status_code=404, detail="Thumbnail not available")
+        
+        return FileResponse(thumbnail_path, media_type="image/jpeg")
+
+
 @router.get("/{video_id}/download")
 async def download_video(video_id: int):
     """Download a processed video file"""
@@ -206,17 +225,19 @@ async def delete_video(video_id: int):
         cursor = conn.cursor()
         
         # Get video info
-        cursor.execute("SELECT name, file_path FROM processed_videos WHERE id = ?", (video_id,))
+        cursor.execute("SELECT name, file_path, thumbnail_path FROM processed_videos WHERE id = ?", (video_id,))
         row = cursor.fetchone()
         
         if not row:
             raise HTTPException(status_code=404, detail="Video not found")
         
-        name, file_path = row
+        name, file_path, thumbnail_path = row
         
-        # Delete file if it exists
+        # Delete files if they exist
         if os.path.exists(file_path):
             os.remove(file_path)
+        if thumbnail_path and os.path.exists(thumbnail_path):
+            os.remove(thumbnail_path)
         
         # Delete record
         cursor.execute("DELETE FROM processed_videos WHERE id = ?", (video_id,))
