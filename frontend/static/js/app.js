@@ -1159,6 +1159,9 @@ async function testUrl() {
 // Videos
 // Cached video list for client-side filtering
 let allVideos = [];
+let currentFilteredVideos = [];
+const VIDEO_PAGE_SIZE = 24;
+let videosDisplayed = 0;
 
 async function loadVideos() {
     try {
@@ -1179,25 +1182,62 @@ async function loadVideos() {
             videoRefreshInterval = null;
         }
         
-        populateVideoJobFilter(videos);
+        populateVideoFilters(videos);
         filterVideos();
     } catch (error) {
         console.error('Failed to load videos:', error);
     }
 }
 
-function populateVideoJobFilter(videos) {
-    const select = document.getElementById('video-job-filter');
-    const current = select.value;
-    const jobNames = [...new Set(videos.map(v => v.job_name).filter(Boolean))].sort();
-    select.innerHTML = '<option value="">All Jobs</option>' +
-        jobNames.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
-    select.value = current;
+function populateVideoFilters(videos) {
+    const yearSelect = document.getElementById('video-year-filter');
+    const currentYear = yearSelect.value;
+    const years = [...new Set(videos.map(v => new Date(v.created_at).getFullYear()))].sort((a, b) => b - a);
+    yearSelect.innerHTML = '<option value="">All Years</option>' +
+        years.map(y => `<option value="${y}">${y}</option>`).join('');
+    yearSelect.value = currentYear;
+}
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function onYearFilterChange() {
+    const yearVal = document.getElementById('video-year-filter').value;
+    const monthSelect = document.getElementById('video-month-filter');
+    
+    if (!yearVal) {
+        monthSelect.innerHTML = '<option value="">All Months</option>';
+        monthSelect.value = '';
+        monthSelect.disabled = true;
+    } else {
+        // Populate months that have videos in the selected year
+        const year = parseInt(yearVal);
+        const months = [...new Set(
+            allVideos
+                .filter(v => new Date(v.created_at).getFullYear() === year)
+                .map(v => new Date(v.created_at).getMonth())
+        )].sort((a, b) => a - b);
+        
+        monthSelect.innerHTML = '<option value="">All Months</option>' +
+            months.map(m => `<option value="${m}">${MONTH_NAMES[m]}</option>`).join('');
+        monthSelect.value = '';
+        monthSelect.disabled = false;
+    }
+    
+    filterVideos();
+}
+
+function resetVideoFilters() {
+    document.getElementById('video-search').value = '';
+    document.getElementById('video-year-filter').value = '';
+    document.getElementById('video-month-filter').value = '';
+    document.getElementById('video-month-filter').disabled = true;
+    filterVideos();
 }
 
 function filterVideos() {
     const search = (document.getElementById('video-search').value || '').toLowerCase();
-    const jobFilter = document.getElementById('video-job-filter').value;
+    const yearFilter = document.getElementById('video-year-filter').value;
+    const monthFilter = document.getElementById('video-month-filter').value;
     
     let filtered = allVideos;
     
@@ -1208,9 +1248,19 @@ function filterVideos() {
         );
     }
     
-    if (jobFilter) {
-        filtered = filtered.filter(v => v.job_name === jobFilter);
+    if (yearFilter) {
+        const year = parseInt(yearFilter);
+        filtered = filtered.filter(v => new Date(v.created_at).getFullYear() === year);
+        
+        if (monthFilter !== '') {
+            const month = parseInt(monthFilter);
+            filtered = filtered.filter(v => new Date(v.created_at).getMonth() === month);
+        }
     }
+    
+    // Show/hide reset button
+    const hasFilters = search || yearFilter || monthFilter !== '';
+    document.getElementById('video-filter-reset').style.display = hasFilters ? '' : 'none';
     
     const countEl = document.getElementById('video-count');
     if (filtered.length !== allVideos.length) {
@@ -1219,14 +1269,48 @@ function filterVideos() {
         countEl.textContent = `${allVideos.length} videos`;
     }
     
-    renderVideos(filtered);
+    currentFilteredVideos = filtered;
+    videosDisplayed = 0;
+    document.getElementById('videos-list').innerHTML = '';
+    showMoreVideos();
 }
 
-function renderVideos(videos) {
+function showMoreVideos() {
+    const batch = currentFilteredVideos.slice(videosDisplayed, videosDisplayed + VIDEO_PAGE_SIZE);
+    if (batch.length === 0 && videosDisplayed === 0) {
+        renderVideos([], true);
+        return;
+    }
+    renderVideos(batch, false);
+    videosDisplayed += batch.length;
+    updateLoadMoreButton();
+}
+
+function updateLoadMoreButton() {
+    let btn = document.getElementById('video-load-more');
+    const remaining = currentFilteredVideos.length - videosDisplayed;
+    if (remaining > 0) {
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.id = 'video-load-more';
+            btn.className = 'btn btn-secondary';
+            btn.onclick = showMoreVideos;
+            document.getElementById('videos-list').insertAdjacentElement('afterend', btn);
+        }
+        const next = Math.min(remaining, VIDEO_PAGE_SIZE);
+        btn.textContent = `Load More (${remaining} remaining)`;
+        btn.style.display = '';
+    } else if (btn) {
+        btn.style.display = 'none';
+    }
+}
+
+function renderVideos(videos, isEmpty) {
     const container = document.getElementById('videos-list');
     
-    if (videos.length === 0) {
-        const hasFilter = document.getElementById('video-search').value || document.getElementById('video-job-filter').value;
+    if (isEmpty) {
+        const hasFilter = document.getElementById('video-search').value ||
+            document.getElementById('video-year-filter').value;
         container.innerHTML = `
             <div class="empty-state">
                 <h3>${hasFilter ? 'No matching videos' : 'No processed videos'}</h3>
@@ -1239,13 +1323,14 @@ function renderVideos(videos) {
     const playIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
     const filmIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><line x1="17" y1="17" x2="22" y2="17"/></svg>`;
     
-    container.innerHTML = videos.map((video, idx) => {
+    const html = videos.map((video, idx) => {
+        const globalIdx = videosDisplayed + idx;
         const isCompleted = video.status === 'completed';
         const isProcessing = video.status === 'processing';
         const thumbSrc = video.thumbnail_path ? `${API_BASE}/videos/${video.id}/thumbnail` : '';
         
         return `
-        <div class="video-gallery-card" style="--i:${idx}" onclick="openVideoDetail(${video.id})" title="${escapeHtml(video.name)}">
+        <div class="video-gallery-card" style="--i:${globalIdx}" onclick="openVideoDetail(${video.id})" title="${escapeHtml(video.name)}">
             <div class="video-gallery-thumb">
                 ${thumbSrc ? 
                     `<img src="${thumbSrc}" alt="" loading="lazy">` : 
@@ -1268,6 +1353,8 @@ function renderVideos(videos) {
             </div>
         </div>`;
     }).join('');
+    
+    container.insertAdjacentHTML('beforeend', html);
 }
 
 async function openVideoDetail(videoId) {
@@ -1294,38 +1381,30 @@ async function openVideoDetail(videoId) {
             player.style.display = 'none';
         }
         
-        // Build metadata
-        const rows = [];
-        if (video.job_name) {
-            if (video.job_id) {
-                rows.push(['Job', `<a href="#" class="job-link" onclick="event.preventDefault(); closeVideoDetail(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a>`]);
-            } else {
-                rows.push(['Job', escapeHtml(video.job_name)]);
-            }
-        }
-        rows.push(['Resolution', video.resolution]);
-        rows.push(['Framerate', `${video.framerate} fps`]);
-        rows.push(['Quality', video.quality]);
-        rows.push(['Frames', video.total_frames.toLocaleString()]);
-        rows.push(['Duration', formatDuration(video.duration_seconds)]);
-        if (video.status === 'completed' && video.file_size) {
-            rows.push(['File Size', formatBytes(video.file_size)]);
-        }
-        if (video.start_time) {
-            rows.push(['Start', formatDateTimeNoSeconds(video.start_time)]);
-        }
-        if (video.end_time) {
-            rows.push(['End', formatDateTimeNoSeconds(video.end_time)]);
-        }
-        rows.push(['Created', formatDateTimeNoSeconds(video.created_at)]);
-        if (video.completed_at) {
-            rows.push(['Completed', formatDateTimeNoSeconds(video.completed_at)]);
-        }
-        rows.push(['Status', `<span class="job-status ${video.status}">${video.status}</span>`]);
+        // Build metadata in 3 dense rows of 4 columns each
+        let metaHtml = '';
         
-        meta.innerHTML = rows.map(([label, value]) =>
-            `<dt>${label}</dt><dd>${value}</dd>`
-        ).join('');
+        // Row 1: Job, Duration, Size, Status
+        const jobVal = video.job_name
+            ? (video.job_id
+                ? `<a href="#" class="job-link" onclick="event.preventDefault(); closeVideoDetail(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a>`
+                : escapeHtml(video.job_name))
+            : 'None';
+        const sizeVal = (video.status === 'completed' && video.file_size) ? formatBytes(video.file_size) : 'N/A';
+        metaHtml += `<dt>Job</dt><dd>${jobVal}</dd><dt>Duration</dt><dd>${formatDuration(video.duration_seconds)}</dd>`;
+        metaHtml += `<dt>Size</dt><dd>${sizeVal}</dd><dt>Status</dt><dd><span class="job-status ${video.status}">${video.status}</span></dd>`;
+        
+        // Row 2: Start, End, Created, Completed
+        metaHtml += `<dt>Start</dt><dd>${video.start_time ? formatDateTimeNoSeconds(video.start_time) : 'N/A'}</dd>`;
+        metaHtml += `<dt>End</dt><dd>${video.end_time ? formatDateTimeNoSeconds(video.end_time) : 'N/A'}</dd>`;
+        metaHtml += `<dt>Created</dt><dd>${formatDateTimeNoSeconds(video.created_at)}</dd>`;
+        metaHtml += `<dt>Completed</dt><dd>${video.completed_at ? formatDateTimeNoSeconds(video.completed_at) : 'N/A'}</dd>`;
+        
+        // Row 3: Resolution, Framerate, Quality, Frames
+        metaHtml += `<dt>Resolution</dt><dd>${video.resolution}</dd><dt>Framerate</dt><dd>${video.framerate} fps</dd>`;
+        metaHtml += `<dt>Quality</dt><dd>${video.quality}</dd><dt>Frames</dt><dd>${video.total_frames.toLocaleString()}</dd>`;
+        
+        meta.innerHTML = metaHtml;
         
         // Build actions
         let actionsHtml = '';
@@ -1378,6 +1457,10 @@ async function showProcessVideoModal(jobId, jobName) {
         document.getElementById('capture-range').style.display = 'none';
         document.getElementById('video-duration-estimate').innerHTML = '';
         document.getElementById('available-range-info').style.display = 'none';
+        const previewImage = document.getElementById('builder-preview-image');
+        const previewPlaceholder = document.getElementById('builder-preview-placeholder');
+        if (previewImage) previewImage.style.display = 'none';
+        if (previewPlaceholder) previewPlaceholder.style.display = 'flex';
         
         const jobSelector = document.getElementById('job-selector-group');
         const jobSelect = document.getElementById('process_job_select');
@@ -1450,6 +1533,12 @@ async function onJobSelectChange() {
     const selectedOption = jobSelect.options[jobSelect.selectedIndex];
     const jobId = jobSelect.value;
     
+    // Hide preview when no job selected
+    const previewImage = document.getElementById('builder-preview-image');
+    const previewPlaceholder = document.getElementById('builder-preview-placeholder');
+    if (previewImage) previewImage.style.display = 'none';
+    if (previewPlaceholder) previewPlaceholder.style.display = 'flex';
+    
     if (!jobId) {
         document.getElementById('process_job_id').value = '';
         document.getElementById('video-duration-estimate').innerHTML = '';
@@ -1475,10 +1564,23 @@ async function onJobSelectChange() {
 }
 
 async function populateVideoFormFromJob(jobId, jobName) {
-    const [job, timeRange] = await Promise.all([
+    const [job, timeRange, latestCaptures] = await Promise.all([
         fetch(`${API_BASE}/jobs/${jobId}`).then(r => r.json()),
-        fetch(`${API_BASE}/captures/job/${jobId}/time-range`).then(r => r.json())
+        fetch(`${API_BASE}/captures/job/${jobId}/time-range`).then(r => r.json()),
+        apiRequest('/captures/', { query: { job_id: jobId, page_size: 1, sort_order: 'desc' } })
     ]);
+    
+    // Show latest capture preview
+    const previewImage = document.getElementById('builder-preview-image');
+    const previewPlaceholder = document.getElementById('builder-preview-placeholder');
+    if (previewImage && latestCaptures.captures && latestCaptures.captures.length > 0) {
+        const cap = latestCaptures.captures[0];
+        const img = document.getElementById('job-preview-img');
+        img.src = `${API_BASE}/captures/${cap.id}/thumbnail`;
+        document.getElementById('job-preview-label').textContent = `Latest capture: ${formatDateTime(cap.captured_at)}`;
+        previewImage.style.display = 'flex';
+        if (previewPlaceholder) previewPlaceholder.style.display = 'none';
+    }
     
     const captureCount = timeRange.count;
     
@@ -1878,6 +1980,31 @@ function closeModal(modalId) {
         window.lastCaptureTime = null;
     }
 }
+
+// Close the topmost active modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        // Check custom modals first (video detail, confirm dialog)
+        const videoDetail = document.getElementById('video-detail-modal');
+        if (videoDetail && videoDetail.classList.contains('active')) {
+            closeVideoDetail();
+            return;
+        }
+        
+        const confirmModal = document.getElementById('confirm-modal');
+        if (confirmModal && confirmModal.classList.contains('active')) {
+            confirmModal.classList.remove('active');
+            return;
+        }
+        
+        // Close the last opened standard modal
+        const modals = document.querySelectorAll('.modal.active');
+        if (modals.length > 0) {
+            const topModal = modals[modals.length - 1];
+            closeModal(topModal.id);
+        }
+    }
+});
 
 function showCreateJobModal() {
     // Reset the form to clear any previous values
@@ -3080,7 +3207,7 @@ async function regenerateApiKey() {
 let capturesState = {
     currentPage: 1,
     pageSize: 16,
-    sortOrder: 'asc',
+    sortOrder: 'desc',
     jobFilter: null,
     startTime: null,
     endTime: null,
@@ -3092,7 +3219,7 @@ async function loadCaptures() {
     try {
         // Load job filter options first time
         const jobSelect = document.getElementById('captures-job-filter');
-        if (jobSelect.options.length === 1) { // Only has "All Jobs"
+        if (jobSelect.options.length === 1) {
             const jobs = await apiRequest('/jobs/');
             jobs.forEach(job => {
                 const option = document.createElement('option');
@@ -3313,6 +3440,9 @@ async function loadCapturesPage() {
         
         const data = await apiRequest('/captures/', { query });
         
+        const countEl = document.getElementById('captures-count');
+        countEl.textContent = `${data.total} captures`;
+        
         renderCaptures(data.captures);
         renderPagination(data);
         updateSelectionControls();
@@ -3517,9 +3647,13 @@ function applyCaptureSortAndFilter() {
     capturesState.jobFilter = jobFilter || null;
     capturesState.startTime = startTime ? new Date(startTime).toISOString() : null;
     capturesState.endTime = endTime ? new Date(endTime).toISOString() : null;
-    capturesState.sortOrder = sortOrder || 'asc';
+    capturesState.sortOrder = sortOrder || 'desc';
     capturesState.pageSize = parseInt(pageSize) || 16;
-    capturesState.currentPage = 1; // Reset to first page
+    capturesState.currentPage = 1;
+    
+    // Show/hide reset button
+    const hasFilters = jobFilter || startTime || endTime;
+    document.getElementById('captures-filter-reset').style.display = hasFilters ? '' : 'none';
     
     loadCapturesPage();
 }
@@ -3528,6 +3662,7 @@ function clearCaptureFilters() {
     setValue('captures-job-filter', '');
     setValue('captures-start-time', '');
     setValue('captures-end-time', '');
+    document.getElementById('captures-filter-reset').style.display = 'none';
     capturesState.jobFilter = null;
     capturesState.startTime = null;
     capturesState.endTime = null;

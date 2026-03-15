@@ -24,8 +24,8 @@
             </div>
             <div class="nav-links">
                 <a href="#" data-view="jobs" class="nav-link active">Jobs</a>
-                <a href="#" data-view="captures" class="nav-link">Captures</a>
                 <a href="#" data-view="videos" class="nav-link">Timelapses</a>
+                <a href="#" data-view="captures" class="nav-link">Captures</a>
                 <a href="#" data-view="settings" class="nav-link">Settings</a>
             </div>
             <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">
@@ -60,10 +60,14 @@
                     <button class="btn btn-purple" onclick="showProcessVideoModal()">+ Build Timelapse</button>
                 </div>
                 <div class="gallery-filters">
-                    <input type="text" class="gallery-search" id="video-search" placeholder="Search by name or job..." oninput="filterVideos()">
-                    <select class="gallery-filter-select" id="video-job-filter" onchange="filterVideos()">
-                        <option value="">All Jobs</option>
+                    <input type="text" class="gallery-search" id="video-search" placeholder="Search..." oninput="filterVideos()">
+                    <select class="gallery-filter-select" id="video-year-filter" onchange="onYearFilterChange()">
+                        <option value="">All Years</option>
                     </select>
+                    <select class="gallery-filter-select" id="video-month-filter" onchange="filterVideos()" disabled>
+                        <option value="">All Months</option>
+                    </select>
+                    <button class="btn btn-secondary btn-sm" id="video-filter-reset" onclick="resetVideoFilters()" style="display:none;" title="Clear all filters">Reset</button>
                     <span class="gallery-count" id="video-count"></span>
                 </div>
                 <div id="videos-list" class="videos-grid"></div>
@@ -82,39 +86,23 @@
                 </div>
                 
                 <!-- Filters -->
-                <div class="captures-filters">
-                    <div class="filter-group">
-                        <label>Sort:</label>
-                        <select id="captures-sort-order" class="form-control" onchange="applyCaptureSortAndFilter()" style="width: 100px;">
-                            <option value="asc">Oldest First</option>
-                            <option value="desc">Newest First</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>Show:</label>
-                        <select id="captures-page-size" class="form-control" onchange="applyCaptureSortAndFilter()" style="width: 70px; min-width: 70px;">
-                            <option value="16" selected>16</option>
-                            <option value="32">32</option>
-                            <option value="64">64</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>Job:</label>
-                        <select id="captures-job-filter" class="form-control" onchange="applyCaptureSortAndFilter()">
-                            <option value="">All Jobs</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>From:</label>
-                        <input type="datetime-local" id="captures-start-time" class="form-control" onchange="applyCaptureSortAndFilter()">
-                    </div>
-                    <div class="filter-group">
-                        <label>To:</label>
-                        <input type="datetime-local" id="captures-end-time" class="form-control" onchange="applyCaptureSortAndFilter()">
-                    </div>
-                    <button class="btn btn-secondary btn-sm" onclick="clearCaptureFilters()" title="Clear filters" style="margin-left: 0.5rem;">
-                        ✕
-                    </button>
+                <div class="gallery-filters">
+                    <select class="gallery-filter-select" id="captures-job-filter" onchange="applyCaptureSortAndFilter()">
+                        <option value="">All Jobs</option>
+                    </select>
+                    <input type="datetime-local" class="gallery-filter-input" id="captures-start-time" onchange="applyCaptureSortAndFilter()" title="From">
+                    <input type="datetime-local" class="gallery-filter-input" id="captures-end-time" onchange="applyCaptureSortAndFilter()" title="To">
+                    <select class="gallery-filter-select" id="captures-sort-order" onchange="applyCaptureSortAndFilter()">
+                        <option value="desc">Newest</option>
+                        <option value="asc">Oldest</option>
+                    </select>
+                    <select class="gallery-filter-select" id="captures-page-size" onchange="applyCaptureSortAndFilter()">
+                        <option value="16" selected>16</option>
+                        <option value="32">32</option>
+                        <option value="64">64</option>
+                    </select>
+                    <button class="btn btn-secondary btn-sm" id="captures-filter-reset" onclick="clearCaptureFilters()" style="display:none;" title="Clear all filters">Reset</button>
+                    <span class="gallery-count" id="captures-count"></span>
                 </div>
 
                 <!-- Selection controls -->
@@ -325,6 +313,8 @@
             </div>
             <form id="process-video-form" onsubmit="processVideo(event)">
                 <input type="hidden" id="process_job_id">
+                <div class="builder-layout">
+                <div class="builder-fields">
 
                 <div class="form-group" id="job-selector-group">
                     <label>Job *</label>
@@ -423,6 +413,23 @@
                     </div>
                 </div>
 
+                </div><!-- .builder-fields -->
+                <div class="builder-preview" id="builder-preview">
+                    <div class="builder-preview-placeholder" id="builder-preview-placeholder">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+                            <rect x="2" y="2" width="20" height="20" rx="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <path d="m21 15-5-5L5 21"/>
+                        </svg>
+                        <span>Select a job to preview</span>
+                    </div>
+                    <div class="builder-preview-image" id="builder-preview-image" style="display:none;">
+                        <img id="job-preview-img" alt="Latest capture">
+                        <span id="job-preview-label"></span>
+                    </div>
+                </div>
+                </div><!-- .builder-layout -->
+
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" onclick="closeModal('process-video-modal')">Cancel</button>
                     <button type="submit" id="create-video-btn" class="btn btn-purple">Create</button>
@@ -436,7 +443,7 @@
         <div class="modal-content xlarge">
             <div class="modal-header">
                 <h3 id="video-detail-title">Video Details</h3>
-                <button class="modal-close" onclick="closeVideoDetail()">&times;</button>
+                <span class="close" onclick="closeVideoDetail()">&times;</span>
             </div>
             <div style="padding: 1rem;">
                 <div class="video-detail-layout">
@@ -470,7 +477,7 @@
         <div class="modal-content xlarge">
             <div class="modal-header">
                 <h3>Capture Details</h3>
-                <button class="modal-close" onclick="closeCapturePreview()">&times;</button>
+                <span class="close" onclick="closeCapturePreview()">&times;</span>
             </div>
             <div style="padding: 1.5rem;">
                 <div style="text-align: center; margin-bottom: 1rem;">
