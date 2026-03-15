@@ -2,13 +2,11 @@
 Settings API endpoints
 """
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from datetime import datetime
 import logging
-import os
 
 from ..database import get_db, generate_api_key
+from ..utils import get_now, to_iso
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -39,7 +37,7 @@ async def get_api_key():
             return SettingsResponse(api_key=row[0], updated_at=row[1])
     except Exception as e:
         logger.error(f"Error retrieving API key: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to retrieve API key")
 
 
 @router.post("/api-key/regenerate", response_model=RegenerateResponse)
@@ -47,7 +45,7 @@ async def regenerate_api_key():
     """Generate a new API key"""
     try:
         new_key = generate_api_key()
-        now = datetime.utcnow().isoformat()
+        now = to_iso(get_now())
         
         with get_db() as conn:
             cursor = conn.cursor()
@@ -70,7 +68,7 @@ async def regenerate_api_key():
         )
     except Exception as e:
         logger.error(f"Error regenerating API key: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to regenerate API key")
 
 
 

@@ -27,6 +27,9 @@ def calculate_next_capture_on_grid(job: dict, reference_time: datetime) -> Optio
     start_dt = parse_iso(job['start_datetime'])
     end_dt = parse_iso(job['end_datetime']) if job.get('end_datetime') else None
     interval = job['interval_seconds']
+    if interval <= 0:
+        logger.error(f"Job {job.get('id', '?')} has invalid interval_seconds={interval}, defaulting to 60")
+        interval = 60
     local_tz = start_dt.tzinfo or get_local_timezone()
     
     # Before start
@@ -118,12 +121,14 @@ def calculate_next_window_start(reference_time: datetime, start_time: time, end_
             tomorrow = reference_time.date() + timedelta(days=1)
             return datetime.combine(tomorrow, start_time, tzinfo=local_tz)
     else:
-        # Crosses midnight
+        # Crosses midnight (e.g., 22:00-06:00)
         if current_time >= start_time:
-            return today_start
+            # We're currently in the window (past start), next window is tomorrow
+            tomorrow = reference_time.date() + timedelta(days=1)
+            return datetime.combine(tomorrow, start_time, tzinfo=local_tz)
         else:
-            yesterday = reference_time.date() - timedelta(days=1)
-            return datetime.combine(yesterday, start_time, tzinfo=local_tz)
+            # Before start_time today — next window opens today at start_time
+            return today_start
 
 
 def find_next_capture_in_window(job: dict, window_start: datetime, start_time: time, end_time: time, max_days: int = 30) -> Optional[datetime]:

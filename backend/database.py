@@ -2,12 +2,12 @@
 Database models and initialization
 """
 import sqlite3
-from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Dict, Any
 from contextlib import contextmanager
 import secrets
 import string
 from . import config
+from .utils import get_now, to_iso
 
 
 @contextmanager
@@ -107,6 +107,7 @@ def init_db():
         
         # Create indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_captures_job_id ON captures(job_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_captures_captured_at ON captures(captured_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_videos_job_id ON processed_videos(job_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)")
         
@@ -144,7 +145,7 @@ def init_db():
         cursor.execute("SELECT value FROM settings WHERE key = 'api_key'")
         if not cursor.fetchone():
             api_key = generate_api_key()
-            now = datetime.utcnow().isoformat()
+            now = to_iso(get_now())
             cursor.execute(
                 "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
                 ('api_key', api_key, now)

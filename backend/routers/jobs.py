@@ -3,7 +3,6 @@ Jobs API endpoints
 """
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
-from datetime import datetime
 import os
 import logging
 
@@ -12,6 +11,7 @@ from ..database import get_db, dict_from_row
 from ..services.url_tester import test_stream_url
 from ..services.duration_calculator import calculate_duration
 from ..services.image_capture import capture_image
+from ..services.capture_scheduler import get_scheduler
 from ..services.maintenance import scan_job_files, cleanup_missing_captures, import_orphaned_files
 from ..services.job_state import calculate_job_state
 from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware
@@ -104,7 +104,7 @@ async def create_job(job: JobCreate):
             cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
             raise HTTPException(
                 status_code=400,
-                detail=f"Failed to create job directory: {str(e)}"
+                detail=f"Failed to create job directory"
             )
         
         # Update the capture_path with the actual directory
@@ -152,21 +152,28 @@ async def list_jobs(
                 (limit, offset)
             )
         
+        rows = cursor.fetchall()
+        job_ids = [row['id'] for row in rows]
+        
+        # Batch-fetch latest capture per job in one query
+        latest_captures = {}
+        if job_ids:
+            placeholders = ','.join('?' for _ in job_ids)
+            cursor.execute(f"""
+                SELECT c.* FROM captures c
+                INNER JOIN (
+                    SELECT job_id, MAX(captured_at) as max_captured_at
+                    FROM captures WHERE job_id IN ({placeholders})
+                    GROUP BY job_id
+                ) latest ON c.job_id = latest.job_id AND c.captured_at = latest.max_captured_at
+            """, job_ids)
+            for cap_row in cursor.fetchall():
+                latest_captures[cap_row['job_id']] = dict_from_row(cap_row)
+        
         jobs = []
-        for row in cursor.fetchall():
+        for row in rows:
             job = dict_from_row(row)
-            
-            # Get latest capture for this job
-            cursor.execute(
-                "SELECT * FROM captures WHERE job_id = ? ORDER BY captured_at DESC LIMIT 1",
-                (job['id'],)
-            )
-            latest_capture_row = cursor.fetchone()
-            if latest_capture_row:
-                job['latest_capture'] = dict_from_row(latest_capture_row)
-            else:
-                job['latest_capture'] = None
-            
+            job['latest_capture'] = latest_captures.get(job['id'])
             jobs.append(enrich_job_with_next_capture(job))
         
         return jobs
@@ -457,10 +464,15 @@ async def manual_capture(job_id: int):
     
     logger.info(f"Manual capture requested for job '{job['name']}' (ID: {job_id})")
     
+    # Prevent duplicate capture if scheduler is already capturing this job
+    scheduler = get_scheduler()
+    if scheduler.is_capture_in_progress(job_id):
+        raise HTTPException(status_code=409, detail="A capture is already in progress for this job")
+    
     success, error_msg = capture_image(job)
     
     if not success:
-        raise HTTPException(status_code=500, detail=f"Capture failed: {error_msg}")
+        raise HTTPException(status_code=500, detail="Capture failed")
     
     # Update last_captured_at for display purposes only — scheduling is unaffected
     now = get_now()
@@ -490,7 +502,7 @@ async def scan_job_maintenance(job_id: int):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error during maintenance scan for job {job_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Maintenance scan failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Maintenance scan failed")
 
 
 @router.post("/{job_id}/maintenance/cleanup")
@@ -511,7 +523,7 @@ async def cleanup_job_maintenance(job_id: int, cleanup: MaintenanceCleanup):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error during maintenance cleanup for job {job_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Maintenance cleanup failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Maintenance cleanup failed")
 
 
 @router.post("/{job_id}/maintenance/import")
@@ -532,5 +544,5 @@ async def import_job_maintenance(job_id: int, import_data: MaintenanceImport):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error during maintenance import for job {job_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Maintenance import failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Maintenance import failed")
 

@@ -96,7 +96,7 @@ app.add_middleware(
 app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"], dependencies=[Depends(verify_api_key)])
 app.include_router(captures.router, prefix="/api/captures", tags=["captures"], dependencies=[Depends(verify_api_key)])
 app.include_router(videos.router, prefix="/api/videos", tags=["videos"], dependencies=[Depends(verify_api_key)])
-app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
+app.include_router(settings.router, prefix="/api/settings", tags=["settings"], dependencies=[Depends(verify_api_key)])
 
 # Serve static files for frontend
 app.mount("/static", StaticFiles(directory="frontend/static"), name="static")

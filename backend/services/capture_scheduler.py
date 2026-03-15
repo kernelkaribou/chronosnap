@@ -29,6 +29,11 @@ class CaptureScheduler:
         self.executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="capture-worker")  # Parallel capture execution
         self._lock = threading.Lock()  # Lock for thread-safe operations on shared data
     
+    def is_capture_in_progress(self, job_id: int) -> bool:
+        """Check if a capture is currently in progress for a given job"""
+        with self._lock:
+            return job_id in self.captures_in_progress
+    
     def start(self):
         """Start the scheduler thread"""
         if self.running:
