@@ -446,7 +446,7 @@ async function showJobDetails(jobId) {
     try {
         const [job, capturesData] = await Promise.all([
             apiRequest(`/jobs/${jobId}`),
-            apiRequest('/captures/', { query: { job_id: jobId, page: 1, page_size: 1 } })
+            apiRequest('/captures/', { query: { job_id: jobId, page: 1, page_size: 1, sort_order: 'desc' } })
         ]);
         
         const modal = document.getElementById('job-details-modal');
@@ -549,9 +549,17 @@ async function showJobDetails(jobId) {
                            title="View captures">
                             ${job.capture_count}
                         </a>
+                        <button class="btn-icon" onclick="event.stopPropagation(); manualCapture(${job.id}, '${escapeHtml(job.name)}')" title="Take Snapshot" style="padding: 0.25rem;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                <circle cx="12" cy="13" r="4"></circle>
+                            </svg>
+                        </button>
                         <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); startMaintenance(${job.id}, '${escapeHtml(job.name)}')" title="Maintenance" style="padding: 0.25rem;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <polyline points="1 20 1 14 7 14"></polyline>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
                             </svg>
                         </button>
                     </div>
@@ -2188,6 +2196,36 @@ window.addEventListener('beforeunload', () => {
 // ===== Maintenance Functions =====
 
 let maintenanceData = null;
+
+async function manualCapture(jobId, jobName) {
+    showConfirm(
+        `Take a manual snapshot for "${jobName}"? This will not affect the scheduled capture timing.`,
+        async (confirmed) => {
+            if (!confirmed) return;
+            
+            showNotification('Capturing snapshot...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/jobs/${jobId}/capture`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Capture failed');
+                }
+                
+                showNotification('Snapshot captured successfully!', 'success');
+                
+                // Refresh job details to show updated capture count
+                await showJobDetails(jobId);
+            } catch (error) {
+                console.error('Manual capture failed:', error);
+                showNotification(`Snapshot failed: ${error.message}`, 'error');
+            }
+        }
+    );
+}
 
 async function startMaintenance(jobId, jobName) {
     showConfirm(
