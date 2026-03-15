@@ -3,6 +3,7 @@ Processed videos API endpoints
 """
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from typing import List, Optional
 import os
 import logging
@@ -56,9 +57,16 @@ async def create_video(video: VideoCreate, background_tasks: BackgroundTasks):
             from .. import config
             videos_path = config.DEFAULT_VIDEOS_PATH
         
+        # Create job subfolder: {job_id}_{sanitized_job_name}
+        import re
+        sanitized_name = re.sub(r'[^\w\s-]', '', job_dict['name']).strip()
+        job_folder = f"{video.job_id}_{sanitized_name}"
+        job_dir = os.path.join(videos_path, job_folder)
+        os.makedirs(job_dir, exist_ok=True)
+        
         # Create video record - name already includes timestamp from frontend
         now = to_iso(get_now())
-        output_path = os.path.join(videos_path, f"{video.name}.mp4")
+        output_path = os.path.join(job_dir, f"{video.name}.mp4")
         
         cursor.execute("""
             INSERT INTO processed_videos (
@@ -239,7 +247,55 @@ async def delete_video(video_id: int):
         if thumbnail_path and os.path.exists(thumbnail_path):
             os.remove(thumbnail_path)
         
+        # Clean up empty parent folder
+        _cleanup_empty_folder(file_path)
+        
         # Delete record
         cursor.execute("DELETE FROM processed_videos WHERE id = ?", (video_id,))
         
         logger.info(f"Deleted video '{name}' (ID: {video_id})")
+
+
+class BulkDeleteRequest(BaseModel):
+    video_ids: List[int]
+
+
+@router.post("/delete-multiple")
+async def delete_multiple_videos(request: BulkDeleteRequest):
+    """Delete multiple processed videos"""
+    deleted = 0
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        for video_id in request.video_ids:
+            cursor.execute("SELECT name, file_path, thumbnail_path FROM processed_videos WHERE id = ?", (video_id,))
+            row = cursor.fetchone()
+            if not row:
+                continue
+            
+            name, file_path, thumbnail_path = row
+            
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            if thumbnail_path and os.path.exists(thumbnail_path):
+                os.remove(thumbnail_path)
+            
+            _cleanup_empty_folder(file_path)
+            
+            cursor.execute("DELETE FROM processed_videos WHERE id = ?", (video_id,))
+            deleted += 1
+            logger.info(f"Deleted video '{name}' (ID: {video_id})")
+    
+    return {"deleted": deleted, "requested": len(request.video_ids)}
+
+
+def _cleanup_empty_folder(file_path: str):
+    """Remove parent folder if empty after file deletion"""
+    folder = os.path.dirname(file_path)
+    try:
+        if folder and os.path.isdir(folder) and not os.listdir(folder):
+            os.rmdir(folder)
+            logger.info(f"Removed empty folder: {folder}")
+    except OSError:
+        pass

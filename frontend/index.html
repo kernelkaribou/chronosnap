@@ -70,6 +70,11 @@
                     <button class="btn btn-secondary btn-sm" id="video-filter-reset" onclick="resetVideoFilters()" style="display:none;" title="Clear all filters">Reset</button>
                     <span class="gallery-count" id="video-count"></span>
                 </div>
+                <div class="captures-selection-controls" id="video-selection-controls" style="display: none;">
+                    <span id="video-selected-count">0 selected</span>
+                    <button class="btn btn-secondary btn-sm" id="video-toggle-selection-btn" onclick="toggleSelectAllVisibleVideos()">Select Visible</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteSelectedVideos()">Delete Selected</button>
+                </div>
                 <div id="videos-list" class="videos-grid"></div>
             </div>
 

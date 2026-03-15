@@ -547,6 +547,12 @@ body {
     cursor: pointer;
     transition: all var(--transition-base);
     box-shadow: var(--shadow-sm);
+    position: relative;
+}
+
+.video-gallery-card.selected {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px var(--primary-glow);
 }
 
 .video-gallery-card:hover {
