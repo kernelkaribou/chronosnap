@@ -1302,6 +1302,112 @@ body {
 .mb-1 { margin-bottom: 0.5rem; }
 .mb-2 { margin-bottom: 1rem; }
 
+/* Storage View */
+.storage-content {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.storage-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+}
+
+.storage-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    text-align: center;
+    box-shadow: var(--shadow-sm);
+}
+
+.storage-card-icon {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 0.75rem;
+}
+
+.storage-card-icon svg {
+    width: 28px;
+    height: 28px;
+    color: var(--accent-purple);
+}
+
+.storage-card-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.storage-card-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.storage-charts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.storage-section {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.storage-section h3 {
+    font-size: 1.15rem;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.storage-chart-container {
+    position: relative;
+    width: 100%;
+    max-height: 300px;
+    display: flex;
+    justify-content: center;
+}
+
+.storage-chart-container canvas {
+    max-height: 300px;
+}
+
+.storage-chart-wide {
+    max-height: 400px;
+}
+
+.storage-chart-wide canvas {
+    max-height: 400px;
+    width: 100% !important;
+}
+
+@media (max-width: 900px) {
+    .storage-summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .storage-charts {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 500px) {
+    .storage-summary {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Settings View */
 .settings-content {
     max-width: 1200px;

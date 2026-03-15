@@ -26,6 +26,7 @@
                 <a href="#" data-view="jobs" class="nav-link active">Jobs</a>
                 <a href="#" data-view="videos" class="nav-link">Timelapses</a>
                 <a href="#" data-view="captures" class="nav-link">Captures</a>
+                <a href="#" data-view="storage" class="nav-link">Storage</a>
                 <a href="#" data-view="settings" class="nav-link">Settings</a>
             </div>
             <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">
@@ -124,6 +125,70 @@
 
                 <!-- Pagination -->
                 <div class="pagination" id="captures-pagination"></div>
+            </div>
+
+            <!-- Storage View -->
+            <div id="storage-view" class="view">
+                <div class="view-header">
+                    <h2>Storage</h2>
+                </div>
+                <div class="storage-content">
+                    <!-- Summary Cards -->
+                    <div class="storage-summary">
+                        <div class="storage-card">
+                            <div class="storage-card-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                            </div>
+                            <div class="storage-card-value" id="stat-total-captures">—</div>
+                            <div class="storage-card-label">Total Captures</div>
+                        </div>
+                        <div class="storage-card">
+                            <div class="storage-card-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                            </div>
+                            <div class="storage-card-value" id="stat-total-videos">—</div>
+                            <div class="storage-card-label">Total Timelapses</div>
+                        </div>
+                        <div class="storage-card">
+                            <div class="storage-card-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                            </div>
+                            <div class="storage-card-value" id="stat-total-storage">—</div>
+                            <div class="storage-card-label">Total Storage Used</div>
+                        </div>
+                        <div class="storage-card">
+                            <div class="storage-card-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                            </div>
+                            <div class="storage-card-value" id="stat-disk-free">—</div>
+                            <div class="storage-card-label">Disk Free</div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Row -->
+                    <div class="storage-charts">
+                        <div class="storage-section">
+                            <h3>Storage Breakdown</h3>
+                            <div class="storage-chart-container">
+                                <canvas id="storage-donut-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="storage-section">
+                            <h3>Disk Usage</h3>
+                            <div class="storage-chart-container">
+                                <canvas id="storage-disk-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Per-Job Bar Chart -->
+                    <div class="storage-section">
+                        <h3>Storage by Job</h3>
+                        <div class="storage-chart-container storage-chart-wide">
+                            <canvas id="storage-job-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Settings View -->
@@ -516,6 +581,7 @@
         </div>
     </div>
 
+    <script src="/static/js/chart.min.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>
