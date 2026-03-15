@@ -1167,7 +1167,7 @@ function renderVideos(videos) {
         container.innerHTML = `
             <div class="empty-state">
                 <h3>No processed videos</h3>
-                <p>Process a job to create your first timelapse video</p>
+                <p>Click <strong>+ Build Timelapse</strong> above to create your first timelapse video</p>
             </div>
         `;
         return;
@@ -1268,157 +1268,253 @@ function handleVideoDownload(event, videoId) {
 
 async function showProcessVideoModal(jobId, jobName) {
     try {
-        // Fetch job data and capture time range
-        const [job, timeRange] = await Promise.all([
-            fetch(`${API_BASE}/jobs/${jobId}`).then(r => r.json()),
-            fetch(`${API_BASE}/captures/job/${jobId}/time-range`).then(r => r.json())
-        ]);
-        
-        const captureCount = timeRange.count;
-        
-        // Store original timestamp strings for API queries
-        window.firstCaptureTimeStr = timeRange.first_capture_time;
-        window.lastCaptureTimeStr = timeRange.last_capture_time;
-        
-        // Generate timestamp in the same format as backend (YYYYMMDD_HHMMSS)
-        const now = new Date();
-        const timestamp = now.getFullYear() +
-            String(now.getMonth() + 1).padStart(2, '0') +
-            String(now.getDate()).padStart(2, '0') + '_' +
-            String(now.getHours()).padStart(2, '0') +
-            String(now.getMinutes()).padStart(2, '0') +
-            String(now.getSeconds()).padStart(2, '0');
-        
-        // Set values
-        document.getElementById('process_job_id').value = jobId;
-        document.getElementById('video_name').value = `${jobName}_${timestamp}`;
-        document.getElementById('video_framerate').value = job.framerate;
-        document.getElementById('video_output_path').value = '/timelapses';
-        
-        // Update modal title
-        document.querySelector('#process-video-modal .modal-header h3').textContent = `Build Timelapse - ${jobName}`;
-        
-        // Store capture count for duration calculation
-        document.getElementById('video_framerate').setAttribute('data-capture-count', captureCount);
-        
-        // Set time range inputs to first and last capture times
-        if (captureCount > 0) {
-            // Parse ISO timestamps - use capture times as they represent actual available data
-            const firstDate = new Date(timeRange.first_capture_time);
-            const lastDate = new Date(timeRange.last_capture_time);
-            
-            // Store globally for validation
-            window.firstCaptureTime = firstDate;
-            window.lastCaptureTime = lastDate;
-            
-            // Display available time range in 24-hour format
-            const rangeInfo = document.getElementById('available-range-info');
-            const rangeSpan = document.getElementById('capture-time-range');
-            
-            if (rangeInfo && rangeSpan) {
-                const formatOptions = { 
-                    year: 'numeric', 
-                    month: '2-digit', 
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: false
-                };
-                const firstFormatted = firstDate.toLocaleString('en-US', formatOptions);
-                const lastFormatted = lastDate.toLocaleString('en-US', formatOptions);
-                rangeSpan.textContent = `${firstFormatted} - ${lastFormatted}`;
-                rangeInfo.style.display = 'block';
-            }
-            
-            // Set start time
-            const startDateInput = document.getElementById('video_start_date');
-            const startTimeInput = document.getElementById('video_start_time');
-            
-            if (startDateInput) {
-                const year = firstDate.getFullYear();
-                const month = String(firstDate.getMonth() + 1).padStart(2, '0');
-                const day = String(firstDate.getDate()).padStart(2, '0');
-                startDateInput.value = `${year}-${month}-${day}`;
-            }
-            if (startTimeInput) {
-                const hours = String(firstDate.getHours()).padStart(2, '0');
-                const minutes = String(firstDate.getMinutes()).padStart(2, '0');
-                startTimeInput.value = `${hours}:${minutes}`;
-            }
-            
-            // Set end time
-            const endDateInput = document.getElementById('video_end_date');
-            const endTimeInput = document.getElementById('video_end_time');
-            
-            if (endDateInput) {
-                const year = lastDate.getFullYear();
-                const month = String(lastDate.getMonth() + 1).padStart(2, '0');
-                const day = String(lastDate.getDate()).padStart(2, '0');
-                endDateInput.value = `${year}-${month}-${day}`;
-            }
-            if (endTimeInput) {
-                const hours = String(lastDate.getHours()).padStart(2, '0');
-                const minutes = String(lastDate.getMinutes()).padStart(2, '0');
-                endTimeInput.value = `${hours}:${minutes}`;
-            }
-            
-            // Store job ID for time range queries
-            window.currentJobId = jobId;
-            
-            // Set up datetime picker sync for video time range inputs
-            setupDateTimePickerSyncWithTimeInput('video_start', 'video_start_datetime');
-            setupDateTimePickerSyncWithTimeInput('video_end', 'video_end_datetime');
-            
-            // Manually sync the initial values to hidden fields
-            const startHidden = document.getElementById('video_start_datetime');
-            const endHidden = document.getElementById('video_end_datetime');
-            if (startHidden && window.firstCaptureTimeStr) {
-                // Store the original timestamp string from API for accurate queries
-                startHidden.value = window.firstCaptureTimeStr;
-            }
-            if (endHidden && window.lastCaptureTimeStr) {
-                // Store the original timestamp string from API for accurate queries
-                endHidden.value = window.lastCaptureTimeStr;
-            }
-            
-            // Don't trigger change events - we've manually set the correct timestamps above
-            // and don't want the sync function to overwrite them
-            
-            // Set up event listeners for duration updates when time range changes
-            const updateDuration = debounce(updateVideoDurationEstimate, 300);
-            
-            const startTimeHidden = document.getElementById('video_start_datetime');
-            const endTimeHidden = document.getElementById('video_end_datetime');
-            
-            // Attach listeners to visible date/time inputs
-            [startDateInput, startTimeInput, endDateInput, endTimeInput].forEach(input => {
-                if (input) {
-                    input.addEventListener('change', updateDuration);
-                    input.addEventListener('input', updateDuration);
-                }
-            });
-            
-            // Attach listeners to hidden combined datetime inputs
-            [startTimeHidden, endTimeHidden].forEach(input => {
-                if (input) {
-                    input.addEventListener('change', updateDuration);
-                    input.addEventListener('input', updateDuration);
-                }
-            });
-        }
-        
-        // Reset the use_range checkbox
+        // Reset form
+        document.getElementById('process-video-form').reset();
         document.getElementById('use_range').checked = false;
         document.getElementById('capture-range').style.display = 'none';
+        document.getElementById('video-duration-estimate').innerHTML = '';
+        document.getElementById('available-range-info').style.display = 'none';
         
-        // Calculate and display initial duration
-        updateVideoDurationEstimate();
+        const jobSelector = document.getElementById('job-selector-group');
+        const jobSelect = document.getElementById('process_job_select');
+        
+        if (jobId && jobName) {
+            // Opened from job details — hide selector, pre-select job
+            jobSelector.style.display = 'none';
+            jobSelect.removeAttribute('required');
+            document.getElementById('process_job_id').value = jobId;
+            document.querySelector('#process-video-modal .modal-header h3').textContent = `Build Timelapse - ${jobName}`;
+            await populateVideoFormFromJob(jobId, jobName);
+        } else {
+            // Opened from Timelapses page — show job selector
+            jobSelector.style.display = '';
+            jobSelect.setAttribute('required', 'required');
+            document.getElementById('process_job_id').value = '';
+            document.querySelector('#process-video-modal .modal-header h3').textContent = 'Build Timelapse';
+            document.getElementById('video_output_path').value = '/timelapses';
+            
+            // Populate job dropdown
+            await populateJobSelector();
+            
+            // Disable create button until a job is selected
+            const createBtn = document.getElementById('create-video-btn');
+            if (createBtn) {
+                createBtn.disabled = true;
+                createBtn.style.opacity = '0.5';
+                createBtn.style.cursor = 'not-allowed';
+            }
+        }
         
         showModal('process-video-modal');
     } catch (error) {
+        console.error('Failed to load modal data:', error);
+        showNotification('Failed to load data for timelapse creation', 'error');
+    }
+}
+
+async function populateJobSelector() {
+    const jobSelect = document.getElementById('process_job_select');
+    jobSelect.innerHTML = '<option value="">Select a job...</option>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/jobs/`);
+        const jobs = await response.json();
+        
+        // Only show jobs that have captures
+        const jobsWithCaptures = jobs.filter(j => j.capture_count > 0);
+        
+        jobsWithCaptures.forEach(job => {
+            const option = document.createElement('option');
+            option.value = job.id;
+            option.textContent = `${job.name} (${job.capture_count} captures)`;
+            option.dataset.jobName = job.name;
+            option.dataset.framerate = job.framerate;
+            jobSelect.appendChild(option);
+        });
+        
+        if (jobsWithCaptures.length === 0) {
+            jobSelect.innerHTML = '<option value="">No jobs with captures available</option>';
+        }
+    } catch (error) {
+        console.error('Failed to load jobs:', error);
+        jobSelect.innerHTML = '<option value="">Failed to load jobs</option>';
+    }
+}
+
+async function onJobSelectChange() {
+    const jobSelect = document.getElementById('process_job_select');
+    const selectedOption = jobSelect.options[jobSelect.selectedIndex];
+    const jobId = jobSelect.value;
+    
+    if (!jobId) {
+        document.getElementById('process_job_id').value = '';
+        document.getElementById('video-duration-estimate').innerHTML = '';
+        document.getElementById('available-range-info').style.display = 'none';
+        const createBtn = document.getElementById('create-video-btn');
+        if (createBtn) {
+            createBtn.disabled = true;
+            createBtn.style.opacity = '0.5';
+            createBtn.style.cursor = 'not-allowed';
+        }
+        return;
+    }
+    
+    const jobName = selectedOption.dataset.jobName;
+    document.getElementById('process_job_id').value = jobId;
+    
+    try {
+        await populateVideoFormFromJob(parseInt(jobId), jobName);
+    } catch (error) {
         console.error('Failed to load job data:', error);
         showNotification('Failed to load job data', 'error');
+    }
+}
+
+async function populateVideoFormFromJob(jobId, jobName) {
+    const [job, timeRange] = await Promise.all([
+        fetch(`${API_BASE}/jobs/${jobId}`).then(r => r.json()),
+        fetch(`${API_BASE}/captures/job/${jobId}/time-range`).then(r => r.json())
+    ]);
+    
+    const captureCount = timeRange.count;
+    
+    // Store original timestamp strings for API queries
+    window.firstCaptureTimeStr = timeRange.first_capture_time;
+    window.lastCaptureTimeStr = timeRange.last_capture_time;
+    
+    // Generate timestamp in the same format as backend (YYYYMMDD_HHMMSS)
+    const now = new Date();
+    const timestamp = now.getFullYear() +
+        String(now.getMonth() + 1).padStart(2, '0') +
+        String(now.getDate()).padStart(2, '0') + '_' +
+        String(now.getHours()).padStart(2, '0') +
+        String(now.getMinutes()).padStart(2, '0') +
+        String(now.getSeconds()).padStart(2, '0');
+    
+    // Set values
+    document.getElementById('process_job_id').value = jobId;
+    document.getElementById('video_name').value = `${jobName}_${timestamp}`;
+    document.getElementById('video_framerate').value = job.framerate;
+    document.getElementById('video_output_path').value = '/timelapses';
+    
+    // Store capture count for duration calculation
+    document.getElementById('video_framerate').setAttribute('data-capture-count', captureCount);
+    
+    // Set time range inputs to first and last capture times
+    if (captureCount > 0) {
+        // Parse ISO timestamps - use capture times as they represent actual available data
+        const firstDate = new Date(timeRange.first_capture_time);
+        const lastDate = new Date(timeRange.last_capture_time);
+        
+        // Store globally for validation
+        window.firstCaptureTime = firstDate;
+        window.lastCaptureTime = lastDate;
+        
+        // Display available time range in 24-hour format
+        const rangeInfo = document.getElementById('available-range-info');
+        const rangeSpan = document.getElementById('capture-time-range');
+        
+        if (rangeInfo && rangeSpan) {
+            const formatOptions = { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            };
+            const firstFormatted = firstDate.toLocaleString('en-US', formatOptions);
+            const lastFormatted = lastDate.toLocaleString('en-US', formatOptions);
+            rangeSpan.textContent = `${firstFormatted} - ${lastFormatted}`;
+            rangeInfo.style.display = 'block';
+        }
+        
+        // Set start time
+        const startDateInput = document.getElementById('video_start_date');
+        const startTimeInput = document.getElementById('video_start_time');
+        
+        if (startDateInput) {
+            const year = firstDate.getFullYear();
+            const month = String(firstDate.getMonth() + 1).padStart(2, '0');
+            const day = String(firstDate.getDate()).padStart(2, '0');
+            startDateInput.value = `${year}-${month}-${day}`;
+        }
+        if (startTimeInput) {
+            const hours = String(firstDate.getHours()).padStart(2, '0');
+            const minutes = String(firstDate.getMinutes()).padStart(2, '0');
+            startTimeInput.value = `${hours}:${minutes}`;
+        }
+        
+        // Set end time
+        const endDateInput = document.getElementById('video_end_date');
+        const endTimeInput = document.getElementById('video_end_time');
+        
+        if (endDateInput) {
+            const year = lastDate.getFullYear();
+            const month = String(lastDate.getMonth() + 1).padStart(2, '0');
+            const day = String(lastDate.getDate()).padStart(2, '0');
+            endDateInput.value = `${year}-${month}-${day}`;
+        }
+        if (endTimeInput) {
+            const hours = String(lastDate.getHours()).padStart(2, '0');
+            const minutes = String(lastDate.getMinutes()).padStart(2, '0');
+            endTimeInput.value = `${hours}:${minutes}`;
+        }
+        
+        // Store job ID for time range queries
+        window.currentJobId = jobId;
+        
+        // Set up datetime picker sync for video time range inputs
+        setupDateTimePickerSyncWithTimeInput('video_start', 'video_start_datetime');
+        setupDateTimePickerSyncWithTimeInput('video_end', 'video_end_datetime');
+        
+        // Manually sync the initial values to hidden fields
+        const startHidden = document.getElementById('video_start_datetime');
+        const endHidden = document.getElementById('video_end_datetime');
+        if (startHidden && window.firstCaptureTimeStr) {
+            startHidden.value = window.firstCaptureTimeStr;
+        }
+        if (endHidden && window.lastCaptureTimeStr) {
+            endHidden.value = window.lastCaptureTimeStr;
+        }
+        
+        // Set up event listeners for duration updates when time range changes
+        const updateDuration = debounce(updateVideoDurationEstimate, 300);
+        
+        const startTimeHidden = document.getElementById('video_start_datetime');
+        const endTimeHidden = document.getElementById('video_end_datetime');
+        
+        // Attach listeners to visible date/time inputs
+        [startDateInput, startTimeInput, endDateInput, endTimeInput].forEach(input => {
+            if (input) {
+                input.addEventListener('change', updateDuration);
+                input.addEventListener('input', updateDuration);
+            }
+        });
+        
+        // Attach listeners to hidden combined datetime inputs
+        [startTimeHidden, endTimeHidden].forEach(input => {
+            if (input) {
+                input.addEventListener('change', updateDuration);
+                input.addEventListener('input', updateDuration);
+            }
+        });
+    }
+    
+    // Reset the use_range checkbox
+    document.getElementById('use_range').checked = false;
+    document.getElementById('capture-range').style.display = 'none';
+    
+    // Calculate and display initial duration
+    updateVideoDurationEstimate();
+    
+    // Enable the create button now that a job is loaded
+    const createBtn = document.getElementById('create-video-btn');
+    if (createBtn) {
+        createBtn.disabled = false;
+        createBtn.style.opacity = '1';
+        createBtn.style.cursor = 'pointer';
     }
 }
 
