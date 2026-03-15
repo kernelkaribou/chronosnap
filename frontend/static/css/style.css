@@ -1,9 +1,10 @@
 :root,
 [data-theme="dark"] {
-    /* Deep space — rich purples & blues, turquoise + orange accents */
-    --primary-color: #22d3ee;
-    --primary-hover: #06b6d4;
-    --primary-glow: rgba(34, 211, 238, 0.15);
+    /* Deep space — rich purples & blues, soft turquoise + orange accents */
+    --primary-color: #4dd0e1;
+    --primary-hover: #3ab8c8;
+    --primary-glow: rgba(77, 208, 225, 0.12);
+    --primary-text-on: #0c0918;
     --accent-color: #f97316;
     --accent-hover: #ea580c;
     --accent-glow: rgba(249, 115, 22, 0.15);
@@ -35,9 +36,10 @@
 }
 
 [data-theme="light"] {
-    --primary-color: #0891b2;
-    --primary-hover: #0e7490;
-    --primary-glow: rgba(8, 145, 178, 0.12);
+    --primary-color: #0e8e9e;
+    --primary-hover: #0c7a88;
+    --primary-glow: rgba(14, 142, 158, 0.12);
+    --primary-text-on: #ffffff;
     --accent-color: #ea580c;
     --accent-hover: #c2410c;
     --accent-glow: rgba(234, 88, 12, 0.12);
@@ -174,7 +176,7 @@ body {
 
 .nav-link.active {
     background: var(--primary-color);
-    color: white;
+    color: var(--primary-text-on);
     box-shadow: 0 0 12px var(--primary-glow);
 }
 
@@ -283,7 +285,7 @@ body {
 
 .btn-primary {
     background: var(--primary-color);
-    color: white;
+    color: var(--primary-text-on);
 }
 
 .btn-primary:hover {
@@ -395,7 +397,7 @@ body {
 .job-card:hover {
     border-color: var(--primary-color);
     transform: translateY(-3px);
-    box-shadow: 0 8px 24px rgba(34, 211, 238, 0.08), 0 0 0 1px rgba(124, 58, 237, 0.06);
+    box-shadow: 0 8px 24px rgba(77, 208, 225, 0.07), 0 0 0 1px rgba(124, 58, 237, 0.05);
 }
 
 .job-card-header {
@@ -1329,7 +1331,7 @@ body {
     margin-bottom: 1rem;
     padding: 0.75rem 1rem;
     background: var(--primary-color);
-    color: white;
+    color: var(--primary-text-on);
     border-radius: var(--radius-sm);
 }
 
@@ -1376,7 +1378,7 @@ body {
 .capture-card:hover {
     border-color: var(--primary-color);
     transform: translateY(-3px);
-    box-shadow: 0 6px 20px rgba(34, 211, 238, 0.08);
+    box-shadow: 0 6px 20px rgba(77, 208, 225, 0.07);
 }
 
 .capture-card.selected {
@@ -1450,7 +1452,7 @@ body {
 .pagination button.active {
     background: var(--primary-color);
     border-color: var(--primary-color);
-    color: white;
+    color: var(--primary-text-on);
 }
 
 .pagination-info {
