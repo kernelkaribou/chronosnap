@@ -1043,7 +1043,7 @@ body {
 .time-picker-container select:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    box-shadow: 0 0 0 3px var(--primary-glow);
 }
 
 .time-picker-container .separator {
@@ -1273,17 +1273,6 @@ body {
 }
 
 /* Settings link icon styling */
-.settings-link {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.5rem;
-}
-
-.settings-link svg {
-    display: block;
-}
-
 /* API documentation link styling */
 .api-docs-link {
     color: var(--primary-color);
