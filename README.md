@@ -234,3 +234,7 @@ MIT License. See [LICENSE](LICENSE) for details.
 ## Author
 
 Maintained by [kernelkaribou](https://github.com/kernelkaribou)
+
+## Disclaimer
+
+This was a shell script I had personally made before but wanted something easier to configure and schedule on a larger scale. This application was built almost exclusively using vibe 🤮 coding. If you are reading this you should know because some people get upset. This was an idea I carried around for a while and AI made it actually happen. I can't imagine that I will be making much changes to it as its more of a utility than an application but intend to keep it functioning as long as I can. Do whatever you want with it, I don't care.
