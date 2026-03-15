@@ -1162,6 +1162,7 @@ let allVideos = [];
 let currentFilteredVideos = [];
 const VIDEO_PAGE_SIZE = 24;
 let videosDisplayed = 0;
+let selectedVideos = new Set();
 
 async function loadVideos() {
     try {
@@ -1271,6 +1272,8 @@ function filterVideos() {
     
     currentFilteredVideos = filtered;
     videosDisplayed = 0;
+    selectedVideos.clear();
+    updateVideoSelectionControls();
     document.getElementById('videos-list').innerHTML = '';
     showMoreVideos();
 }
@@ -1328,9 +1331,15 @@ function renderVideos(videos, isEmpty) {
         const isCompleted = video.status === 'completed';
         const isProcessing = video.status === 'processing';
         const thumbSrc = video.thumbnail_path ? `${API_BASE}/videos/${video.id}/thumbnail` : '';
+        const isSelected = selectedVideos.has(video.id);
         
         return `
-        <div class="video-gallery-card" style="--i:${globalIdx}" onclick="openVideoDetail(${video.id})" title="${escapeHtml(video.name)}">
+        <div class="video-gallery-card ${isSelected ? 'selected' : ''}" style="--i:${globalIdx}" 
+             data-video-id="${video.id}"
+             onclick="handleVideoCardClick(${video.id}, event)" title="${escapeHtml(video.name)}">
+            <input type="checkbox" class="capture-checkbox"
+                   ${isSelected ? 'checked' : ''}
+                   onclick="event.stopPropagation(); toggleVideoSelection(${video.id}, event)">
             <div class="video-gallery-thumb">
                 ${thumbSrc ? 
                     `<img src="${thumbSrc}" alt="" loading="lazy">` : 
@@ -1444,6 +1453,98 @@ async function deleteVideoFromDetail(videoId, videoName) {
                 }
             } catch (error) {
                 showNotification(`Failed to delete video "${videoName}"`, 'error');
+            }
+        }
+    );
+}
+
+// Video selection for bulk operations
+function handleVideoCardClick(videoId, event) {
+    if (event.target.type === 'checkbox') return;
+    if (selectedVideos.size > 0) {
+        toggleVideoSelection(videoId, event);
+    } else {
+        openVideoDetail(videoId);
+    }
+}
+
+function toggleVideoSelection(videoId, event) {
+    if (event) event.stopPropagation();
+    
+    if (selectedVideos.has(videoId)) {
+        selectedVideos.delete(videoId);
+    } else {
+        selectedVideos.add(videoId);
+    }
+    
+    const card = document.querySelector(`.video-gallery-card[data-video-id="${videoId}"]`);
+    if (card) {
+        card.classList.toggle('selected', selectedVideos.has(videoId));
+        const cb = card.querySelector('.capture-checkbox');
+        if (cb) cb.checked = selectedVideos.has(videoId);
+    }
+    
+    updateVideoSelectionControls();
+}
+
+function toggleSelectAllVisibleVideos() {
+    const cards = document.querySelectorAll('.video-gallery-card[data-video-id]');
+    const allSelected = [...cards].every(c => selectedVideos.has(parseInt(c.dataset.videoId)));
+    
+    cards.forEach(card => {
+        const id = parseInt(card.dataset.videoId);
+        if (allSelected) {
+            selectedVideos.delete(id);
+            card.classList.remove('selected');
+            card.querySelector('.capture-checkbox').checked = false;
+        } else {
+            selectedVideos.add(id);
+            card.classList.add('selected');
+            card.querySelector('.capture-checkbox').checked = true;
+        }
+    });
+    
+    updateVideoSelectionControls();
+}
+
+function updateVideoSelectionControls() {
+    const count = selectedVideos.size;
+    const controls = document.getElementById('video-selection-controls');
+    controls.style.display = count > 0 ? 'flex' : 'none';
+    document.getElementById('video-selected-count').textContent = `${count} selected`;
+    
+    const cards = document.querySelectorAll('.video-gallery-card[data-video-id]');
+    const allSelected = cards.length > 0 && [...cards].every(c => selectedVideos.has(parseInt(c.dataset.videoId)));
+    document.getElementById('video-toggle-selection-btn').textContent = allSelected ? 'Clear Selection' : 'Select Visible';
+}
+
+function clearVideoSelection() {
+    selectedVideos.clear();
+    document.querySelectorAll('.video-gallery-card.selected').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('.video-gallery-card .capture-checkbox').forEach(cb => cb.checked = false);
+    updateVideoSelectionControls();
+}
+
+async function deleteSelectedVideos() {
+    const count = selectedVideos.size;
+    if (count === 0) return;
+    
+    showConfirm(
+        `Are you sure you want to delete ${count} timelapse${count > 1 ? 's' : ''}?`,
+        async (confirmed) => {
+            if (!confirmed) return;
+            try {
+                const response = await fetch(`${API_BASE}/videos/delete-multiple`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ video_ids: [...selectedVideos] })
+                });
+                const result = await response.json();
+                selectedVideos.clear();
+                loadVideos();
+                showNotification(`Deleted ${result.deleted} timelapse${result.deleted > 1 ? 's' : ''}`);
+            } catch (error) {
+                showNotification('Failed to delete timelapses', 'error');
             }
         }
     );
