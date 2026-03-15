@@ -227,6 +227,46 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Webhook Notifications Section -->
+                    <div class="settings-section">
+                        <h3>Webhook Notifications</h3>
+                        <p class="settings-description">
+                            Receive alerts when a job fails consecutive captures. Sends a POST request with a JSON payload to your configured endpoint (e.g., Home Assistant, Discord, Slack).
+                        </p>
+                        <div class="webhook-settings">
+                            <div class="webhook-row">
+                                <label class="webhook-label">Enabled</label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="webhook-enabled" onchange="markWebhookDirty()">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="webhook-row">
+                                <label class="webhook-label" for="webhook-url">Webhook URL</label>
+                                <input type="url" id="webhook-url" class="form-control webhook-input" placeholder="https://homeassistant.local/api/webhook/..." oninput="markWebhookDirty()">
+                            </div>
+                            <div class="webhook-row">
+                                <label class="webhook-label" for="webhook-threshold">Failure Threshold</label>
+                                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                    <input type="number" id="webhook-threshold" class="form-control webhook-input-sm" min="1" max="50" value="3" oninput="markWebhookDirty()">
+                                    <span class="webhook-hint">consecutive failures before alerting</span>
+                                </div>
+                            </div>
+                            <div class="webhook-row webhook-template-row">
+                                <label class="webhook-label" for="webhook-template">Payload Template</label>
+                                <textarea id="webhook-template" class="form-control webhook-textarea" rows="4" oninput="markWebhookDirty()" spellcheck="false">{"title": "{title}", "message": "{message}"}</textarea>
+                                <div class="webhook-variables">
+                                    <span class="webhook-hint">Variables:</span>
+                                    <code>{title}</code> <code>{message}</code> <code>{job_name}</code> <code>{job_id}</code> <code>{failure_count}</code> <code>{error_message}</code>
+                                </div>
+                            </div>
+                            <div class="webhook-actions">
+                                <button class="btn btn-secondary" onclick="testWebhook()">Test Webhook</button>
+                                <button class="btn btn-purple" id="webhook-save-btn" onclick="saveWebhookSettings()" disabled>Save</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
