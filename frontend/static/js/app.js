@@ -9,6 +9,28 @@ let videoRefreshInterval = null;
 let confirmCallback = null;
 
 // =============================================================================
+// Theme Toggle
+// =============================================================================
+
+function initTheme() {
+    const saved = localStorage.getItem('theme');
+    if (saved) {
+        document.documentElement.setAttribute('data-theme', saved);
+    }
+    // Default is dark (handled by :root CSS)
+}
+
+function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme');
+    const next = current === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+}
+
+// Apply theme immediately (before DOMContentLoaded)
+initTheme();
+
+// =============================================================================
 // Universal Utility Functions
 // =============================================================================
 
