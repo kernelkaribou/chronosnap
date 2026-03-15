@@ -368,10 +368,10 @@ function renderJobs(jobs) {
         return;
     }
     
-    container.innerHTML = jobs.map(job => {
+    container.innerHTML = jobs.map((job, idx) => {
         const thumbnailHtml = job.latest_capture 
-            ? `<div class="job-thumbnail" style="background-image: url('${API_BASE}/captures/${job.latest_capture.id}/thumbnail'); background-size: cover; background-position: center; height: 120px; border-radius: 0.5rem; margin-bottom: 1rem;"></div>`
-            : `<div class="job-thumbnail" style="background: var(--border-color); height: 120px; border-radius: 0.5rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">No captures yet</div>`;
+            ? `<div class="job-thumbnail" style="background-image: url('${API_BASE}/captures/${job.latest_capture.id}/thumbnail'); background-size: cover; background-position: center; height: 120px; border-radius: var(--radius-md); margin-bottom: 1rem;"></div>`
+            : `<div class="job-thumbnail" style="background: var(--border-color); height: 120px; border-radius: var(--radius-md); margin-bottom: 1rem; display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">No captures yet</div>`;
         
         // Determine status display
         let statusLabel, statusClass;
@@ -412,7 +412,7 @@ function renderJobs(jobs) {
         }
         
         return `
-        <div class="job-card" onclick="showJobDetails(${job.id})">
+        <div class="job-card" style="--i:${idx}" onclick="showJobDetails(${job.id})">
             ${thumbnailHtml}
             <div class="job-card-header">
                 <div class="job-card-title">${escapeHtml(job.name)}</div>
@@ -1181,8 +1181,8 @@ function renderVideos(videos) {
         return;
     }
     
-    container.innerHTML = videos.map(video => `
-        <div class="video-card">
+    container.innerHTML = videos.map((video, idx) => `
+        <div class="video-card" style="--i:${idx}">
             <div class="video-card-content">
                 <div class="video-card-main">
                     <div class="video-card-header">
@@ -3066,8 +3066,9 @@ function renderCaptures(captures) {
         return;
     }
     
-    grid.innerHTML = captures.map(capture => `
+    grid.innerHTML = captures.map((capture, idx) => `
         <div class="capture-card ${capturesState.selectedCaptures.has(capture.id) ? 'selected' : ''}" 
+             style="--i:${idx}"
              data-capture-id="${capture.id}"
              onclick="handleCaptureCardClick(${capture.id}, event)">
             <input type="checkbox" 
