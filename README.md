@@ -34,8 +34,25 @@ A self-hosted web application for creating automated timelapse captures from HTT
 - Per-job capture sync tool to reconcile database records with files on disk
 - Orphaned capture detection across all jobs
 - Bulk capture deletion
+- Job duplication to quickly create similar configurations
 - API key authentication for all endpoints
 - Health check endpoint for container orchestration
+
+### Storage Dashboard
+
+- Visual breakdown of storage usage across all jobs
+- Donut charts for captures vs. timelapses and disk usage
+- Per-job horizontal bar chart showing capture and timelapse sizes
+- Summary cards for total captures, timelapses, storage used, and disk free
+
+### Webhook Notifications
+
+- Configurable webhook alerts when a job fails consecutive captures
+- Customizable failure threshold (default: 3 consecutive failures)
+- JSON payload template with variable substitution for integration with Home Assistant, Discord, Slack, or any HTTP endpoint
+- Available template variables: `{title}`, `{message}`, `{job_name}`, `{job_id}`, `{failure_count}`, `{error_message}`
+- Test button to verify webhook configuration before relying on it
+- Alerts fire once when the threshold is first reached (non-spamming)
 
 ## Quick Start
 
@@ -172,7 +189,8 @@ Interactive API documentation is available at `/docs` (Swagger UI) when the appl
 | `/api/jobs` | Create, list, update, and delete capture jobs. Trigger manual captures. Run capture sync scans. |
 | `/api/captures` | List, filter, download, and delete captures. Detect and clean up orphaned files. |
 | `/api/videos` | Create timelapse videos, track processing progress, download and delete videos. |
-| `/api/settings` | View and regenerate the API key. |
+| `/api/settings` | View and regenerate the API key. Configure webhook notifications. |
+| `/api/storage` | Storage statistics and disk usage. |
 
 ## Considerations
 
@@ -206,7 +224,7 @@ If you want to stop a job without losing data, disable it or let it complete nat
 
 ### Network and Camera Reliability
 
-FFmpeg capture operations time out based on the `FFMPEG_TIMEOUT` setting. If your cameras are on a slow or unreliable network, increase this value. The scheduler tracks consecutive failures per job and logs warnings, but does not automatically disable jobs that fail repeatedly.
+FFmpeg capture operations time out based on the `FFMPEG_TIMEOUT` setting. If your cameras are on a slow or unreliable network, increase this value. The scheduler tracks consecutive failures per job and sets a warning after reaching the configurable threshold (default: 3). If webhook notifications are configured in Settings, an alert is sent when the threshold is first reached. Jobs are never automatically disabled by failures; manual intervention is required to stop a persistently failing job.
 
 RTSP captures use TCP transport for reliability over UDP. Ensure the container can reach your camera network and that any firewalls allow the RTSP port (typically 554 or 7441 for UniFi Protect).
 
@@ -217,6 +235,7 @@ RTSP captures use TCP transport for reliability over UDP. Ensure the container c
 - FFmpeg for image capture and video encoding
 - Pillow for thumbnail generation
 - Vanilla HTML, CSS, and JavaScript frontend with Alpine.js
+- Chart.js for storage dashboard visualizations
 - Docker with multi-stage builds
 
 ## CI/CD
