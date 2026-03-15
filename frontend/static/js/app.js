@@ -175,22 +175,12 @@ function showNotification(message, type = 'success') {
 }
 
 // Confirmation system
-function showConfirm(message, callback, showOptions = false) {
+function showConfirm(message, callback) {
     const modal = document.getElementById('confirm-modal');
     const messageEl = document.getElementById('confirm-message');
-    const optionsDiv = document.getElementById('confirm-options');
-    const checkbox = document.getElementById('delete-captures-checkbox');
     
     messageEl.textContent = message;
     confirmCallback = callback;
-    
-    // Show/hide options and reset checkbox
-    if (showOptions) {
-        optionsDiv.style.display = 'block';
-        checkbox.checked = false;
-    } else {
-        optionsDiv.style.display = 'none';
-    }
     
     modal.classList.add('active');
 }
@@ -1102,24 +1092,18 @@ async function saveJobChanges(jobId) {
 
 async function deleteJob(jobId, jobName) {
     showConfirm(
-        `Are you sure you want to delete the job "${jobName}"?`,
+        `Are you sure you want to delete the job "${jobName}"? This will permanently remove the job and all its captures. Timelapse videos will be preserved.`,
         async (confirmed) => {
             if (!confirmed) return;
             
-            const deleteCaptures = document.getElementById('delete-captures-checkbox').checked;
-            
             try {
-                const response = await fetch(`${API_BASE}/jobs/${jobId}?delete_captures=${deleteCaptures}`, {
+                const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
                     method: 'DELETE'
                 });
                 
                 if (response.ok) {
                     loadJobs();
-                    if (deleteCaptures) {
-                        showNotification(`Job "${jobName}" and all captures deleted successfully`);
-                    } else {
-                        showNotification(`Job "${jobName}" deleted successfully (captures preserved)`);
-                    }
+                    showNotification(`Job "${jobName}" and all captures deleted successfully`);
                 } else {
                     showNotification(`Failed to delete job "${jobName}"`, 'error');
                 }
@@ -1127,8 +1111,7 @@ async function deleteJob(jobId, jobName) {
                 console.error('Failed to delete job:', error);
                 showNotification(`Failed to delete job "${jobName}"`, 'error');
             }
-        },
-        true  // Show checkbox option
+        }
     );
 }
 
@@ -1214,7 +1197,7 @@ function renderVideos(videos) {
                     <div class="video-info">
                         ${video.job_name ? 
                             `<div><strong>Job:</strong> <a href="#" class="job-link" onclick="event.preventDefault(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a></div>` : 
-                            `<div><strong>Job:</strong> <span class="text-muted">Unknown (removed)</span></div>`
+                            `<div><strong>Job:</strong> <span class="text-muted">Deleted Job</span></div>`
                         }
                         <div><strong>Resolution:</strong> ${video.resolution} | <strong>FPS:</strong> ${video.framerate}</div>
                         <div><strong>Quality:</strong> ${video.quality}</div>

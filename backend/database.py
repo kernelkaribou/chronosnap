@@ -6,9 +6,11 @@ from typing import Dict, Any
 from contextlib import contextmanager
 import secrets
 import string
+import logging
 from . import config
 from .utils import get_now, to_iso
 
+logger = logging.getLogger(__name__)
 
 @contextmanager
 def get_db():
@@ -84,7 +86,7 @@ def init_db():
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS processed_videos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                job_id INTEGER NOT NULL,
+                job_id INTEGER,
                 name TEXT NOT NULL,
                 file_path TEXT NOT NULL,
                 file_size INTEGER NOT NULL,
@@ -101,7 +103,7 @@ def init_db():
                 progress REAL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 completed_at TEXT,
-                FOREIGN KEY (job_id) REFERENCES jobs (id) ON DELETE CASCADE
+                FOREIGN KEY (job_id) REFERENCES jobs (id) ON DELETE SET NULL
             )
         """)
         
@@ -140,6 +142,44 @@ def init_db():
             cursor.execute("ALTER TABLE processed_videos ADD COLUMN start_time TEXT")
         if 'end_time' not in video_columns:
             cursor.execute("ALTER TABLE processed_videos ADD COLUMN end_time TEXT")
+        
+        # Migration: Change processed_videos FK from CASCADE to SET NULL
+        # SQLite doesn't support ALTER CONSTRAINT, so we need to recreate the table
+        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='processed_videos'")
+        create_sql = cursor.fetchone()[0]
+        if 'ON DELETE CASCADE' in create_sql and 'processed_videos' in create_sql:
+            logger.info("Migrating processed_videos: changing ON DELETE CASCADE to ON DELETE SET NULL")
+            cursor.execute("ALTER TABLE processed_videos RENAME TO _processed_videos_old")
+            cursor.execute("""
+                CREATE TABLE processed_videos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id INTEGER,
+                    name TEXT NOT NULL,
+                    file_path TEXT NOT NULL,
+                    file_size INTEGER NOT NULL,
+                    resolution TEXT NOT NULL,
+                    framerate INTEGER NOT NULL,
+                    quality TEXT NOT NULL,
+                    start_capture_id INTEGER,
+                    end_capture_id INTEGER,
+                    start_time TEXT,
+                    end_time TEXT,
+                    total_frames INTEGER NOT NULL,
+                    duration_seconds REAL NOT NULL,
+                    status TEXT DEFAULT 'processing',
+                    progress REAL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    completed_at TEXT,
+                    FOREIGN KEY (job_id) REFERENCES jobs (id) ON DELETE SET NULL
+                )
+            """)
+            cursor.execute("""
+                INSERT INTO processed_videos 
+                SELECT * FROM _processed_videos_old
+            """)
+            cursor.execute("DROP TABLE _processed_videos_old")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_videos_job_id ON processed_videos(job_id)")
+            logger.info("Migration complete: processed_videos FK updated to SET NULL")
         
         # Initialize API key if not exists
         cursor.execute("SELECT value FROM settings WHERE key = 'api_key'")

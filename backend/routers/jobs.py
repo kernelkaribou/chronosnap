@@ -370,9 +370,11 @@ async def update_job(job_id: int, job_update: JobUpdate):
 
 
 @router.delete("/{job_id}", status_code=204)
-async def delete_job(job_id: int, delete_captures: bool = False):
-    """Delete a job and optionally its capture files"""
-    import os
+async def delete_job(job_id: int):
+    """
+    Permanently delete a job, all its capture records, and all capture files.
+    Timelapse videos created from this job are preserved (their job_id is set to NULL).
+    """
     import shutil
     
     with get_db() as conn:
@@ -386,8 +388,8 @@ async def delete_job(job_id: int, delete_captures: bool = False):
         
         job_name, job_folder = row
         
-        # Delete the entire job folder if requested
-        if delete_captures and job_folder:
+        # Delete the entire job folder from disk
+        if job_folder:
             try:
                 if os.path.exists(job_folder) and os.path.isdir(job_folder):
                     shutil.rmtree(job_folder)
@@ -395,10 +397,10 @@ async def delete_job(job_id: int, delete_captures: bool = False):
             except Exception as e:
                 logger.warning(f"Failed to delete job folder {job_folder}: {e}")
         
-        # Delete job (cascades to captures and videos records in DB)
+        # Delete job (cascades captures, sets NULL on processed_videos)
         cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
         
-        logger.info(f"Deleted job '{job_name}' (ID: {job_id}) - Captures deleted from disk: {delete_captures}")
+        logger.info(f"Deleted job '{job_name}' (ID: {job_id}) and all captures")
 
 
 @router.post("/test-url", response_model=TestUrlResponse)
