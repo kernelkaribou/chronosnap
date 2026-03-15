@@ -5,13 +5,17 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 from typing import List, Optional
 from datetime import datetime
+from pydantic import BaseModel
 import os
+import re
+import shutil
 import logging
 
 from ..models import CaptureResponse, CaptureListResponse, CaptureDeleteRequest
 from ..database import get_db, dict_from_row
 from ..utils import get_now, to_iso, parse_iso
 from ..services.thumbnail_generator import get_thumbnail_path, has_thumbnail, delete_thumbnail
+from .. import config
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -96,6 +100,235 @@ async def list_captures(
             "page_size": page_size,
             "total_pages": total_pages
         }
+
+
+class OrphanedCleanupRequest(BaseModel):
+    folders: Optional[List[str]] = None
+    job_ids: Optional[List[int]] = None
+    delete_all: bool = False
+
+
+@router.get("/orphaned")
+async def scan_orphaned_captures():
+    """
+    Scan for orphaned captures:
+    1. Filesystem orphans: folders on disk that don't belong to any existing job
+    2. Database orphans: capture records referencing deleted jobs
+    """
+    captures_base = config.DEFAULT_CAPTURES_PATH
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # Get all existing job IDs and their capture_paths
+        cursor.execute("SELECT id, capture_path FROM jobs")
+        jobs = {row[0]: row[1] for row in cursor.fetchall()}
+        active_job_ids = set(jobs.keys())
+        active_paths = set(jobs.values())
+        
+        # --- Database orphans: captures referencing deleted jobs ---
+        cursor.execute("""
+            SELECT c.job_id, COUNT(*) as cnt, SUM(c.file_size) as total_size
+            FROM captures c
+            LEFT JOIN jobs j ON c.job_id = j.id
+            WHERE j.id IS NULL
+            GROUP BY c.job_id
+            ORDER BY c.job_id
+        """)
+        
+        db_orphaned_groups = []
+        db_total_records = 0
+        db_total_size = 0
+        
+        for row in cursor.fetchall():
+            job_id, count, size = row[0], row[1], row[2] or 0
+            db_orphaned_groups.append({
+                "type": "database",
+                "original_job_id": job_id,
+                "original_job_name": f"Deleted Job #{job_id}",
+                "record_count": count,
+                "total_size": size
+            })
+            db_total_records += count
+            db_total_size += size
+    
+    # --- Filesystem orphans: folders with no matching job ---
+    fs_orphaned_groups = []
+    fs_total_files = 0
+    fs_total_size = 0
+    
+    if os.path.exists(captures_base):
+        for entry in os.scandir(captures_base):
+            if not entry.is_dir():
+                continue
+            
+            folder_path = entry.path
+            
+            if folder_path in active_paths:
+                continue
+            
+            folder_name = entry.name
+            match = re.match(r'^(\d+)_(.+)$', folder_name)
+            original_job_id = int(match.group(1)) if match else None
+            original_job_name = match.group(2) if match else folder_name
+            
+            if original_job_id and original_job_id in active_job_ids:
+                continue
+            
+            file_count = 0
+            folder_size = 0
+            for root, dirs, files in os.walk(folder_path):
+                for f in files:
+                    fp = os.path.join(root, f)
+                    try:
+                        file_count += 1
+                        folder_size += os.path.getsize(fp)
+                    except OSError:
+                        pass
+            
+            fs_orphaned_groups.append({
+                "type": "filesystem",
+                "folder_path": folder_path,
+                "folder_name": folder_name,
+                "original_job_id": original_job_id,
+                "original_job_name": original_job_name,
+                "file_count": file_count,
+                "total_size": folder_size
+            })
+            fs_total_files += file_count
+            fs_total_size += folder_size
+    
+    # Merge: DB orphans that also have a filesystem folder get combined
+    for db_group in db_orphaned_groups:
+        job_id = db_group['original_job_id']
+        matching_fs = next((g for g in fs_orphaned_groups if g['original_job_id'] == job_id), None)
+        if matching_fs:
+            matching_fs['type'] = 'both'
+            matching_fs['record_count'] = db_group['record_count']
+            matching_fs['db_size'] = db_group['total_size']
+            matching_fs['total_size'] += db_group['total_size']
+        # Otherwise DB-only group stands alone
+    
+    # Build final list: combined fs groups + db-only groups
+    all_groups = list(fs_orphaned_groups)
+    fs_job_ids = {g['original_job_id'] for g in fs_orphaned_groups}
+    for db_group in db_orphaned_groups:
+        if db_group['original_job_id'] not in fs_job_ids:
+            all_groups.append(db_group)
+    
+    all_groups.sort(key=lambda g: (g.get('original_job_id') is None, g.get('original_job_id') or 0))
+    
+    return {
+        "orphaned_groups": all_groups,
+        "total_fs_files": fs_total_files,
+        "total_fs_size": fs_total_size,
+        "total_db_records": db_total_records,
+        "total_db_size": db_total_size
+    }
+
+
+@router.post("/orphaned/cleanup")
+async def cleanup_orphaned_captures(request: OrphanedCleanupRequest):
+    """
+    Delete orphaned captures from disk and/or database.
+    Supports folder paths (filesystem), job_ids (database records), or delete_all.
+    """
+    captures_base = config.DEFAULT_CAPTURES_PATH
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, capture_path FROM jobs")
+        jobs = {row[0]: row[1] for row in cursor.fetchall()}
+        active_job_ids = set(jobs.keys())
+        active_paths = set(jobs.values())
+    
+    deleted_folders = []
+    deleted_db_groups = []
+    errors = []
+    total_freed = 0
+    total_db_records_deleted = 0
+    
+    if request.delete_all:
+        scan = await scan_orphaned_captures()
+        folders_to_delete = [g['folder_path'] for g in scan['orphaned_groups'] if g.get('folder_path')]
+        db_job_ids_to_delete = [g['original_job_id'] for g in scan['orphaned_groups'] 
+                                if g['type'] in ('database', 'both') and g.get('original_job_id')]
+    else:
+        folders_to_delete = request.folders or []
+        db_job_ids_to_delete = request.job_ids or []
+    
+    # Delete filesystem folders
+    for folder_path in folders_to_delete:
+        if not folder_path.startswith(captures_base):
+            errors.append(f"{folder_path}: not under captures directory")
+            continue
+        if folder_path in active_paths:
+            errors.append(f"{folder_path}: belongs to an active job")
+            continue
+        if not os.path.exists(folder_path):
+            errors.append(f"{folder_path}: does not exist")
+            continue
+        
+        try:
+            folder_size = 0
+            for root, dirs, files in os.walk(folder_path):
+                for f in files:
+                    try:
+                        folder_size += os.path.getsize(os.path.join(root, f))
+                    except OSError:
+                        pass
+            
+            shutil.rmtree(folder_path)
+            deleted_folders.append(folder_path)
+            total_freed += folder_size
+            logger.info(f"Deleted orphaned capture folder: {folder_path}")
+        except Exception as e:
+            logger.error(f"Failed to delete orphaned folder {folder_path}: {e}")
+            errors.append(f"{folder_path}: {str(e)}")
+    
+    # Delete database orphan records
+    for job_id in db_job_ids_to_delete:
+        if job_id in active_job_ids:
+            errors.append(f"Job #{job_id}: still active, skipping")
+            continue
+        
+        try:
+            with get_db() as conn:
+                cursor = conn.cursor()
+                
+                # Delete associated files from disk first
+                cursor.execute("SELECT file_path FROM captures WHERE job_id = ?", (job_id,))
+                file_paths = [row[0] for row in cursor.fetchall()]
+                
+                for fp in file_paths:
+                    try:
+                        if os.path.exists(fp):
+                            os.remove(fp)
+                            # Also delete thumbnail
+                            delete_thumbnail(fp)
+                    except OSError:
+                        pass
+                
+                # Delete DB records
+                cursor.execute("SELECT COUNT(*) FROM captures WHERE job_id = ?", (job_id,))
+                count = cursor.fetchone()[0]
+                cursor.execute("DELETE FROM captures WHERE job_id = ?", (job_id,))
+                
+                deleted_db_groups.append(job_id)
+                total_db_records_deleted += count
+                logger.info(f"Deleted {count} orphaned DB records for job_id={job_id}")
+        except Exception as e:
+            logger.error(f"Failed to delete orphaned DB records for job {job_id}: {e}")
+            errors.append(f"Job #{job_id}: {str(e)}")
+    
+    return {
+        "deleted_folders": deleted_folders,
+        "deleted_db_job_ids": deleted_db_groups,
+        "total_folders_deleted": len(deleted_folders),
+        "total_db_records_deleted": total_db_records_deleted,
+        "total_freed": total_freed,
+        "errors": errors
+    }
 
 
 @router.get("/{capture_id}", response_model=CaptureResponse)
