@@ -29,8 +29,8 @@ if [ "$CURRENT_UID" != "$PUID" ] || [ "$CURRENT_GID" != "$PGID" ]; then
     usermod -u "$PUID" -g "$PGID" appuser 2>/dev/null || true
 fi
 
-# Set ownership of directories
-chown -R "$PUID:$PGID" /app/data /captures /timelapses
+# Set ownership of directories (ignore errors for NFS/read-only mounts)
+chown -R "$PUID:$PGID" /app/data /captures /timelapses 2>/dev/null || true
 
 # Switch to app user and execute the command
 exec gosu "$PUID:$PGID" "$@"
