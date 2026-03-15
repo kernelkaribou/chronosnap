@@ -27,6 +27,14 @@ function toggleTheme() {
     localStorage.setItem('theme', next);
 }
 
+function getTimeFormat() {
+    return localStorage.getItem('timeFormat') || '24';
+}
+
+function setTimeFormat(format) {
+    localStorage.setItem('timeFormat', format);
+}
+
 // Apply theme immediately (before DOMContentLoaded)
 initTheme();
 
@@ -1428,6 +1436,7 @@ async function populateVideoFormFromJob(jobId, jobName) {
         const rangeSpan = document.getElementById('capture-time-range');
         
         if (rangeInfo && rangeSpan) {
+            const use12 = getTimeFormat() === '12';
             const formatOptions = { 
                 year: 'numeric', 
                 month: '2-digit', 
@@ -1435,10 +1444,11 @@ async function populateVideoFormFromJob(jobId, jobName) {
                 hour: '2-digit',
                 minute: '2-digit',
                 second: '2-digit',
-                hour12: false
+                hour12: use12
             };
-            const firstFormatted = firstDate.toLocaleString('en-US', formatOptions);
-            const lastFormatted = lastDate.toLocaleString('en-US', formatOptions);
+            const locale = use12 ? 'en-US' : 'en-CA';
+            const firstFormatted = firstDate.toLocaleString(locale, formatOptions);
+            const lastFormatted = lastDate.toLocaleString(locale, formatOptions);
             rangeSpan.textContent = `${firstFormatted} - ${lastFormatted}`;
             rangeInfo.style.display = 'block';
         }
@@ -1938,36 +1948,32 @@ function formatBytes(bytes) {
 
 function formatDateTime(isoString) {
     if (!isoString) return 'N/A';
-    // Parse the ISO string - it should now have timezone info
     const date = new Date(isoString);
-    // If the date is invalid, return the raw string
     if (isNaN(date.getTime())) return isoString;
-    // Force 24-hour format
-    return date.toLocaleString('en-CA', { 
+    const use12 = getTimeFormat() === '12';
+    return date.toLocaleString(use12 ? 'en-US' : 'en-CA', { 
         year: 'numeric', 
         month: '2-digit', 
         day: '2-digit',
         hour: '2-digit', 
         minute: '2-digit', 
         second: '2-digit',
-        hour12: false 
+        hour12: use12 
     });
 }
 
 function formatDateTimeNoSeconds(isoString) {
     if (!isoString) return 'N/A';
-    // Parse the ISO string - it should now have timezone info
     const date = new Date(isoString);
-    // If the date is invalid, return the raw string
     if (isNaN(date.getTime())) return isoString;
-    // Force 24-hour format without seconds
-    return date.toLocaleString('en-CA', { 
+    const use12 = getTimeFormat() === '12';
+    return date.toLocaleString(use12 ? 'en-US' : 'en-CA', { 
         year: 'numeric', 
         month: '2-digit', 
         day: '2-digit',
         hour: '2-digit', 
         minute: '2-digit', 
-        hour12: false 
+        hour12: use12 
     });
 }
 
@@ -2958,6 +2964,28 @@ async function loadSettings() {
         console.error('Failed to load settings:', error);
         showNotification('Failed to load settings', 'error');
     }
+    
+    // Sync time format toggle state
+    updateTimeFormatButtons();
+}
+
+function updateTimeFormatButtons() {
+    const current = getTimeFormat();
+    const btn24 = document.getElementById('time-format-24');
+    const btn12 = document.getElementById('time-format-12');
+    if (btn24 && btn12) {
+        btn24.className = current === '24' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
+        btn12.className = current === '12' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
+    }
+}
+
+function toggleTimeFormat(format) {
+    setTimeFormat(format);
+    updateTimeFormatButtons();
+    // Refresh visible data to apply new format
+    loadJobs();
+    loadVideos();
+    showNotification(`Time format set to ${format}-hour`, 'success');
 }
 
 async function copyApiKey() {
