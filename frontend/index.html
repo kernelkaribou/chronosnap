@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TimeLapse-Manager</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -17,14 +21,20 @@
                 <a href="#" data-view="jobs" class="nav-link active">Jobs</a>
                 <a href="#" data-view="captures" class="nav-link">Captures</a>
                 <a href="#" data-view="videos" class="nav-link">Timelapses</a>
-                <a href="#" data-view="settings" class="nav-link settings-link" title="Settings">
-                    <svg width="20" height="20" viewBox="0 0 306.256 306.256" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M282.468,166.157v-26.059l21.313-19.243c2.355-2.126,3.118-5.505,1.903-8.437L289.787,74.04 c-1.214-2.932-4.139-4.774-7.311-4.62l-28.678,1.465l-18.427-18.427l1.465-28.677c0.162-3.169-1.689-6.098-4.62-7.312 L193.837,0.571c-2.933-1.214-6.31-0.452-8.438,1.903l-19.241,21.314h-26.06L120.856,2.474c-2.126-2.355-5.504-3.116-8.437-1.903 L74.04,16.468c-2.932,1.214-4.782,4.143-4.62,7.312l1.465,28.677L52.458,70.884L23.781,69.42 c-3.166-0.157-6.098,1.688-7.312,4.62L0.572,112.419c-1.214,2.932-0.452,6.311,1.903,8.437l21.313,19.242v26.06L2.475,185.4 c-2.355,2.126-3.118,5.505-1.903,8.437l15.897,38.379c1.214,2.932,4.144,4.782,7.312,4.62l28.677-1.465l18.427,18.427 l-1.465,28.677c-0.162,3.169,1.689,6.098,4.62,7.312l38.379,15.897c2.933,1.215,6.311,0.453,8.437-1.903l19.243-21.314h26.06 l19.241,21.314c1.453,1.609,3.489,2.475,5.569,2.475c0.965,0,1.939-0.186,2.868-0.571l38.379-15.897 c2.932-1.214,4.782-4.143,4.62-7.312l-1.465-28.677l18.427-18.427l28.678,1.465c3.175,0.159,6.098-1.689,7.311-4.62 l15.897-38.379c1.215-2.932,0.452-6.311-1.903-8.437L282.468,166.157z M277.955,221.586l-26.721-1.365 c-2.129-0.107-4.186,0.687-5.686,2.187l-23.141,23.141c-1.5,1.501-2.295,3.566-2.186,5.686l1.365,26.72l-28.599,11.846 l-17.929-19.859c-1.423-1.575-3.445-2.474-5.567-2.474h-32.726c-2.122,0-4.145,0.899-5.567,2.474l-17.929,19.859L84.67,277.955 l1.365-26.72c0.108-2.12-0.686-4.186-2.187-5.686l-23.141-23.141c-1.5-1.501-3.561-2.295-5.686-2.187l-26.72,1.365 l-11.846-28.599l19.859-17.929c1.575-1.422,2.474-3.445,2.474-5.567v-32.726c0-2.122-0.899-4.145-2.474-5.567l-19.859-17.929 L28.301,84.67l26.72,1.365c2.123,0.108,4.185-0.686,5.686-2.187l23.141-23.141c1.501-1.5,2.295-3.566,2.187-5.686l-1.365-26.72 l28.599-11.846l17.929,19.859c1.422,1.575,3.445,2.474,5.567,2.474h32.726c2.122,0,4.145-0.899,5.567-2.474l17.929-19.859 l28.599,11.846l-1.365,26.72c-0.108,2.12,0.686,4.186,2.186,5.686l23.141,23.141c1.5,1.5,3.56,2.297,5.686,2.187l26.721-1.365 l11.846,28.599l-19.858,17.929c-1.575,1.422-2.475,3.445-2.475,5.567v32.726c0,2.122,0.899,4.145,2.475,5.567l19.858,17.929 L277.955,221.586z"/>
-                        <path d="M153.128,71.045c-45.261,0-82.084,36.822-82.084,82.083s36.822,82.084,82.084,82.084 c45.261,0,82.083-36.822,82.083-82.084C235.211,107.866,198.389,71.045,153.128,71.045z M153.128,220.212 c-36.99,0-67.084-30.094-67.084-67.084s30.094-67.083,67.084-67.083c36.989,0,67.083,30.094,67.083,67.083 S190.118,220.212,153.128,220.212z"/>
-                        <path d="M153.128,101.184c-28.642,0-51.944,23.302-51.944,51.944s23.302,51.944,51.944,51.944 c28.643,0,51.944-23.302,51.944-51.944C205.072,124.486,181.771,101.184,153.128,101.184z M153.128,190.072 c-20.371,0-36.944-16.573-36.944-36.944c0-20.371,16.573-36.944,36.944-36.944c20.371,0,36.944,16.573,36.944,36.944 C190.072,173.499,173.499,190.072,153.128,190.072z"/>
-                    </svg>
-                </a>
+                <a href="#" data-view="settings" class="nav-link">Settings</a>
             </div>
+            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5"/>
+                    <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                    <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                </svg>
+            </button>
         </nav>
 
         <!-- Main Content -->
@@ -90,7 +100,7 @@
                         <label>To:</label>
                         <input type="datetime-local" id="captures-end-time" class="form-control" onchange="applyCaptureSortAndFilter()">
                     </div>
-                    <button class="btn-icon" onclick="clearCaptureFilters()" title="Clear filters" style="padding: 0.5rem 0.6rem; background: #6c757d; color: white; border-radius: 0.25rem; margin-left: 0.5rem;">
+                    <button class="btn btn-secondary btn-sm" onclick="clearCaptureFilters()" title="Clear filters" style="margin-left: 0.5rem;">
                         ✕
                     </button>
                 </div>
@@ -235,8 +245,8 @@
                             <small>End of daily capture window (can be next day)</small>
                         </div>
                     </div>
-                    <div style="padding: 0.75rem; background: #e3f2fd; border-left: 3px solid #2196f3; margin-bottom: 1rem; border-radius: 0.25rem;">
-                        <p style="margin: 0; font-size: 0.875rem; color: #1565c0;">
+                    <div class="info-box" style="margin-bottom: 1rem;">
+                        <p style="margin: 0; font-size: 0.875rem;">
                             <strong>Note:</strong> The time window can span days. For example, 22:00 to 02:00 will capture from 10 PM to 2 AM.
                         </p>
                     </div>
@@ -289,7 +299,7 @@
 
     <!-- Process Video Modal -->
     <div id="process-video-modal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content large">
             <div class="modal-header">
                 <h3>Process Timelapse Video</h3>
                 <span class="close" onclick="closeModal('process-video-modal')">&times;</span>
@@ -404,13 +414,13 @@
 
     <!-- Video Player Modal -->
     <div id="video-player-modal" class="modal">
-        <div class="modal-content large">
+        <div class="modal-content xlarge">
             <div class="modal-header">
                 <h3 id="video-player-title">Video Player</h3>
                 <button class="modal-close" onclick="closeVideoPlayer()">&times;</button>
             </div>
             <div style="padding: 1rem;">
-                <video id="video-player" controls style="width: 100%; max-height: 70vh; background: #000;">
+                <video id="video-player" controls style="width: 100%; max-height: 80vh; background: #000;">
                     <source id="video-source" type="video/mp4">
                     Your browser does not support the video tag.
                 </video>
@@ -420,7 +430,7 @@
 
     <!-- Maintenance Modal -->
     <div id="maintenance-modal" class="modal">
-        <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-content large">
             <div class="modal-header">
                 <h3 id="maintenance-title">File Maintenance</h3>
                 <span class="close" onclick="closeMaintenance()">&times;</span>
@@ -433,14 +443,14 @@
 
     <!-- Capture Preview Modal -->
     <div id="capture-preview-modal" class="modal">
-        <div class="modal-content large">
+        <div class="modal-content xlarge">
             <div class="modal-header">
                 <h3>Capture Details</h3>
                 <button class="modal-close" onclick="closeCapturePreview()">&times;</button>
             </div>
             <div style="padding: 1.5rem;">
                 <div style="text-align: center; margin-bottom: 1rem;">
-                    <img id="capture-preview-image" style="max-width: 100%; max-height: 60vh; background: #000;">
+                    <img id="capture-preview-image" style="max-width: 100%; max-height: 75vh; background: #000; border-radius: var(--radius-md);">
                 </div>
                 <div id="capture-preview-details" class="capture-details">
                     <div class="detail-row">

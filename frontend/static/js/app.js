@@ -9,6 +9,28 @@ let videoRefreshInterval = null;
 let confirmCallback = null;
 
 // =============================================================================
+// Theme Toggle
+// =============================================================================
+
+function initTheme() {
+    const saved = localStorage.getItem('theme');
+    if (saved) {
+        document.documentElement.setAttribute('data-theme', saved);
+    }
+    // Default is dark (handled by :root CSS)
+}
+
+function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme');
+    const next = current === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+}
+
+// Apply theme immediately (before DOMContentLoaded)
+initTheme();
+
+// =============================================================================
 // Universal Utility Functions
 // =============================================================================
 
@@ -368,10 +390,10 @@ function renderJobs(jobs) {
         return;
     }
     
-    container.innerHTML = jobs.map(job => {
+    container.innerHTML = jobs.map((job, idx) => {
         const thumbnailHtml = job.latest_capture 
-            ? `<div class="job-thumbnail" style="background-image: url('${API_BASE}/captures/${job.latest_capture.id}/thumbnail'); background-size: cover; background-position: center; height: 120px; border-radius: 0.5rem; margin-bottom: 1rem;"></div>`
-            : `<div class="job-thumbnail" style="background: var(--border-color); height: 120px; border-radius: 0.5rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">No captures yet</div>`;
+            ? `<div class="job-thumbnail" style="background-image: url('${API_BASE}/captures/${job.latest_capture.id}/thumbnail'); background-size: cover; background-position: center; height: 120px; border-radius: var(--radius-md); margin-bottom: 1rem;"></div>`
+            : `<div class="job-thumbnail" style="background: var(--border-color); height: 120px; border-radius: var(--radius-md); margin-bottom: 1rem; display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">No captures yet</div>`;
         
         // Determine status display
         let statusLabel, statusClass;
@@ -412,7 +434,7 @@ function renderJobs(jobs) {
         }
         
         return `
-        <div class="job-card" onclick="showJobDetails(${job.id})">
+        <div class="job-card" style="--i:${idx}" onclick="showJobDetails(${job.id})">
             ${thumbnailHtml}
             <div class="job-card-header">
                 <div class="job-card-title">${escapeHtml(job.name)}</div>
@@ -487,7 +509,7 @@ async function showJobDetails(jobId) {
         let timeWindowHtml = '';
         if (job.time_window_enabled) {
             timeWindowHtml = `
-                <div style="margin: 1rem 0; padding: 1rem; background: #e3f2fd; color: #1565c0; border-radius: 0.5rem; border-left: 4px solid #2196f3;">
+                <div class="info-box" style="margin: 1rem 0;">
                     <div style="display: flex; align-items: start; gap: 0.5rem;">
                         <div>
                             <strong>Time Window Enabled</strong>
@@ -520,7 +542,7 @@ async function showJobDetails(jobId) {
                 ${latestImageHtml}
                 
                 ${job.warning_message ? `
-                <div style="margin: 1rem 0; padding: 1rem; background: #fed7aa; color: #9a3412; border-radius: 0.5rem; border-left: 4px solid #ea580c;">
+                <div class="info-box" style="margin: 1rem 0; border-left-color: var(--warning-color);">
                     <div style="display: flex; align-items: start; gap: 0.5rem;">
                         <span style="font-size: 1.25rem;">⚠</span>
                         <div>
@@ -1119,7 +1141,7 @@ async function testUrl() {
         return;
     }
     
-    resultDiv.innerHTML = '<p style="color: #666;">Testing URL...</p>';
+    resultDiv.innerHTML = '<p style="color: var(--text-secondary);">Testing URL...</p>';
     resultDiv.className = 'test-result';
     
     try {
@@ -1131,15 +1153,15 @@ async function testUrl() {
         if (result.success) {
             resultDiv.className = 'test-result';
             resultDiv.innerHTML = `
-                <img src="${result.image_data}" alt="Test capture" style="max-width: 100%; margin-top: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                <img src="${result.image_data}" alt="Test capture" style="max-width: 100%; margin-top: 10px; border: 1px solid var(--border-color); border-radius: 4px;">
             `;
         } else {
             resultDiv.className = 'test-result error';
-            resultDiv.innerHTML = `<p style="color: #e74c3c; margin-top: 10px;">${result.message}</p>`;
+            resultDiv.innerHTML = `<p style="color: var(--danger-color); margin-top: 10px;">${result.message}</p>`;
         }
     } catch (error) {
         resultDiv.className = 'test-result error';
-        resultDiv.innerHTML = `<p style="color: #e74c3c; margin-top: 10px;">Error: Please check the URL.</p>`;
+        resultDiv.innerHTML = `<p style="color: var(--danger-color); margin-top: 10px;">Error: Please check the URL.</p>`;
     }
 }
 
@@ -1181,8 +1203,8 @@ function renderVideos(videos) {
         return;
     }
     
-    container.innerHTML = videos.map(video => `
-        <div class="video-card">
+    container.innerHTML = videos.map((video, idx) => `
+        <div class="video-card" style="--i:${idx}">
             <div class="video-card-content">
                 <div class="video-card-main">
                     <div class="video-card-header">
@@ -1567,8 +1589,8 @@ function displayDurationEstimate(captureCount, framerate) {
             
             if (customEnd < window.firstCaptureTime || customStart > window.lastCaptureTime) {
                 document.getElementById('video-duration-estimate').innerHTML = 
-                    '<p style="color: #dc3545; font-weight: 600;"><strong>Warning:</strong> Selected time range is outside available captures!</p>' +
-                    '<p style="color: #dc3545; font-size: 0.875rem;">Available: ' + 
+                    '<p style="color: var(--danger-color); font-weight: 600;"><strong>Warning:</strong> Selected time range is outside available captures!</p>' +
+                    '<p style="color: var(--danger-color); font-size: 0.875rem;">Available: ' + 
                     formatDateTime(window.firstCaptureTime.toISOString()) + ' - ' + 
                     formatDateTime(window.lastCaptureTime.toISOString()) + '</p>';
                 
@@ -1584,7 +1606,7 @@ function displayDurationEstimate(captureCount, framerate) {
     
     if (captureCount === 0) {
         const message = useRange 
-            ? '<p style="color: #dc3545; font-weight: 600;"><strong>Warning:</strong> No captures in selected time range!</p>'
+            ? '<p style="color: var(--danger-color); font-weight: 600;"><strong>Warning:</strong> No captures in selected time range!</p>'
             : '<p style="color: var(--text-secondary);">No captures available for this job yet.</p>';
         document.getElementById('video-duration-estimate').innerHTML = message;
         
@@ -2303,11 +2325,11 @@ function displayMaintenanceResults(jobId, jobName) {
     } else {
         // Issues found - show details
         const missingList = data.missing_files && data.missing_files.length > 0 ? data.missing_files.map(file => `
-            <div style="padding: 0.4rem 0.5rem; background: white; border-radius: 3px; margin-bottom: 0.25rem; border-left: 2px solid var(--danger);">
+            <div style="padding: 0.4rem 0.5rem; background: var(--card-bg); border-radius: 3px; margin-bottom: 0.25rem; border-left: 2px solid var(--danger);">
                 <div style="font-size: 0.8rem; color: #000; word-break: break-all; font-family: monospace; line-height: 1.3;">
                     ${escapeHtml(file.file_path)}
                 </div>
-                <div style="font-size: 0.7rem; color: #666; margin-top: 0.15rem; line-height: 1.2;">
+                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.15rem; line-height: 1.2;">
                     ${formatDateTime(file.captured_at)} • ${formatBytes(file.file_size)}
                 </div>
             </div>
@@ -2331,7 +2353,7 @@ function displayMaintenanceResults(jobId, jobName) {
                         </div>
                         <div>
                             <div style="font-size: 0.875rem; color: var(--text-secondary);">Orphaned Files</div>
-                            <div style="font-size: 1.5rem; font-weight: bold; color: #f59e0b;">${data.orphaned_count || 0}</div>
+                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--warning-color);">${data.orphaned_count || 0}</div>
                         </div>
                         <div>
                             <div style="font-size: 0.875rem; color: var(--text-secondary);">Existing Files</div>
@@ -2343,14 +2365,14 @@ function displayMaintenanceResults(jobId, jobName) {
                 ${data.missing_count > 0 ? `
                 <div style="margin-bottom: 1.5rem;">
                     <h4 style="margin-bottom: 0.5rem;">Missing Files (${data.missing_count}):</h4>
-                    <div style="max-height: 300px; overflow-y: auto; padding: 0.4rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px;">
+                    <div style="max-height: 300px; overflow-y: auto; padding: 0.4rem; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 6px;">
                         ${missingList}
                     </div>
                 </div>
                 
-                <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                    <strong style="color: #856404;">Important</strong>
-                    <p style="color: #856404; margin-top: 0.5rem; margin-bottom: 0; font-size: 0.875rem;">
+                <div style="background: var(--surface-hover); border: 1px solid var(--warning-color); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                    <strong style="color: var(--warning-color);">Important</strong>
+                    <p style="color: var(--warning-color); margin-top: 0.5rem; margin-bottom: 0; font-size: 0.875rem;">
                         These files are missing from disk. Submitting will remove the database records for these captures. 
                         Ensure files are truly missing and not temporarily unavailable (e.g., unmounted drive). This action cannot be undone.
                     </p>
@@ -2360,23 +2382,23 @@ function displayMaintenanceResults(jobId, jobName) {
                 ${data.orphaned_count > 0 ? `
                 <div style="margin-bottom: 1.5rem; ${data.missing_count > 0 ? 'padding-top: 1rem; border-top: 2px solid var(--border-color);' : ''}">
                     <h4 style="margin-bottom: 0.5rem;">Orphaned Files (${data.orphaned_count}):</h4>
-                    <div style="max-height: 300px; overflow-y: auto; padding: 0.4rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px;">
+                    <div style="max-height: 300px; overflow-y: auto; padding: 0.4rem; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 6px;">
                         ${(data.orphaned_files && data.orphaned_files.length > 0) ? data.orphaned_files.map(f => `
-                            <div style="padding: 0.4rem 0.5rem; background: white; border-radius: 3px; margin-bottom: 0.25rem; border-left: 2px solid #f59e0b;">
+                            <div style="padding: 0.4rem 0.5rem; background: var(--card-bg); border-radius: 3px; margin-bottom: 0.25rem; border-left: 2px solid var(--warning-color);">
                                 <div style="font-size: 0.8rem; color: #000; word-break: break-all; font-family: monospace; line-height: 1.3;">
                                     ${escapeHtml(f.file_path)}
                                 </div>
-                                <div style="font-size: 0.7rem; color: #666; margin-top: 0.15rem; line-height: 1.2;">
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.15rem; line-height: 1.2;">
                                     ${formatDateTime(f.captured_at)} • ${formatBytes(f.file_size)}
                                 </div>
                             </div>
-                        `).join('') : '<div style="padding: 1rem; text-align: center; color: #666;">No orphaned files data</div>'}
+                        `).join('') : '<div style="padding: 1rem; text-align: center; color: var(--text-secondary);">No orphaned files data</div>'}
                     </div>
                 </div>
                 
-                <div style="background: #dbeafe; border: 1px solid #3b82f6; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                    <strong style="color: #1e40af;">Important</strong>
-                    <p style="color: #1e40af; margin-top: 0.5rem; margin-bottom: 0; font-size: 0.875rem;">
+                <div style="background: var(--surface-hover); border: 1px solid var(--primary-color); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                    <strong style="color: var(--primary-color);">Important</strong>
+                    <p style="color: var(--primary-color); margin-top: 0.5rem; margin-bottom: 0; font-size: 0.875rem;">
                         Timestamps will be extracted from filenames, EXIF data, or file modification times. 
                         Submitting will add these files to the database and update job statistics. This action cannot be undone.
                     </p>
@@ -3248,8 +3270,9 @@ function renderCaptures(captures) {
         return;
     }
     
-    grid.innerHTML = captures.map(capture => `
+    grid.innerHTML = captures.map((capture, idx) => `
         <div class="capture-card ${capturesState.selectedCaptures.has(capture.id) ? 'selected' : ''}" 
+             style="--i:${idx}"
              data-capture-id="${capture.id}"
              onclick="handleCaptureCardClick(${capture.id}, event)">
             <input type="checkbox" 
