@@ -575,7 +575,7 @@ async function showJobDetails(jobId) {
                                 <circle cx="12" cy="13" r="4"></circle>
                             </svg>
                         </button>
-                        <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); startMaintenance(${job.id}, '${escapeHtml(job.name)}')" title="Sync — Compare database records against files on disk" style="padding: 0.25rem;">
+                        <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); performMaintenanceScan(${job.id}, '${escapeHtml(job.name)}')" title="Sync" style="padding: 0.25rem;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="23 4 23 10 17 10"></polyline>
                                 <polyline points="1 20 1 14 7 14"></polyline>
@@ -2238,17 +2238,6 @@ async function manualCapture(jobId, jobName) {
     );
 }
 
-async function startMaintenance(jobId, jobName) {
-    showConfirm(
-        `This will compare the database records against the actual files on disk for "${jobName}". It will identify records with no matching file and files with no matching record. No changes are made until you review and confirm. Continue?`,
-        async (confirmed) => {
-            if (confirmed) {
-                await performMaintenanceScan(jobId, jobName);
-            }
-        }
-    );
-}
-
 async function performMaintenanceScan(jobId, jobName) {
     const modal = document.getElementById('maintenance-modal');
     const title = document.getElementById('maintenance-title');
@@ -2419,8 +2408,14 @@ function displayMaintenanceResults(jobId, jobName) {
 }
 
 function confirmMaintenanceSubmit(jobId, jobName) {
+    const data = maintenanceData;
+    const parts = [];
+    if (data.missing_count > 0) parts.push(`remove ${data.missing_count} database record(s) with no matching file`);
+    if (data.orphaned_count > 0) parts.push(`import ${data.orphaned_count} file(s) with no database record`);
+    const summary = parts.join(' and ');
+    
     showConfirm(
-        'Are you sure you want to apply all sync actions? Records without files will be removed, and files without records will be imported. This cannot be undone.',
+        `This will ${summary}. This cannot be undone.`,
         async (confirmed) => {
             if (confirmed) {
                 await performMaintenanceActions(jobId, jobName);
@@ -2435,7 +2430,7 @@ async function performMaintenanceActions(jobId, jobName) {
     
     content.innerHTML = `
         <div style="text-align: center; padding: 2rem;">
-            <p>Processing maintenance actions...</p>
+            <p>Applying sync changes...</p>
         </div>
     `;
     
