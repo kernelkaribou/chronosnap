@@ -11,6 +11,7 @@ from ..models import JobCreate, JobUpdate, JobResponse, TestUrlResponse, Duratio
 from ..database import get_db, dict_from_row
 from ..services.url_tester import test_stream_url
 from ..services.duration_calculator import calculate_duration
+from ..services.image_capture import capture_image
 from ..services.maintenance import scan_job_files, cleanup_missing_captures, import_orphaned_files
 from ..services.job_state import calculate_job_state
 from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware
@@ -436,6 +437,42 @@ async def get_latest_image(job_id: int):
             raise HTTPException(status_code=404, detail="No captures found for this job")
         
         return {"file_path": row[0]}
+
+
+@router.post("/{job_id}/capture")
+async def manual_capture(job_id: int):
+    """
+    Take a manual snapshot using the job's existing stream settings.
+    Does not affect the job's scheduling state (next_scheduled_capture_at, status).
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        job = dict_from_row(row)
+    
+    logger.info(f"Manual capture requested for job '{job['name']}' (ID: {job_id})")
+    
+    success, error_msg = capture_image(job)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail=f"Capture failed: {error_msg}")
+    
+    # Update last_captured_at for display purposes only — scheduling is unaffected
+    now = get_now()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE jobs SET last_captured_at = ?, updated_at = ? WHERE id = ?",
+            (to_iso(now), to_iso(now), job_id)
+        )
+    
+    logger.info(f"Manual capture completed for job '{job['name']}' (ID: {job_id})")
+    return {"success": True, "message": f"Manual capture completed for '{job['name']}'"}
 
 
 @router.post("/{job_id}/maintenance/scan", response_model=MaintenanceResult)
