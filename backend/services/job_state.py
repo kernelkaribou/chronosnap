@@ -300,8 +300,20 @@ def calculate_job_state(
             window_capture = find_next_capture_in_window(job, next_window_start, start_time, end_time)
             
             if window_capture is None:
-                # No captures before job ends
-                return ('completed', None, 'Job ends before next window')
+                if not end_dt or end_dt > reference_time:
+                    # end_datetime is still in the future — grid may not align with
+                    # the window, but the job is NOT done. Stay sleeping and let the
+                    # scheduler re-evaluate. Use the next window start as a wake-up hint.
+                    remaining = f"{(end_dt - reference_time).days} days" if end_dt else "indefinitely"
+                    logger.warning(
+                        f"Job '{job.get('name', '?')}': no grid capture aligns with "
+                        f"time window within search period, but job runs for "
+                        f"{remaining}. Staying sleeping."
+                    )
+                    return ('sleeping', next_window_start,
+                            f'No capture aligned with window yet, re-checking at {to_iso(next_window_start)}')
+                # end_datetime has passed or is None with no captures — truly completed
+                return ('completed', None, 'No more captures before job ends')
             
             return ('sleeping', window_capture, f'Outside time window, next capture at {to_iso(window_capture)}')
     
