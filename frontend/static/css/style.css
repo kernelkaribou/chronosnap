@@ -547,6 +547,12 @@ body {
     cursor: pointer;
     transition: all var(--transition-base);
     box-shadow: var(--shadow-sm);
+    position: relative;
+}
+
+.video-gallery-card.selected {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px var(--primary-glow);
 }
 
 .video-gallery-card:hover {
@@ -1476,8 +1482,23 @@ body {
 }
 
 .captures-selection-controls span {
-    flex: 1;
     font-weight: 500;
+}
+
+.captures-selection-controls span:not(.selection-clear) {
+    flex: 1;
+}
+
+.selection-clear {
+    cursor: pointer;
+    font-size: 1.25rem;
+    line-height: 1;
+    opacity: 0.8;
+    padding: 0 0.25rem;
+}
+
+.selection-clear:hover {
+    opacity: 1;
 }
 
 .captures-grid {
