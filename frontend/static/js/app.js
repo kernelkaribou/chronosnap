@@ -661,6 +661,12 @@ async function showJobDetails(jobId) {
                             job.status === 'disabled' ?
                             `<button class="btn btn-success" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')">Enable</button>` : ''
                         }
+                        <button class="btn-icon" onclick="duplicateJob(${job.id})" title="Duplicate Job" style="padding: 0.5rem;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                        </button>
                         <button class="btn-icon" onclick="closeModal('job-details-modal'); deleteJob(${job.id}, '${escapeHtml(job.name)}')" title="Delete Job" style="padding: 0.5rem;">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="3 6 5 6 21 6"></polyline>
@@ -2129,12 +2135,80 @@ function showCreateJobModal() {
     // Set initial min for end date
     updateEndDateMin();
     
+    // Reset time window
+    document.getElementById('time_window_enabled').checked = false;
+    document.getElementById('time-window-fields').style.display = 'none';
+    
     showModal('create-job-modal');
     
     // Trigger initial duration estimate with default values
     setTimeout(() => {
         updateDurationEstimate();
     }, 100);
+}
+
+async function duplicateJob(jobId) {
+    try {
+        const job = await apiRequest(`/jobs/${jobId}`);
+        
+        closeModal('job-details-modal');
+        
+        // Open create modal and pre-fill with job data
+        document.getElementById('create-job-form').reset();
+        document.getElementById('test-result').innerHTML = '';
+        document.getElementById('duration-estimate').innerHTML = '';
+        
+        setupDateTimePickerSyncWithTimeInput('start', 'start_datetime');
+        setupDateTimePickerSyncWithTimeInput('end', 'end_datetime');
+        
+        // Pre-fill fields from source job
+        document.getElementById('job_name').value = `${job.name} (Copy)`;
+        document.getElementById('job_url').value = job.url;
+        document.getElementById('interval_seconds').value = job.interval_seconds;
+        document.getElementById('framerate').value = job.framerate || 30;
+        document.getElementById('capture_path').value = '/captures';
+        document.getElementById('naming_pattern').value = job.naming_pattern || '{job_name}_{num:06d}_{timestamp}';
+        
+        // Set start to now
+        setDefaultStartTime();
+        
+        // Copy end date if it exists
+        if (job.end_datetime) {
+            const end = new Date(job.end_datetime);
+            const endDate = document.getElementById('end_date');
+            const endTime = document.getElementById('end_time');
+            endDate.value = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`;
+            endTime.value = `${String(end.getHours()).padStart(2,'0')}:${String(end.getMinutes()).padStart(2,'0')}`;
+            endDate.dispatchEvent(new Event('change'));
+        }
+        
+        // Copy time window settings
+        const twEnabled = document.getElementById('time_window_enabled');
+        const twFields = document.getElementById('time-window-fields');
+        if (job.time_window_enabled) {
+            twEnabled.checked = true;
+            twFields.style.display = '';
+            if (job.time_window_start) {
+                document.getElementById('time_window_start_time').value = job.time_window_start;
+                document.getElementById('time_window_start_time').dispatchEvent(new Event('change'));
+            }
+            if (job.time_window_end) {
+                document.getElementById('time_window_end_time').value = job.time_window_end;
+                document.getElementById('time_window_end_time').dispatchEvent(new Event('change'));
+            }
+        } else {
+            twEnabled.checked = false;
+            twFields.style.display = 'none';
+        }
+        
+        updateEndDateMin();
+        showModal('create-job-modal');
+        
+        setTimeout(() => updateDurationEstimate(), 100);
+    } catch (error) {
+        console.error('Failed to duplicate job:', error);
+        showNotification('Failed to duplicate job', 'error');
+    }
 }
 
 // Update minimum end date based on start date and interval
