@@ -3027,6 +3027,188 @@ async function loadCaptures() {
     }
 }
 
+async function scanOrphanedCaptures() {
+    const modal = document.getElementById('maintenance-modal');
+    const title = document.getElementById('maintenance-title');
+    const content = document.getElementById('maintenance-content');
+    
+    title.textContent = 'Captures Cleanup';
+    content.innerHTML = `
+        <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 2rem; margin-bottom: 1rem;">🔍</div>
+            <p>Scanning for orphaned captures...</p>
+            <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
+                Checking filesystem and database...
+            </p>
+        </div>
+    `;
+    modal.classList.add('active');
+    
+    try {
+        const data = await apiRequest('/captures/orphaned');
+        displayOrphanedResults(data);
+    } catch (error) {
+        console.error('Orphaned scan failed:', error);
+        content.innerHTML = `
+            <div style="text-align: center; padding: 2rem;">
+                <div style="font-size: 2rem; margin-bottom: 1rem;">❌</div>
+                <p style="color: var(--danger);">Failed to scan for orphaned captures</p>
+                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
+                    ${escapeHtml(error.message)}
+                </p>
+                <button class="btn btn-secondary" style="margin-top: 1rem;" onclick="closeMaintenance()">Close</button>
+            </div>
+        `;
+    }
+}
+
+function displayOrphanedResults(data) {
+    const content = document.getElementById('maintenance-content');
+    
+    if (!data.orphaned_groups || data.orphaned_groups.length === 0) {
+        content.innerHTML = `
+            <div style="text-align: center; padding: 2rem;">
+                <h3 style="margin-bottom: 0.5rem;">All Clean</h3>
+                <p style="color: var(--text-secondary);">
+                    No orphaned captures found. All files and records belong to active jobs.
+                </p>
+                <button class="btn btn-primary" style="margin-top: 1.5rem;" onclick="closeMaintenance()">Close</button>
+            </div>
+        `;
+        return;
+    }
+    
+    const groupsHtml = data.orphaned_groups.map(group => {
+        const typeLabel = group.type === 'both' ? 'Files + DB Records' 
+            : group.type === 'database' ? 'DB Records Only' 
+            : 'Files Only';
+        const typeBadgeColor = group.type === 'both' ? '#e74c3c' 
+            : group.type === 'database' ? '#3498db' 
+            : '#e67e22';
+        
+        let details = '';
+        if (group.type === 'filesystem') {
+            details = `${group.file_count} file${group.file_count !== 1 ? 's' : ''} on disk · ${formatBytes(group.total_size)}`;
+        } else if (group.type === 'database') {
+            details = `${group.record_count} DB record${group.record_count !== 1 ? 's' : ''}`;
+        } else {
+            details = `${group.file_count} file${group.file_count !== 1 ? 's' : ''} on disk + ${group.record_count} DB record${group.record_count !== 1 ? 's' : ''} · ${formatBytes(group.total_size - (group.db_size || 0))}`;
+        }
+        
+        // Build cleanup params based on type
+        const cleanupArg = group.type === 'filesystem' 
+            ? `'fs', '${escapeHtml(group.folder_path)}', null`
+            : group.type === 'database'
+            ? `'db', null, ${group.original_job_id}`
+            : `'both', '${escapeHtml(group.folder_path)}', ${group.original_job_id}`;
+        
+        return `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: var(--bg-color); border-radius: 0.375rem; margin-bottom: 0.5rem;">
+                <div style="flex: 1; min-width: 0;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                        <strong>${escapeHtml(group.original_job_name)}</strong>
+                        <span style="font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 0.25rem; background: ${typeBadgeColor}; color: white;">${typeLabel}</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                        ${details}
+                    </div>
+                </div>
+                <button class="btn btn-danger" style="padding: 0.3rem 0.75rem; font-size: 0.85rem; white-space: nowrap; margin-left: 0.5rem;" 
+                    onclick="deleteOrphanedGroup(${cleanupArg}, '${escapeHtml(group.original_job_name)}')">
+                    Delete
+                </button>
+            </div>
+        `;
+    }).join('');
+    
+    // Summary line
+    const summaryParts = [];
+    if (data.total_fs_files > 0) summaryParts.push(`${data.total_fs_files} files on disk (${formatBytes(data.total_fs_size)})`);
+    if (data.total_db_records > 0) summaryParts.push(`${data.total_db_records} DB records`);
+    
+    content.innerHTML = `
+        <div>
+            <div style="margin-bottom: 1rem;">
+                <strong style="color: #e67e22;">⚠ Orphaned Captures Found</strong>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                    ${data.orphaned_groups.length} group${data.orphaned_groups.length > 1 ? 's' : ''} · ${summaryParts.join(' · ')}
+                </div>
+            </div>
+            <div style="max-height: 400px; overflow-y: auto;">
+                ${groupsHtml}
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                <button class="btn btn-secondary" onclick="closeMaintenance()">Close</button>
+                ${data.orphaned_groups.length > 1 ? `
+                    <button class="btn btn-danger" onclick="deleteAllOrphanedCaptures()">Delete All</button>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+async function deleteOrphanedGroup(type, folderPath, jobId, jobName) {
+    showConfirm(
+        `Delete all orphaned captures from "${jobName}"? This will permanently remove ${type === 'database' ? 'database records' : type === 'both' ? 'files and database records' : 'files from disk'}.`,
+        async (confirmed) => {
+            if (!confirmed) return;
+            
+            try {
+                const body = {};
+                if (folderPath) body.folders = [folderPath];
+                if (jobId) body.job_ids = [jobId];
+                
+                const response = await apiRequest('/captures/orphaned/cleanup', {
+                    method: 'POST',
+                    body
+                });
+                
+                const parts = [];
+                if (response.total_folders_deleted > 0) parts.push(`${response.total_folders_deleted} folder(s)`);
+                if (response.total_db_records_deleted > 0) parts.push(`${response.total_db_records_deleted} DB records`);
+                if (response.total_freed > 0) parts.push(`${formatBytes(response.total_freed)} freed`);
+                
+                showNotification(`Cleaned up ${parts.join(', ')}`, 'success');
+                const data = await apiRequest('/captures/orphaned');
+                displayOrphanedResults(data);
+                loadCapturesPage();
+            } catch (error) {
+                console.error('Failed to delete orphaned captures:', error);
+                showNotification('Failed to delete orphaned captures', 'error');
+            }
+        }
+    );
+}
+
+async function deleteAllOrphanedCaptures() {
+    showConfirm(
+        'Delete ALL orphaned captures? This will permanently remove all orphaned files and database records.',
+        async (confirmed) => {
+            if (!confirmed) return;
+            
+            try {
+                const response = await apiRequest('/captures/orphaned/cleanup', {
+                    method: 'POST',
+                    body: { delete_all: true }
+                });
+                
+                const parts = [];
+                if (response.total_folders_deleted > 0) parts.push(`${response.total_folders_deleted} folder(s)`);
+                if (response.total_db_records_deleted > 0) parts.push(`${response.total_db_records_deleted} DB records`);
+                if (response.total_freed > 0) parts.push(`${formatBytes(response.total_freed)} freed`);
+                
+                showNotification(`Cleaned up ${parts.join(', ')}`, 'success');
+                const data = await apiRequest('/captures/orphaned');
+                displayOrphanedResults(data);
+                loadCapturesPage();
+            } catch (error) {
+                console.error('Failed to delete orphaned captures:', error);
+                showNotification('Failed to delete orphaned captures', 'error');
+            }
+        }
+    );
+}
+
 async function loadCapturesPage() {
     try {
         const query = {
