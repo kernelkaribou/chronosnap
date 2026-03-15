@@ -4,7 +4,6 @@ Processed videos API endpoints
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
 from fastapi.responses import FileResponse
 from typing import List, Optional
-from datetime import datetime
 import os
 import logging
 

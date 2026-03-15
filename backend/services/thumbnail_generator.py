@@ -2,7 +2,6 @@
 Thumbnail generation service - creates small preview images for captures
 """
 import os
-import subprocess
 import hashlib
 from typing import Optional
 import logging
@@ -99,63 +98,6 @@ def generate_thumbnail(image_path: str, force: bool = False) -> tuple[bool, Opti
         
     except Exception as e:
         logger.error(f"Failed to generate thumbnail for {image_path}: {e}")
-        return False, str(e)
-
-
-def generate_thumbnail_ffmpeg(image_path: str, force: bool = False) -> tuple[bool, Optional[str]]:
-    """
-    Generate a thumbnail using ffmpeg (alternative method)
-    
-    Args:
-        image_path: Path to the original image
-        force: If True, regenerate even if thumbnail exists
-        
-    Returns:
-        tuple: (success: bool, error_message: Optional[str])
-    """
-    if not os.path.exists(image_path):
-        return False, f"Image file not found: {image_path}"
-    
-    thumbnail_path = get_thumbnail_path(image_path)
-    
-    # Skip if thumbnail already exists and force is False
-    if os.path.exists(thumbnail_path) and not force:
-        return True, None
-    
-    try:
-        # Create thumbnail directory if it doesn't exist
-        thumbnail_dir = os.path.dirname(thumbnail_path)
-        os.makedirs(thumbnail_dir, exist_ok=True)
-        
-        # Use ffmpeg to create thumbnail
-        cmd = [
-            'ffmpeg',
-            '-i', image_path,
-            '-vf', f'scale={THUMBNAIL_SIZE[0]}:{THUMBNAIL_SIZE[1]}:force_original_aspect_ratio=decrease',
-            '-q:v', '75',
-            '-frames:v', '1',
-            '-y',  # Overwrite output file
-            thumbnail_path
-        ]
-        
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
-        if result.returncode != 0:
-            logger.error(f"ffmpeg thumbnail generation failed: {result.stderr}")
-            return False, f"ffmpeg error: {result.stderr}"
-        
-        logger.debug(f"Generated thumbnail with ffmpeg: {thumbnail_path}")
-        return True, None
-        
-    except subprocess.TimeoutExpired:
-        return False, "Thumbnail generation timed out"
-    except Exception as e:
-        logger.error(f"Failed to generate thumbnail with ffmpeg for {image_path}: {e}")
         return False, str(e)
 
 

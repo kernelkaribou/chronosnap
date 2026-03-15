@@ -144,11 +144,13 @@ def process_video(
                 universal_newlines=True
             )
             
-            # Monitor progress
+            # Monitor progress, collecting stderr for error reporting
+            stderr_lines = []
             while True:
                 line = process.stderr.readline()
                 if not line:
                     break
+                stderr_lines.append(line)
                 
                 # Parse progress from ffmpeg output
                 if 'frame=' in line:
@@ -157,7 +159,7 @@ def process_video(
                         current_frame = int(frame_str)
                         progress = (current_frame / total_frames) * 100
                         _update_progress(video_id, progress)
-                    except:
+                    except (ValueError, IndexError):
                         pass
             
             process.wait()
@@ -175,9 +177,9 @@ def process_video(
                 
                 logger.info(f"Video processing completed: {output_path}")
             else:
-                error_msg = process.stderr.read() if process.stderr else "Unknown error"
+                error_msg = ''.join(stderr_lines[-20:]) if stderr_lines else "Unknown error"
                 _update_video_status(video_id, 'failed', 0, f"FFMPEG error: {error_msg[:200]}")
-                logger.error(f"Video processing failed: {error_msg}")
+                logger.error(f"Video processing failed: {error_msg[:500]}")
         
         finally:
             # Clean up temp file

@@ -154,32 +154,6 @@ class StateManager:
             
             cursor.execute(query, values)
             logger.info(f"Video {video_id} state updated: {status} (progress: {progress}%)")
-    
-    @staticmethod
-    def get_job_state_summary(job: dict) -> Dict:
-        """
-        Get a human-readable summary of a job's current state.
-        
-        Returns:
-            {
-                'status': 'active' | 'sleeping' | 'completed' | 'disabled',
-                'next_capture': ISO timestamp or None,
-                'reason': Human explanation,
-                'is_running': bool,
-                'can_capture_now': bool
-            }
-        """
-        now = get_now()
-        status, next_capture, reason = StateManager.calculate_job_state(job, now)
-        should_capture, _ = should_job_capture_now(job, now)
-        
-        return {
-            'status': status,
-            'next_capture': to_iso(next_capture) if next_capture else None,
-            'reason': reason,
-            'is_running': status in ('active', 'sleeping'),
-            'can_capture_now': should_capture and status == 'active'
-        }
 
 
 # Singleton-like access

@@ -28,7 +28,7 @@ class VideoStatus(str, Enum):
 
 class JobCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    url: str = Field(..., description="HTTP or RTSP stream URL")
+    url: str = Field(..., max_length=2048, description="HTTP or RTSP stream URL")
     stream_type: StreamType
     start_datetime: datetime
     end_datetime: Optional[datetime] = None
@@ -39,6 +39,13 @@ class JobCreate(BaseModel):
     time_window_enabled: bool = Field(default=False, description="Enable daily time window for captures")
     time_window_start: Optional[str] = Field(None, description="Start time in HH:MM format (e.g., '08:00')")
     time_window_end: Optional[str] = Field(None, description="End time in HH:MM format (e.g., '20:00')")
+    
+    @field_validator('url')
+    @classmethod
+    def validate_url(cls, v):
+        if not v.startswith(('http://', 'https://', 'rtsp://', 'rtsps://')):
+            raise ValueError("URL must start with http://, https://, rtsp://, or rtsps://")
+        return v
     
     @model_validator(mode='after')
     def validate_dates(self):
@@ -75,8 +82,8 @@ class JobCreate(BaseModel):
 
 
 class JobUpdate(BaseModel):
-    name: Optional[str] = None
-    url: Optional[str] = None
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    url: Optional[str] = Field(None, max_length=2048)
     stream_type: Optional[StreamType] = None
     start_datetime: Optional[datetime] = None
     end_datetime: Optional[datetime] = None
@@ -86,6 +93,13 @@ class JobUpdate(BaseModel):
     time_window_enabled: Optional[bool] = None
     time_window_start: Optional[str] = None
     time_window_end: Optional[str] = None
+    
+    @field_validator('url')
+    @classmethod
+    def validate_url(cls, v):
+        if v is not None and not v.startswith(('http://', 'https://', 'rtsp://', 'rtsps://')):
+            raise ValueError("URL must start with http://, https://, rtsp://, or rtsps://")
+        return v
 
 
 class JobResponse(BaseModel):
@@ -151,7 +165,7 @@ class VideoCreate(BaseModel):
 
 class VideoResponse(BaseModel):
     id: int
-    job_id: int
+    job_id: Optional[int] = None
     job_name: Optional[str] = None
     name: str
     file_path: str

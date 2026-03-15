@@ -29,7 +29,10 @@ def capture_image(job: Dict[str, Any]) -> tuple[bool, Optional[str]]:
         with get_db() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT capture_count FROM jobs WHERE id = ?", (job['id'],))
-            capture_count = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            if row is None:
+                return (False, f"Job {job['id']} no longer exists")
+            capture_count = row[0]
         
         # Generate filename and hierarchical path structure
         now = get_now()
@@ -69,7 +72,10 @@ def capture_image(job: Dict[str, Any]) -> tuple[bool, Optional[str]]:
             file_size = os.path.getsize(output_path)
             
             # Generate thumbnail for the captured image
-            generate_thumbnail(output_path)
+            try:
+                generate_thumbnail(output_path)
+            except Exception as thumb_err:
+                logger.warning(f"Thumbnail generation failed for {output_path}: {thumb_err}")
             
             # Record capture in database
             with get_db() as conn:

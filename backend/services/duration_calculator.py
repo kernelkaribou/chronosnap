@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, time
 import logging
 
 from ..models import DurationEstimate, DurationCalculation
+from ..utils import parse_iso
 
 logger = logging.getLogger(__name__)
 
@@ -145,8 +146,8 @@ def calculate_duration(
     # Determine number of captures
     if job['end_datetime']:
         # Job has defined end time
-        start = datetime.fromisoformat(job['start_datetime'])
-        end = datetime.fromisoformat(job['end_datetime'])
+        start = parse_iso(job['start_datetime'])
+        end = parse_iso(job['end_datetime'])
         
         total_captures = calculate_captures_in_time_range(
             start, end, interval_seconds,
@@ -164,7 +165,7 @@ def calculate_duration(
             # Default estimates: 1 hour, 1 day, 1 week, 1 month
             estimate_seconds = 3600  # 1 hour default
         
-        start = datetime.fromisoformat(job['start_datetime'])
+        start = parse_iso(job['start_datetime'])
         end = start + timedelta(seconds=estimate_seconds)
         
         total_captures = calculate_captures_in_time_range(

@@ -4,7 +4,6 @@ Captures API endpoints
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 from typing import List, Optional
-from datetime import datetime
 from pydantic import BaseModel
 import os
 import re
@@ -49,7 +48,7 @@ async def list_captures(
                 parse_iso(start_time)  # Validate format
                 conditions.append("c.captured_at >= ?")
                 params.append(start_time)
-            except:
+            except (ValueError, TypeError):
                 raise HTTPException(status_code=400, detail="Invalid start_time format")
         
         if end_time:
@@ -57,7 +56,7 @@ async def list_captures(
                 parse_iso(end_time)  # Validate format
                 conditions.append("c.captured_at <= ?")
                 params.append(end_time)
-            except:
+            except (ValueError, TypeError):
                 raise HTTPException(status_code=400, detail="Invalid end_time format")
         
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
@@ -259,7 +258,9 @@ async def cleanup_orphaned_captures(request: OrphanedCleanupRequest):
     
     # Delete filesystem folders
     for folder_path in folders_to_delete:
-        if not folder_path.startswith(captures_base):
+        resolved_path = os.path.abspath(folder_path)
+        resolved_base = os.path.abspath(captures_base)
+        if not resolved_path.startswith(resolved_base + os.sep):
             errors.append(f"{folder_path}: not under captures directory")
             continue
         if folder_path in active_paths:
