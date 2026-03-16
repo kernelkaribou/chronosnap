@@ -570,9 +570,14 @@ async function loadJobs() {
     }
 }
 
+function toggleJobStatus(btn) {
+    btn.classList.toggle('active');
+    filterJobs();
+}
+
 function filterJobs() {
     const search = (document.getElementById('job-search').value || '').toLowerCase();
-    const status = document.getElementById('job-status-filter').value;
+    const activeStatuses = [...document.querySelectorAll('.job-status-btn.active')].map(b => b.dataset.status);
     const sort = document.getElementById('job-sort').value;
     
     let filtered = allJobs;
@@ -584,13 +589,8 @@ function filterJobs() {
         );
     }
     
-    if (status) {
-        if (status === 'active') {
-            // Include active and jobs with warnings
-            filtered = filtered.filter(j => j.status === 'active');
-        } else {
-            filtered = filtered.filter(j => j.status === status);
-        }
+    if (activeStatuses.length > 0) {
+        filtered = filtered.filter(j => activeStatuses.includes(j.status));
     }
     
     // Sort
@@ -603,7 +603,7 @@ function filterJobs() {
         default: filtered.sort((a, b) => b.created_at.localeCompare(a.created_at)); break;
     }
     
-    const hasFilters = search || status || sort !== 'created_desc';
+    const hasFilters = search || activeStatuses.length > 0 || sort !== 'created_desc';
     document.getElementById('job-filter-reset').style.display = hasFilters ? '' : 'none';
     
     renderJobs(filtered);
@@ -611,7 +611,7 @@ function filterJobs() {
 
 function resetJobFilters() {
     document.getElementById('job-search').value = '';
-    document.getElementById('job-status-filter').value = '';
+    document.querySelectorAll('.job-status-btn.active').forEach(b => b.classList.remove('active'));
     document.getElementById('job-sort').value = 'created_desc';
     filterJobs();
 }

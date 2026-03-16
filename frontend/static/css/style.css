@@ -818,6 +818,22 @@ body {
     border-color: var(--primary-color);
 }
 
+.job-status-btn {
+    background: var(--surface-color);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    font-size: 0.75rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.job-status-btn.active {
+    background: var(--primary-color);
+    color: var(--primary-text-on);
+    border-color: var(--primary-color);
+}
+
 .gallery-filter-input {
     padding: 0.5rem 0.75rem;
     background: var(--surface-color);

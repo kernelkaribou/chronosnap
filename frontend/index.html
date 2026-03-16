@@ -66,16 +66,15 @@
                         <button class="btn btn-purple" onclick="showCreateJobModal()">+ Create Job</button>
                     </div>
                 </div>
-                <div class="filter-bar" id="job-filter-bar">
-                    <input type="text" id="job-search" class="form-control" placeholder="Search jobs..." oninput="filterJobs()" style="max-width:220px;">
-                    <select id="job-status-filter" class="form-control" onchange="filterJobs()" style="max-width:160px;">
-                        <option value="">All Statuses</option>
-                        <option value="active">Active</option>
-                        <option value="sleeping">Sleeping</option>
-                        <option value="completed">Completed</option>
-                        <option value="disabled">Disabled</option>
-                    </select>
-                    <select id="job-sort" class="form-control" onchange="filterJobs()" style="max-width:160px;">
+                <div class="gallery-filters" id="job-filter-bar">
+                    <input type="text" class="gallery-search" id="job-search" placeholder="Search jobs..." oninput="filterJobs()">
+                    <div class="job-status-toggles" id="job-status-toggles" style="display:flex;gap:0.35rem;flex-wrap:wrap;">
+                        <button class="btn btn-sm job-status-btn" data-status="active" onclick="toggleJobStatus(this)">Active</button>
+                        <button class="btn btn-sm job-status-btn" data-status="sleeping" onclick="toggleJobStatus(this)">Sleeping</button>
+                        <button class="btn btn-sm job-status-btn" data-status="completed" onclick="toggleJobStatus(this)">Completed</button>
+                        <button class="btn btn-sm job-status-btn" data-status="disabled" onclick="toggleJobStatus(this)">Disabled</button>
+                    </div>
+                    <select class="gallery-filter-select" id="job-sort" onchange="filterJobs()">
                         <option value="created_desc">Newest First</option>
                         <option value="created_asc">Oldest First</option>
                         <option value="name_asc">Name A-Z</option>
