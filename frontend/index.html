@@ -484,7 +484,7 @@
                 </div>
 
                 <div class="form-section">
-                    <div class="form-section-title">Automation</div>
+                    <div class="form-section-title">Auto Build</div>
                     <div class="form-group" style="margin-bottom: 1rem;">
                         <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
                             <input type="checkbox" id="auto_build_enabled" style="cursor: pointer;" onchange="toggleAutoBuildFields()">
@@ -537,12 +537,14 @@
                 </div>
 
                 <div class="form-section">
-                    <div class="form-section-title">Configuration</div>
+                    <div class="form-section-title">Tags</div>
                     <div class="form-group">
-                        <label>Tags</label>
                         <div class="tag-picker" id="create-job-tags"></div>
                     </div>
+                </div>
 
+                <div class="form-section">
+                    <div class="form-section-title">Storage</div>
                     <div class="form-group">
                         <label>Capture Path</label>
                         <input type="text" id="capture_path" class="form-control" placeholder="Leave empty for default">

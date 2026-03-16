@@ -854,7 +854,7 @@ async function showJobDetails(jobId) {
                     </div>
                 </div>
 
-                <h4 style="margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border-color);">Job Settings</h4>
+                <!-- Job Settings sections -->
 
                 <div class="form-section">
                     <div class="form-section-title">Source</div>
@@ -924,7 +924,7 @@ async function showJobDetails(jobId) {
                 </div>
 
                 <div class="form-section">
-                    <div class="form-section-title">Automation</div>
+                    <div class="form-section-title">Auto Build</div>
                     <div class="form-group" style="margin-bottom: 1rem;">
                         <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
                             <input type="checkbox" id="edit_auto_build_enabled" ${job.auto_build_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditAutoBuildFields()">
@@ -978,9 +978,8 @@ async function showJobDetails(jobId) {
                 </div>
 
                 <div class="form-section">
-                    <div class="form-section-title">Configuration</div>
+                    <div class="form-section-title">Tags</div>
                     <div class="form-group" style="margin-bottom: 1rem;">
-                        <label>Tags</label>
                         <div class="tag-picker" id="edit-job-tags"></div>
                     </div>
                 </div>

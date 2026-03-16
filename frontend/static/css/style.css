@@ -877,18 +877,15 @@ body {
 }
 
 .form-section {
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 0.75rem 1rem;
-    margin-bottom: 1rem;
+    margin-bottom: 1.25rem;
 }
 .form-section-title {
-    font-size: 0.7rem;
+    font-size: 0.95rem;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-secondary);
-    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 2px solid var(--border-color);
 }
 .form-section > *:last-child {
     margin-bottom: 0;
