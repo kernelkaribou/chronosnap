@@ -16,7 +16,8 @@ A self-hosted web application for creating automated timelapse captures from HTT
 
 - RTSP and RTSPS streams captured via FFmpeg with TCP transport
 - HTTP/HTTPS snapshot URLs captured via FFmpeg
-- URL validation with a test capture before committing to a job
+- URL validation with a preview capture before committing to a job
+- Preview button on existing jobs to verify camera connectivity and angle at any time
 - Manual snapshot trigger for on-demand captures outside the schedule
 
 ### Video Processing
@@ -26,6 +27,7 @@ A self-hosted web application for creating automated timelapse captures from HTT
 - Filter captures by time range or capture ID range when building a video
 - Real-time progress tracking during processing
 - Videos are preserved even if the parent job is deleted
+- **Auto-build**: per-job recurring timelapse generation (daily, weekly, monthly, etc.) — videos accumulate as a sequence with an "Auto" badge in the gallery
 
 ### Management
 

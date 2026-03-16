@@ -73,8 +73,10 @@ async def create_job(job: JobCreate):
                 interval_seconds, framerate, capture_path, naming_pattern,
                 time_window_enabled, time_window_start, time_window_end,
                 warning_threshold,
+                auto_build_enabled, auto_build_interval_hours, auto_build_fps,
+                auto_build_quality, auto_build_resolution, last_auto_build_at,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             job.name, job.url, job.stream_type.value,
             to_iso(job.start_datetime),
@@ -85,6 +87,12 @@ async def create_job(job: JobCreate):
             job.time_window_start if job.time_window_enabled else None,
             job.time_window_end if job.time_window_enabled else None,
             job.warning_threshold,
+            1 if job.auto_build_enabled else 0,
+            job.auto_build_interval_hours,
+            job.auto_build_fps,
+            job.auto_build_quality,
+            job.auto_build_resolution,
+            now_str if job.auto_build_enabled else None,
             now_str, now_str
         ))
         
@@ -285,6 +293,31 @@ async def update_job(job_id: int, job_update: JobUpdate):
         if job_update.warning_threshold is not None:
             updates.append("warning_threshold = ?")
             values.append(job_update.warning_threshold)
+        
+        if job_update.auto_build_enabled is not None:
+            updates.append("auto_build_enabled = ?")
+            values.append(1 if job_update.auto_build_enabled else 0)
+            # When enabling auto-build, seed last_auto_build_at to now so the
+            # first build covers only future captures instead of the entire history
+            if job_update.auto_build_enabled and not current_job.get('auto_build_enabled'):
+                updates.append("last_auto_build_at = ?")
+                values.append(to_iso(get_now()))
+        
+        if job_update.auto_build_interval_hours is not None:
+            updates.append("auto_build_interval_hours = ?")
+            values.append(job_update.auto_build_interval_hours)
+        
+        if job_update.auto_build_fps is not None:
+            updates.append("auto_build_fps = ?")
+            values.append(job_update.auto_build_fps)
+        
+        if job_update.auto_build_quality is not None:
+            updates.append("auto_build_quality = ?")
+            values.append(job_update.auto_build_quality)
+        
+        if job_update.auto_build_resolution is not None:
+            updates.append("auto_build_resolution = ?")
+            values.append(job_update.auto_build_resolution)
         
         # Track manual status changes
         manual_status_change = False

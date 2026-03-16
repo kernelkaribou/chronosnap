@@ -40,6 +40,11 @@ class JobCreate(BaseModel):
     time_window_start: Optional[str] = Field(None, description="Start time in HH:MM format (e.g., '08:00')")
     time_window_end: Optional[str] = Field(None, description="End time in HH:MM format (e.g., '20:00')")
     warning_threshold: int = Field(default=3, ge=1, le=50, description="Consecutive failures before warning state")
+    auto_build_enabled: bool = Field(default=False, description="Enable automatic timelapse builds")
+    auto_build_interval_hours: int = Field(default=168, ge=1, le=8760, description="Hours between auto-builds")
+    auto_build_fps: int = Field(default=30, gt=0, le=120, description="FPS for auto-built videos")
+    auto_build_quality: str = Field(default="medium", pattern=r"^(low|medium|high|lossless)$")
+    auto_build_resolution: str = Field(default="1920x1080", pattern=r"^\d+x\d+$")
     
     @field_validator('url')
     @classmethod
@@ -95,6 +100,11 @@ class JobUpdate(BaseModel):
     time_window_start: Optional[str] = None
     time_window_end: Optional[str] = None
     warning_threshold: Optional[int] = Field(None, ge=1, le=50)
+    auto_build_enabled: Optional[bool] = None
+    auto_build_interval_hours: Optional[int] = Field(None, ge=1, le=8760)
+    auto_build_fps: Optional[int] = Field(None, gt=0, le=120)
+    auto_build_quality: Optional[str] = Field(None, pattern=r"^(low|medium|high|lossless)$")
+    auto_build_resolution: Optional[str] = Field(None, pattern=r"^\d+x\d+$")
     
     @field_validator('url')
     @classmethod
@@ -123,6 +133,13 @@ class JobResponse(BaseModel):
     time_window_start: Optional[str] = None
     time_window_end: Optional[str] = None
     warning_threshold: int = 3
+    auto_build_enabled: int = 0
+    auto_build_interval_hours: int = 168
+    auto_build_fps: int = 30
+    auto_build_quality: str = "medium"
+    auto_build_resolution: str = "1920x1080"
+    last_auto_build_at: Optional[str] = None
+    auto_build_in_progress: int = 0
     next_scheduled_capture_at: Optional[str] = None  # New: scheduled capture time from DB
     next_capture_at: Optional[str] = None  # Calculated field from enrich function
     latest_capture: Optional[Dict[str, Any]] = None  # Latest capture info
@@ -187,6 +204,7 @@ class VideoResponse(BaseModel):
     created_at: str
     completed_at: Optional[str]
     thumbnail_path: Optional[str] = None
+    build_source: str = "manual"
 
 
 class TestUrlResponse(BaseModel):

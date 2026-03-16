@@ -139,6 +139,27 @@ def init_db():
         if 'warning_threshold' not in columns:
             cursor.execute("ALTER TABLE jobs ADD COLUMN warning_threshold INTEGER DEFAULT 3")
         
+        # Migration: Add auto-build columns if they don't exist
+        if 'auto_build_enabled' not in columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_enabled INTEGER DEFAULT 0")
+        if 'auto_build_interval_days' not in columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_interval_days INTEGER DEFAULT 7")
+        # Migration: rename interval_days to interval_hours
+        if 'auto_build_interval_hours' not in columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_interval_hours INTEGER DEFAULT 168")
+            # Migrate existing values: days * 24
+            cursor.execute("UPDATE jobs SET auto_build_interval_hours = auto_build_interval_days * 24 WHERE auto_build_interval_days IS NOT NULL")
+        if 'auto_build_fps' not in columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_fps INTEGER DEFAULT 30")
+        if 'auto_build_quality' not in columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_quality TEXT DEFAULT 'medium'")
+        if 'auto_build_resolution' not in columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_resolution TEXT DEFAULT '1920x1080'")
+        if 'last_auto_build_at' not in columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN last_auto_build_at TEXT")
+        if 'auto_build_in_progress' not in columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_in_progress INTEGER DEFAULT 0")
+        
         # Migration: Add start_time and end_time columns to processed_videos if they don't exist
         cursor.execute("PRAGMA table_info(processed_videos)")
         video_columns = [col[1] for col in cursor.fetchall()]
@@ -211,6 +232,9 @@ def init_db():
         if 'thumbnail_path' not in video_columns:
             cursor.execute("ALTER TABLE processed_videos ADD COLUMN thumbnail_path TEXT")
             logger.info("Migration complete: added thumbnail_path column to processed_videos")
+        if 'build_source' not in video_columns:
+            cursor.execute("ALTER TABLE processed_videos ADD COLUMN build_source TEXT DEFAULT 'manual'")
+            logger.info("Migration complete: added build_source column to processed_videos")
         
         # Initialize API key if not exists
         cursor.execute("SELECT value FROM settings WHERE key = 'api_key'")

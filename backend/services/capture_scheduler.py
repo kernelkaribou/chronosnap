@@ -14,6 +14,7 @@ from ..utils import get_now, to_iso, parse_iso
 from .image_capture import capture_image
 from .job_state import calculate_job_state, should_execute_capture
 from .webhook import send_webhook_event
+from .auto_builder import check_auto_builds, reset_stuck_auto_builds
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,9 @@ class CaptureScheduler:
         
         # Hydrate in-memory queue from database on startup
         self._hydrate_from_database()
+        
+        # Clear any auto-build flags left by a previous crash
+        reset_stuck_auto_builds()
         
         self.running = True
         self.thread = threading.Thread(target=self._run_loop, daemon=True)
@@ -212,6 +216,12 @@ class CaptureScheduler:
         # PHASE 3: Execute captures in parallel
         if jobs_to_capture:
             self._execute_captures_parallel(jobs_to_capture, now)
+        
+        # PHASE 4: Check auto-builds (runs in its own daemon threads)
+        try:
+            check_auto_builds()
+        except Exception as e:
+            logger.error(f"Error checking auto-builds: {e}", exc_info=True)
     
     def _execute_captures_parallel(self, jobs: list, capture_time: datetime):
         """Execute multiple captures in parallel using ThreadPoolExecutor"""
