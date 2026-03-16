@@ -373,6 +373,7 @@ async function loadJobs() {
     try {
         const jobs = await apiRequest('/jobs/');
         renderJobs(jobs);
+        updateJobWarningBadge(jobs);
     } catch (error) {
         console.error('Failed to load jobs:', error);
     }
@@ -398,7 +399,7 @@ function renderJobs(jobs) {
         
         // Determine status display
         let statusLabel, statusClass;
-        if (job.warning_message) {
+        if (job.warning_message && job.status !== 'disabled' && job.status !== 'completed') {
             statusLabel = '⚠ Warning';
             statusClass = 'warning';
         } else if (job.status === 'sleeping') {
@@ -492,7 +493,7 @@ async function showJobDetails(jobId) {
         
         // Determine status display
         let statusLabel, statusClass;
-        if (job.warning_message) {
+        if (job.warning_message && job.status !== 'disabled' && job.status !== 'completed') {
             statusLabel = 'Warning';
             statusClass = 'warning';
         } else if (job.status === 'sleeping') {
@@ -542,7 +543,7 @@ async function showJobDetails(jobId) {
             <div style="padding: 1.5rem;">
                 ${latestImageHtml}
                 
-                ${job.warning_message ? `
+                ${job.warning_message && job.status !== 'disabled' && job.status !== 'completed' ? `
                 <div class="info-box" style="margin: 1rem 0; border-left-color: var(--warning-color);">
                     <div style="display: flex; align-items: start; gap: 0.5rem;">
                         <span style="font-size: 1.25rem;">⚠</span>
@@ -3599,6 +3600,9 @@ async function loadSettings() {
     
     // Sync time format toggle state
     updateTimeFormatButtons();
+
+    // Load webhook settings
+    loadWebhookSettings();
 }
 
 function updateTimeFormatButtons() {
@@ -3654,6 +3658,130 @@ async function regenerateApiKey() {
             showNotification('Failed to regenerate API key', 'error');
         }
     });
+}
+
+// Webhook Settings Functions
+let webhookDirty = false;
+
+function markWebhookDirty() {
+    webhookDirty = true;
+    const btn = document.getElementById('webhook-save-btn');
+    if (btn) btn.disabled = false;
+    updateWebhookToggleState();
+}
+
+function updateWebhookToggleState() {
+    const url = document.getElementById('webhook-url').value.trim();
+    const toggle = document.getElementById('webhook-enabled');
+    if (!url) {
+        toggle.disabled = true;
+        toggle.checked = false;
+    } else {
+        toggle.disabled = false;
+    }
+}
+
+async function loadWebhookSettings() {
+    try {
+        const data = await apiRequest('/settings/webhook');
+        document.getElementById('webhook-url').value = data.webhook_url || '';
+        document.getElementById('webhook-enabled').checked = data.webhook_enabled;
+        document.getElementById('webhook-threshold').value = data.webhook_failure_threshold || 3;
+        document.getElementById('webhook-template').value = data.webhook_payload_template || '{"title": "{title}", "message": "{message}"}';
+        updateWebhookToggleState();
+        webhookDirty = false;
+        const btn = document.getElementById('webhook-save-btn');
+        if (btn) btn.disabled = true;
+    } catch (error) {
+        console.error('Failed to load webhook settings:', error);
+    }
+}
+
+async function saveWebhookSettings() {
+    const url = document.getElementById('webhook-url').value.trim();
+    const template = document.getElementById('webhook-template').value.trim();
+    const defaultTemplate = '{"title": "{title}", "message": "{message}"}';
+
+    const settings = {
+        webhook_enabled: document.getElementById('webhook-enabled').checked && !!url,
+        webhook_url: url,
+        webhook_failure_threshold: parseInt(document.getElementById('webhook-threshold').value) || 3,
+        webhook_payload_template: template || defaultTemplate,
+    };
+
+    // If template was empty, update the textarea to show the default
+    if (!template) {
+        document.getElementById('webhook-template').value = defaultTemplate;
+    }
+
+    // Validate JSON template
+    try {
+        const testPayload = settings.webhook_payload_template
+            .replace(/\{job_name\}/g, 'test')
+            .replace(/\{job_id\}/g, '0')
+            .replace(/\{failure_count\}/g, '3')
+            .replace(/\{error_message\}/g, 'test')
+            .replace(/\{title\}/g, 'test')
+            .replace(/\{message\}/g, 'test');
+        JSON.parse(testPayload);
+    } catch (e) {
+        showNotification('Payload template must produce valid JSON', 'error');
+        return;
+    }
+
+    try {
+        await apiRequest('/settings/webhook', {
+            method: 'PUT',
+            body: settings
+        });
+        webhookDirty = false;
+        const btn = document.getElementById('webhook-save-btn');
+        if (btn) btn.disabled = true;
+        showNotification('Webhook settings saved', 'success');
+    } catch (error) {
+        console.error('Failed to save webhook settings:', error);
+        showNotification('Failed to save webhook settings', 'error');
+    }
+}
+
+async function testWebhook() {
+    const url = document.getElementById('webhook-url').value.trim();
+    const template = document.getElementById('webhook-template').value;
+
+    if (!url) {
+        showNotification('Enter a webhook URL first', 'error');
+        return;
+    }
+
+    try {
+        const data = await apiRequest('/settings/webhook/test', {
+            method: 'POST',
+            body: { url, payload_template: template }
+        });
+        showNotification(data.message, data.success ? 'success' : 'error');
+    } catch (error) {
+        console.error('Webhook test failed:', error);
+        showNotification('Webhook test failed', 'error');
+    }
+}
+
+// Nav Warning Badge
+function updateJobWarningBadge(jobs) {
+    const jobsLink = document.querySelector('.nav-link[data-view="jobs"]');
+    if (!jobsLink) return;
+
+    // Remove existing badge
+    const existing = jobsLink.querySelector('.nav-warning-badge');
+    if (existing) existing.remove();
+
+    // Check if any active/sleeping job has a warning
+    const hasWarnings = jobs && jobs.some(j => j.warning_message && j.status !== 'disabled' && j.status !== 'completed');
+    if (hasWarnings) {
+        const badge = document.createElement('span');
+        badge.className = 'nav-warning-badge';
+        badge.title = 'One or more jobs have warnings';
+        jobsLink.appendChild(badge);
+    }
 }
 
 // =============================================================================

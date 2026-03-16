@@ -13,6 +13,7 @@ from ..database import get_db, dict_from_row
 from ..utils import get_now, to_iso, parse_iso
 from .image_capture import capture_image
 from .job_state import calculate_job_state, should_execute_capture
+from .webhook import send_webhook_alert, get_failure_threshold
 
 logger = logging.getLogger(__name__)
 
@@ -234,6 +235,7 @@ class CaptureScheduler:
         try:
             logger.debug(f"Attempting capture for job {job_id}: {job['name']}")
             success, error_message = capture_image(job)
+            threshold = get_failure_threshold()
             
             if success:
                 self.failure_counts[job_id] = 0  # Reset failure count on success
@@ -243,16 +245,19 @@ class CaptureScheduler:
                 self.failure_counts[job_id] = self.failure_counts.get(job_id, 0) + 1
                 consecutive_failures = self.failure_counts[job_id]
                 
-                logger.warning(f"Capture failed for job {job_id}: {job['name']} - {error_message} (failure {consecutive_failures}/3)")
+                logger.warning(f"Capture failed for job {job_id}: {job['name']} - {error_message} (failure {consecutive_failures}/{threshold})")
                 
-                # Only set warning message after 3 consecutive failures
-                if consecutive_failures >= 3:
+                # Only set warning message after threshold consecutive failures
+                if consecutive_failures >= threshold:
                     with get_db() as conn:
                         cursor = conn.cursor()
                         cursor.execute(
                             "UPDATE jobs SET warning_message = ? WHERE id = ?",
                             (f"{error_message} (after {consecutive_failures} consecutive failures)", job_id)
                         )
+                    # Send webhook alert when threshold is first reached
+                    if consecutive_failures == threshold:
+                        send_webhook_alert(job['name'], job_id, consecutive_failures, error_message)
                 else:
                     # Clear warning if it exists but we haven't hit threshold yet
                     with get_db() as conn:
@@ -267,15 +272,19 @@ class CaptureScheduler:
             # Increment failure count for exceptions too
             self.failure_counts[job_id] = self.failure_counts.get(job_id, 0) + 1
             consecutive_failures = self.failure_counts[job_id]
+            threshold = get_failure_threshold()
             
-            # Only set warning message after 3 consecutive failures
-            if consecutive_failures >= 3:
+            # Only set warning message after threshold consecutive failures
+            if consecutive_failures >= threshold:
                 with get_db() as conn:
                     cursor = conn.cursor()
                     cursor.execute(
                         "UPDATE jobs SET warning_message = ? WHERE id = ?",
                         (f"Exception during capture: {str(e)} (after {consecutive_failures} consecutive failures)", job_id)
                     )
+                # Send webhook alert when threshold is first reached
+                if consecutive_failures == threshold:
+                    send_webhook_alert(job['name'], job_id, consecutive_failures, str(e))
         finally:
             # Calculate next capture using context-aware calculator
             with get_db() as conn:

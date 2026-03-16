@@ -348,18 +348,28 @@ async def update_job(job_id: int, job_update: JobUpdate):
             logger.info(f"Job {job_id}: Schedule updated, new status: {new_status} - {reason}")
             
         elif job_update.status is not None and job_update.status.value == 'active':
-            # Re-enabling - recalculate state
+            # Re-enabling - recalculate state and clear warnings/failure counts
             new_status, next_capture, reason = calculate_job_state(updated_job, get_now(), pending_capture_time=None)
             
             cursor.execute(
-                "UPDATE jobs SET status = ?, next_scheduled_capture_at = ? WHERE id = ?",
+                "UPDATE jobs SET status = ?, next_scheduled_capture_at = ?, warning_message = NULL WHERE id = ?",
                 (new_status, to_iso(next_capture) if next_capture else None, job_id)
             )
+            
+            # Reset in-memory failure count so it gets a fresh start
+            scheduler = get_scheduler()
+            scheduler.failure_counts.pop(job_id, None)
             
             # Reload with new state
             cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
             updated_job = dict_from_row(cursor.fetchone())
             logger.info(f"Job {job_id}: Re-enabled, new status: {new_status} - {reason}")
+        
+        # Clear warning when manually disabling or completing a job
+        if manual_status_change and updated_job.get('warning_message'):
+            cursor.execute("UPDATE jobs SET warning_message = NULL WHERE id = ?", (job_id,))
+            updated_job['warning_message'] = None
+            logger.info(f"Job {job_id}: Cleared warning on manual {job_update.status.value}")
         
         # Log changes
         changes = [f"{field}" for field in job_update.model_fields_set]
