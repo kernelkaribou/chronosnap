@@ -3603,26 +3603,20 @@ function calculateAndDisplayDuration(options) {
             { label: '1 Month', seconds: 2592000 }
         ];
         
-        displayElement.innerHTML = `<h4>Estimated Video Duration @ ${framerate} FPS (Ongoing)${windowNote}</h4>`;
-        
-        durations.forEach(dur => {
+        let boxes = durations.map(dur => {
             const captures = calculateCaptures(dur.seconds);
-            displayElement.innerHTML += `
-                <div class="duration-row">
-                    <strong>${dur.label}</strong>
-                    <div class="duration-table">
-                        <div class="duration-item">
-                            <div class="duration-fps">Captures</div>
-                            <div class="duration-time">${captures.toLocaleString()}</div>
-                        </div>
-                        <div class="duration-item">
-                            <div class="duration-fps">Duration</div>
-                            <div class="duration-time">${formatDuration(captures / framerate)}</div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
+            return `
+                <div class="duration-item">
+                    <div class="duration-label">${dur.label}</div>
+                    <div class="duration-time">${formatDuration(captures / framerate)}</div>
+                    <div class="duration-fps">${captures.toLocaleString()} captures</div>
+                </div>`;
+        }).join('');
+
+        displayElement.innerHTML = `
+            <h4>Est. Duration @ ${framerate} FPS (Ongoing)${windowNote}</h4>
+            <div class="duration-grid">${boxes}</div>
+        `;
     }
 }
 

@@ -1263,65 +1263,46 @@ body {
 
 .duration-grid {
     display: flex;
-    gap: 1rem;
+    gap: 0.5rem;
     flex-wrap: wrap;
     justify-content: center;
-}
-
-.duration-row {
-    margin: 0.5rem 0;
-    padding: 0.5rem;
-    background: var(--surface-color);
-    border-radius: var(--radius-sm);
-}
-
-.duration-row strong {
-    display: block;
-    margin-bottom: 0.25rem;
-    font-size: 0.8rem;
-    color: var(--text-primary);
-    text-align: center;
-}
-
-.duration-table {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-    flex-wrap: wrap;
 }
 
 .duration-item {
     background: var(--surface-color);
-    padding: 0.5rem 0.75rem;
+    padding: 0.4rem 0.6rem;
     border-radius: var(--radius-sm);
     text-align: center;
-    min-width: 100px;
+    min-width: 80px;
+    flex: 1;
+}
+
+.duration-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.15rem;
 }
 
 .duration-fps {
-    font-size: 0.75rem;
+    font-size: 0.65rem;
     color: var(--text-secondary);
-    margin-bottom: 0.25rem;
     white-space: nowrap;
 }
 
 .duration-time {
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-weight: 700;
     color: var(--primary-color);
 }
 
 @media (max-width: 640px) {
     .duration-grid {
-        flex-direction: column;
-    }
-    
-    .duration-table {
-        flex-direction: column;
+        flex-wrap: wrap;
     }
     
     .duration-item {
-        width: 100%;
+        min-width: 45%;
     }
 }
 
