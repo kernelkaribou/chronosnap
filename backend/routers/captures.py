@@ -30,7 +30,7 @@ class FavoriteRequest(BaseModel):
 @router.get("/", response_model=CaptureListResponse)
 async def list_captures(
     job_id: Optional[int] = Query(None, description="Filter by job ID"),
-    tag_id: Optional[int] = Query(None, description="Filter by tag ID (inherited from job)"),
+    tag_id: Optional[str] = Query(None, description="Filter by tag ID(s), comma-separated"),
     start_time: Optional[str] = Query(None, description="Start time (ISO format)"),
     end_time: Optional[str] = Query(None, description="End time (ISO format)"),
     favorites_only: bool = Query(False, description="Show only favorites"),
@@ -72,8 +72,13 @@ async def list_captures(
             conditions.append("c.is_favorite = 1")
         
         if tag_id is not None:
-            conditions.append("c.job_id IN (SELECT job_id FROM job_tags WHERE tag_id = ?)")
-            params.append(tag_id)
+            try:
+                tag_ids = [int(t) for t in tag_id.split(',') if t.strip()]
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid tag_id format")
+            for tid in tag_ids:
+                conditions.append("c.job_id IN (SELECT job_id FROM job_tags WHERE tag_id = ?)")
+                params.append(tid)
         
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         

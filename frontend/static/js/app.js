@@ -1470,13 +1470,10 @@ function populateVideoFilters(videos) {
         years.map(y => `<option value="${y}">${y}</option>`).join('');
     yearSelect.value = currentYear;
     
-    // Populate tag filter
-    const tagSelect = document.getElementById('video-tag-filter');
-    if (tagSelect) {
-        const currentTag = tagSelect.value;
-        tagSelect.innerHTML = '<option value="">All Tags</option>' +
-            allTags.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
-        tagSelect.value = currentTag;
+    // Initialize tag filter (once)
+    const tagWrap = document.getElementById('video-tag-filter-wrap');
+    if (tagWrap && !tagWrap._tagFilterSelected) {
+        renderTagFilter('video-tag-filter-wrap', () => filterVideos());
     }
 }
 
@@ -1513,8 +1510,7 @@ function resetVideoFilters() {
     document.getElementById('video-year-filter').value = '';
     document.getElementById('video-month-filter').value = '';
     document.getElementById('video-month-filter').disabled = true;
-    const tagFilter = document.getElementById('video-tag-filter');
-    if (tagFilter) tagFilter.value = '';
+    clearTagFilter('video-tag-filter-wrap');
     videoFavoritesOnly = false;
     const favBtn = document.getElementById('video-fav-filter');
     if (favBtn) favBtn.classList.remove('active');
@@ -1525,7 +1521,7 @@ function filterVideos(opts = {}) {
     const search = (document.getElementById('video-search').value || '').toLowerCase();
     const yearFilter = document.getElementById('video-year-filter').value;
     const monthFilter = document.getElementById('video-month-filter').value;
-    const tagFilter = document.getElementById('video-tag-filter')?.value || '';
+    const selectedTags = getTagFilterIds('video-tag-filter-wrap');
     
     let filtered = allVideos;
     
@@ -1550,13 +1546,12 @@ function filterVideos(opts = {}) {
         filtered = filtered.filter(v => v.is_favorite);
     }
     
-    if (tagFilter) {
-        const tagId = parseInt(tagFilter);
-        filtered = filtered.filter(v => v.tags && v.tags.some(t => t.id === tagId));
+    if (selectedTags.length > 0) {
+        filtered = filtered.filter(v => v.tags && selectedTags.every(tid => v.tags.some(t => t.id === tid)));
     }
     
     // Show/hide reset button
-    const hasFilters = search || yearFilter || monthFilter !== '' || videoFavoritesOnly || tagFilter;
+    const hasFilters = search || yearFilter || monthFilter !== '' || videoFavoritesOnly || selectedTags.length > 0;
     document.getElementById('video-filter-reset').style.display = hasFilters ? '' : 'none';
     
     const countEl = document.getElementById('video-count');
@@ -4533,6 +4528,128 @@ function getSelectedTagIds(containerId) {
     return Array.from(container.querySelectorAll('.tag-chip.selected')).map(el => parseInt(el.dataset.tagId));
 }
 
+// Tag filter dropdown for galleries — searchable multi-select
+function renderTagFilter(wrapId, onChange) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+
+    wrap._tagFilterSelected = new Set();
+    wrap._tagFilterOnChange = onChange;
+
+    wrap.innerHTML = `
+        <div class="tag-filter-trigger" onclick="toggleTagFilterDropdown('${wrapId}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.5"/></svg>
+            <span class="tag-filter-label">Tags</span>
+        </div>
+        <div class="tag-filter-dropdown" id="${wrapId}-dropdown">
+            <div class="tag-filter-search">
+                <input type="text" placeholder="Search tags..." oninput="filterTagDropdown('${wrapId}', this.value)">
+            </div>
+            <div class="tag-filter-list" id="${wrapId}-list"></div>
+        </div>
+    `;
+
+    populateTagFilterList(wrapId);
+
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+        if (!wrap.contains(e.target)) {
+            const dd = document.getElementById(`${wrapId}-dropdown`);
+            if (dd) dd.classList.remove('open');
+            const trigger = wrap.querySelector('.tag-filter-trigger');
+            if (trigger) trigger.classList.remove('active');
+        }
+    });
+}
+
+function populateTagFilterList(wrapId) {
+    const list = document.getElementById(`${wrapId}-list`);
+    if (!list) return;
+    const wrap = document.getElementById(wrapId);
+    const selected = wrap?._tagFilterSelected || new Set();
+
+    list.innerHTML = allTags.map(tag => `
+        <div class="tag-filter-item ${selected.has(tag.id) ? 'selected' : ''}" data-tag-id="${tag.id}" data-name="${escapeHtml(tag.name.toLowerCase())}"
+             onclick="toggleTagFilter('${wrapId}', ${tag.id})">
+            <span class="tag-filter-check"></span>
+            <span class="tag-filter-dot" style="background:${tag.color};"></span>
+            <span>${escapeHtml(tag.name)}</span>
+        </div>
+    `).join('');
+
+    if (allTags.length === 0) {
+        list.innerHTML = '<div style="padding:0.5rem;color:var(--text-secondary);font-size:0.8rem;">No tags</div>';
+    }
+}
+
+function toggleTagFilterDropdown(wrapId) {
+    const dd = document.getElementById(`${wrapId}-dropdown`);
+    const trigger = document.querySelector(`#${wrapId} .tag-filter-trigger`);
+    if (!dd) return;
+    const isOpen = dd.classList.toggle('open');
+    if (trigger) trigger.classList.toggle('active', isOpen);
+    if (isOpen) {
+        populateTagFilterList(wrapId);
+        const input = dd.querySelector('input');
+        if (input) { input.value = ''; input.focus(); }
+    }
+}
+
+function filterTagDropdown(wrapId, query) {
+    const list = document.getElementById(`${wrapId}-list`);
+    if (!list) return;
+    const q = query.toLowerCase();
+    list.querySelectorAll('.tag-filter-item').forEach(item => {
+        item.style.display = item.dataset.name.includes(q) ? '' : 'none';
+    });
+}
+
+function toggleTagFilter(wrapId, tagId) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    const selected = wrap._tagFilterSelected;
+    if (selected.has(tagId)) selected.delete(tagId);
+    else selected.add(tagId);
+
+    // Update item visual
+    const item = document.querySelector(`#${wrapId}-list .tag-filter-item[data-tag-id="${tagId}"]`);
+    if (item) item.classList.toggle('selected', selected.has(tagId));
+
+    // Update trigger label
+    updateTagFilterTrigger(wrapId);
+
+    // Fire callback
+    if (wrap._tagFilterOnChange) wrap._tagFilterOnChange([...selected]);
+}
+
+function updateTagFilterTrigger(wrapId) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    const selected = wrap._tagFilterSelected;
+    const label = wrap.querySelector('.tag-filter-label');
+    if (!label) return;
+
+    if (selected.size === 0) {
+        label.textContent = 'Tags';
+    } else if (selected.size <= 2) {
+        const names = allTags.filter(t => selected.has(t.id)).map(t => t.name);
+        label.textContent = names.join(', ');
+    } else {
+        label.innerHTML = `Tags <span class="tag-filter-count">${selected.size}</span>`;
+    }
+}
+
+function getTagFilterIds(wrapId) {
+    const wrap = document.getElementById(wrapId);
+    return wrap?._tagFilterSelected ? [...wrap._tagFilterSelected] : [];
+}
+
+function clearTagFilter(wrapId) {
+    const wrap = document.getElementById(wrapId);
+    if (wrap?._tagFilterSelected) wrap._tagFilterSelected.clear();
+    updateTagFilterTrigger(wrapId);
+}
+
 // Nav Warning Badge
 function updateJobWarningBadge(jobs) {
     const jobsLink = document.querySelector('.nav-link[data-view="jobs"]');
@@ -4596,13 +4713,10 @@ async function loadCaptures() {
             });
         }
         
-        // Populate tag filter
-        const tagSelect = document.getElementById('captures-tag-filter');
-        if (tagSelect) {
-            const currentTag = tagSelect.value;
-            tagSelect.innerHTML = '<option value="">All Tags</option>' +
-                allTags.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
-            tagSelect.value = currentTag;
+        // Initialize tag filter (once)
+        const tagWrap = document.getElementById('captures-tag-filter-wrap');
+        if (tagWrap && !tagWrap._tagFilterSelected) {
+            renderTagFilter('captures-tag-filter-wrap', () => applyCaptureSortAndFilter());
         }
         
         await loadCapturesPage();
@@ -4918,14 +5032,14 @@ function goToPage(page) {
 
 function applyCaptureSortAndFilter() {
     const jobFilter = getValue('captures-job-filter');
-    const tagFilter = getValue('captures-tag-filter');
+    const selectedTags = getTagFilterIds('captures-tag-filter-wrap');
     const startTime = getValue('captures-start-time');
     const endTime = getValue('captures-end-time');
     const sortOrder = getValue('captures-sort-order');
     const pageSize = getValue('captures-page-size');
     
     capturesState.jobFilter = jobFilter || null;
-    capturesState.tagFilter = tagFilter || null;
+    capturesState.tagFilter = selectedTags.length > 0 ? selectedTags.join(',') : null;
     capturesState.startTime = startTime ? new Date(startTime).toISOString() : null;
     capturesState.endTime = endTime ? new Date(endTime).toISOString() : null;
     capturesState.sortOrder = sortOrder || 'desc';
@@ -4933,7 +5047,7 @@ function applyCaptureSortAndFilter() {
     capturesState.currentPage = 1;
     
     // Show/hide reset button
-    const hasFilters = jobFilter || tagFilter || startTime || endTime || capturesState.favoritesOnly;
+    const hasFilters = jobFilter || selectedTags.length > 0 || startTime || endTime || capturesState.favoritesOnly;
     document.getElementById('captures-filter-reset').style.display = hasFilters ? '' : 'none';
     
     loadCapturesPage();
@@ -4941,7 +5055,7 @@ function applyCaptureSortAndFilter() {
 
 function clearCaptureFilters() {
     setValue('captures-job-filter', '');
-    setValue('captures-tag-filter', '');
+    clearTagFilter('captures-tag-filter-wrap');
     setValue('captures-start-time', '');
     setValue('captures-end-time', '');
     document.getElementById('captures-filter-reset').style.display = 'none';

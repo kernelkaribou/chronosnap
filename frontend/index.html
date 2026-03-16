@@ -80,9 +80,7 @@
                     <button class="btn btn-sm fav-filter-btn" id="video-fav-filter" onclick="toggleVideoFavoritesFilter()" title="Show favorites only">
                         <span class="fav-heart">♥</span>
                     </button>
-                    <select class="gallery-filter-select" id="video-tag-filter" onchange="filterVideos()">
-                        <option value="">All Tags</option>
-                    </select>
+                    <div class="tag-filter-wrap" id="video-tag-filter-wrap"></div>
                     <button class="btn btn-secondary btn-sm" id="video-filter-reset" onclick="resetVideoFilters()" style="display:none;" title="Clear all filters">Reset</button>
                     <span class="gallery-count" id="video-count"></span>
                 </div>
@@ -131,9 +129,7 @@
                     <button class="btn btn-sm fav-filter-btn" id="captures-fav-filter" onclick="toggleCaptureFavoritesFilter()" title="Show favorites only">
                         <span class="fav-heart">♥</span>
                     </button>
-                    <select class="gallery-filter-select" id="captures-tag-filter" onchange="applyCaptureSortAndFilter()">
-                        <option value="">All Tags</option>
-                    </select>
+                    <div class="tag-filter-wrap" id="captures-tag-filter-wrap"></div>
                     <select class="gallery-filter-select" id="captures-sort-order" onchange="applyCaptureSortAndFilter()">
                         <option value="desc">Newest</option>
                         <option value="asc">Oldest</option>
