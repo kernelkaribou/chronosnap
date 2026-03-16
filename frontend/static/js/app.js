@@ -733,7 +733,7 @@ async function showJobDetails(jobId) {
         if (capturesData.captures && capturesData.captures.length > 0) {
             latestImageHtml = `
                 <div style="margin: 0.5rem 0 1rem;">
-                    <img src="${API_BASE}/captures/${capturesData.captures[0].id}/image" alt="Latest capture" style="max-width: 100%; border-radius: 0.5rem; border: 1px solid var(--border-color);">
+                    <img src="${API_BASE}/captures/${capturesData.captures[0].id}/image" alt="Latest capture" onclick="openOverlayLightbox(this)" style="max-width: 100%; border-radius: 0.5rem; border: 1px solid var(--border-color); cursor: pointer;" title="Click to enlarge">
                 </div>
             `;
         }
@@ -942,9 +942,8 @@ async function showJobDetails(jobId) {
                             <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                                 <input type="number" id="edit_auto_build_interval_hours" class="form-control" min="1" max="8760" value="${job.auto_build_interval_hours || 168}" style="width: 100px;">
                                 <small style="color: var(--text-secondary);">hours</small>
-                                <div class="auto-build-presets" style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
+                                <div class="auto-build-presets" style="display: flex; gap: 0.25rem; flex-wrap: wrap; margin-left: 0.5rem;">
                                     <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 1)">Hourly</button>
-                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 6)">6 Hours</button>
                                     <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 24)">Daily</button>
                                     <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 168)">Weekly</button>
                                     <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 720)">Monthly</button>
@@ -2592,7 +2591,7 @@ function generateOverlayHTML(prefix, opts = {}) {
 
     const previewHtml = showPreview ? `
             <div class="overlay-preview-panel" id="${prefix}-overlay-preview-panel">
-                <img id="${prefix}-overlay-preview-img" alt="Overlay preview" onclick="openOverlayLightbox(this)" style="border-radius: var(--radius-lg); border: 1px solid var(--border-color); display: none;" title="Click to enlarge">
+                <img id="${prefix}-overlay-preview-img" alt="Overlay preview" style="border-radius: var(--radius-lg); border: 1px solid var(--border-color); display: none;">
                 <div id="${prefix}-overlay-preview-placeholder" style="width:100%; aspect-ratio:16/9; background:var(--surface-color); border:1px dashed var(--border-color); border-radius:var(--radius-lg); display:flex; align-items:center; justify-content:center; color:var(--text-secondary); font-size:0.8rem;">
                     Loading preview…
                 </div>
