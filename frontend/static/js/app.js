@@ -808,47 +808,49 @@ async function showJobDetails(jobId) {
                 
                 ${timeWindowHtml}
                 
-                <div class="job-info" style="margin-bottom: 1rem;">
-                    <div><strong>Status:</strong> <span class="job-status ${statusClass}">${statusLabel}</span></div>
-                    <div><strong>Start:</strong> ${formatDateTimeNoSeconds(job.start_datetime)}</div>
-                    ${nextCaptureHtml}
-                    ${nextAutoBuildHtml}
-                    ${lastCaptureHtml}
-                </div>
-                
-                <div class="job-info" style="margin-bottom: 1.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <strong>Captures:</strong> 
-                        <a href="#" onclick="event.stopPropagation(); viewJobCaptures(${job.id}); return false;" 
-                           style="color: var(--primary-color); text-decoration: none;"
-                           title="View captures">
-                            ${job.capture_count}
-                        </a>
-                        <button class="btn-icon" onclick="event.stopPropagation(); manualCapture(${job.id}, '${escapeHtml(job.name)}')" title="Take Snapshot" style="padding: 0.25rem;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                                <circle cx="12" cy="13" r="4"></circle>
-                            </svg>
-                        </button>
-                        <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); openCompareModal(${job.id})" title="Compare Captures" style="padding: 0.25rem;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="2" y="2" width="20" height="20" rx="2"/>
-                                <path d="M12 2v20"/>
-                                <circle cx="7.5" cy="7.5" r="1.5"/>
-                                <path d="M6 18l3-4 2 2 4-5 3 4"/>
-                                <rect x="12" y="2" width="10" height="20" rx="2" fill="currentColor" opacity="0.15" stroke="none"/>
-                            </svg>
-                        </button>
-                        <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); performMaintenanceScan(${job.id}, '${escapeHtml(job.name)}')" title="Sync" style="padding: 0.25rem;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="23 4 23 10 17 10"></polyline>
-                                <polyline points="1 20 1 14 7 14"></polyline>
-                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                            </svg>
-                        </button>
+                <div style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div class="job-info" style="flex: 1; margin-bottom: 0;">
+                        <div><strong>Status:</strong> <span class="job-status ${statusClass}">${statusLabel}</span></div>
+                        <div><strong>Start:</strong> ${formatDateTimeNoSeconds(job.start_datetime)}</div>
+                        ${nextCaptureHtml}
+                        ${nextAutoBuildHtml}
+                        ${lastCaptureHtml}
                     </div>
-                    <div><strong>Storage:</strong> ${formatBytes(job.storage_size)}</div>
-                    <div><strong>Path:</strong> ${escapeHtml(job.capture_path)}</div>
+                    
+                    <div class="job-info" style="flex: 1; margin-bottom: 0; padding-left: 1.5rem; border-left: 1px solid var(--border-color);">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <strong>Captures:</strong> 
+                            <a href="#" onclick="event.stopPropagation(); viewJobCaptures(${job.id}); return false;" 
+                               style="color: var(--primary-color); text-decoration: none;"
+                               title="View captures">
+                                ${job.capture_count}
+                            </a>
+                            <button class="btn-icon" onclick="event.stopPropagation(); manualCapture(${job.id}, '${escapeHtml(job.name)}')" title="Take Snapshot" style="padding: 0.25rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                    <circle cx="12" cy="13" r="4"></circle>
+                                </svg>
+                            </button>
+                            <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); openCompareModal(${job.id})" title="Compare Captures" style="padding: 0.25rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="2" width="20" height="20" rx="2"/>
+                                    <path d="M12 2v20"/>
+                                    <circle cx="7.5" cy="7.5" r="1.5"/>
+                                    <path d="M6 18l3-4 2 2 4-5 3 4"/>
+                                    <rect x="12" y="2" width="10" height="20" rx="2" fill="currentColor" opacity="0.15" stroke="none"/>
+                                </svg>
+                            </button>
+                            <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); performMaintenanceScan(${job.id}, '${escapeHtml(job.name)}')" title="Sync" style="padding: 0.25rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <div><strong>Storage:</strong> ${formatBytes(job.storage_size)}</div>
+                        <div><strong>Path:</strong> <span style="font-size: 0.8rem; word-break: break-all;">${escapeHtml(job.capture_path)}</span></div>
+                    </div>
                 </div>
 
                 <h4 style="margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border-color);">Job Settings</h4>
