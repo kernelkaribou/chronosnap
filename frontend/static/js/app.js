@@ -875,7 +875,13 @@ function setupJobEditChangeTracking(originalJob) {
         'edit_time_window_start_time',
         'edit_time_window_end_time',
         'edit_url',
-        'edit_stream_type'
+        'edit_stream_type',
+        'edit_warning_threshold',
+        'edit_auto_build_enabled',
+        'edit_auto_build_interval_days',
+        'edit_auto_build_fps',
+        'edit_auto_build_quality',
+        'edit_auto_build_resolution'
     ];
     
     fields.forEach(fieldId => {
