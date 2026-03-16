@@ -265,21 +265,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup range checkbox
     document.getElementById('use_range').addEventListener('change', (e) => {
         const captureRange = document.getElementById('capture-range');
-        const startTimeInput = document.getElementById('start_time');
-        const endTimeInput = document.getElementById('end_time');
+        const startInput = document.getElementById('video_start_datetime');
+        const endInput = document.getElementById('video_end_datetime');
         
         if (e.target.checked) {
             captureRange.style.display = 'flex';
-            startTimeInput.disabled = false;
-            endTimeInput.disabled = false;
+            startInput.disabled = false;
+            endInput.disabled = false;
             
             // Update duration estimate for the selected time range
-            // Don't dispatch change events - hidden fields already have correct timestamps
             setTimeout(() => updateVideoDurationEstimate(), 100);
         } else {
             captureRange.style.display = 'none';
-            startTimeInput.disabled = true;
-            endTimeInput.disabled = true;
+            startInput.disabled = true;
+            endInput.disabled = true;
             // Revert to showing full duration estimate
             updateVideoDurationEstimate();
         }
@@ -621,11 +620,7 @@ async function showJobDetails(jobId) {
 
                 <div class="form-group" style="margin-bottom: 1rem;">
                     <label>End Date & Time</label>
-                    <div class="datetime-picker-container">
-                        <input type="date" id="edit_end_date" class="form-control">
-                        <input type="time" id="edit_end_time" class="form-control">
-                    </div>
-                    <input type="hidden" id="edit_end_datetime">
+                    <input type="datetime-local" id="edit_end_datetime" class="form-control">
                     <small style="color: var(--text-secondary);">Leave empty for ongoing capture</small>
                 </div>
                 
@@ -841,8 +836,8 @@ async function createJob(event) {
         name: values.job_name,
         url: values.job_url,
         stream_type: stream_type,
-        start_datetime: values.start_datetime,
-        end_datetime: values.end_datetime,
+        start_datetime: datetimeLocalToISO(values.start_datetime),
+        end_datetime: values.end_datetime ? datetimeLocalToISO(values.end_datetime) : null,
         interval_seconds: values.interval_seconds,
         framerate: values.framerate,
         capture_path: values.capture_path,
@@ -889,8 +884,7 @@ function setupJobEditChangeTracking(originalJob) {
     // Track changes on all editable fields
     const fields = [
         'edit_interval_seconds',
-        'edit_end_date',
-        'edit_end_time',
+        'edit_end_datetime',
         'edit_time_window_enabled',
         'edit_time_window_start_time',
         'edit_time_window_end_time',
@@ -913,7 +907,7 @@ function setupJobEditChangeTracking(originalJob) {
     });
 
     // Duration estimate watchers
-    const estimateFields = ['edit_interval_seconds', 'edit_framerate', 'edit_end_date', 'edit_end_time', 
+    const estimateFields = ['edit_interval_seconds', 'edit_framerate', 'edit_end_datetime', 
                             'edit_time_window_enabled', 'edit_time_window_start_time', 'edit_time_window_end_time'];
     estimateFields.forEach(fieldId => {
         const field = document.getElementById(fieldId);
@@ -1012,7 +1006,8 @@ async function updateJobStatus(jobId, status, jobName) {
 
 async function updateJobEndTime(jobId) {
     const endDatetimeInput = document.getElementById('edit_end_datetime');
-    const endDatetime = endDatetimeInput.value || null;
+    const rawValue = endDatetimeInput.value || null;
+    const endDatetime = rawValue ? datetimeLocalToISO(rawValue) : null;
     
     // Validate end time if provided
     if (endDatetime) {
@@ -1146,7 +1141,8 @@ async function saveJobChanges(jobId) {
     // Collect all form values
     const interval = parseInt(document.getElementById('edit_interval_seconds').value);
     const url = document.getElementById('edit_url').value.trim();
-    const endDatetime = document.getElementById('edit_end_datetime').value || null;
+    const endDatetimeRaw = document.getElementById('edit_end_datetime').value || null;
+    const endDatetime = endDatetimeRaw ? datetimeLocalToISO(endDatetimeRaw) : null;
     const timeWindowEnabled = document.getElementById('edit_time_window_enabled').checked;
     const timeWindowStart = document.getElementById('edit_time_window_start').value;
     const timeWindowEnd = document.getElementById('edit_time_window_end').value;
@@ -1879,71 +1875,20 @@ async function populateVideoFormFromJob(jobId, jobName) {
             rangeInfo.style.display = 'block';
         }
         
-        // Set start time
-        const startDateInput = document.getElementById('video_start_date');
-        const startTimeInput = document.getElementById('video_start_time');
+        // Set start/end datetime-local inputs directly
+        const startInput = document.getElementById('video_start_datetime');
+        const endInput = document.getElementById('video_end_datetime');
         
-        if (startDateInput) {
-            const year = firstDate.getFullYear();
-            const month = String(firstDate.getMonth() + 1).padStart(2, '0');
-            const day = String(firstDate.getDate()).padStart(2, '0');
-            startDateInput.value = `${year}-${month}-${day}`;
-        }
-        if (startTimeInput) {
-            const hours = String(firstDate.getHours()).padStart(2, '0');
-            const minutes = String(firstDate.getMinutes()).padStart(2, '0');
-            startTimeInput.value = `${hours}:${minutes}`;
-        }
-        
-        // Set end time
-        const endDateInput = document.getElementById('video_end_date');
-        const endTimeInput = document.getElementById('video_end_time');
-        
-        if (endDateInput) {
-            const year = lastDate.getFullYear();
-            const month = String(lastDate.getMonth() + 1).padStart(2, '0');
-            const day = String(lastDate.getDate()).padStart(2, '0');
-            endDateInput.value = `${year}-${month}-${day}`;
-        }
-        if (endTimeInput) {
-            const hours = String(lastDate.getHours()).padStart(2, '0');
-            const minutes = String(lastDate.getMinutes()).padStart(2, '0');
-            endTimeInput.value = `${hours}:${minutes}`;
-        }
+        if (startInput) startInput.value = isoToDatetimeLocal(timeRange.first_capture_time);
+        if (endInput) endInput.value = isoToDatetimeLocal(timeRange.last_capture_time);
         
         // Store job ID for time range queries
         window.currentJobId = jobId;
         
-        // Set up datetime picker sync for video time range inputs
-        setupDateTimePickerSyncWithTimeInput('video_start', 'video_start_datetime');
-        setupDateTimePickerSyncWithTimeInput('video_end', 'video_end_datetime');
-        
-        // Manually sync the initial values to hidden fields
-        const startHidden = document.getElementById('video_start_datetime');
-        const endHidden = document.getElementById('video_end_datetime');
-        if (startHidden && window.firstCaptureTimeStr) {
-            startHidden.value = window.firstCaptureTimeStr;
-        }
-        if (endHidden && window.lastCaptureTimeStr) {
-            endHidden.value = window.lastCaptureTimeStr;
-        }
-        
         // Set up event listeners for duration updates when time range changes
         const updateDuration = debounce(updateVideoDurationEstimate, 300);
         
-        const startTimeHidden = document.getElementById('video_start_datetime');
-        const endTimeHidden = document.getElementById('video_end_datetime');
-        
-        // Attach listeners to visible date/time inputs
-        [startDateInput, startTimeInput, endDateInput, endTimeInput].forEach(input => {
-            if (input) {
-                input.addEventListener('change', updateDuration);
-                input.addEventListener('input', updateDuration);
-            }
-        });
-        
-        // Attach listeners to hidden combined datetime inputs
-        [startTimeHidden, endTimeHidden].forEach(input => {
+        [startInput, endInput].forEach(input => {
             if (input) {
                 input.addEventListener('change', updateDuration);
                 input.addEventListener('input', updateDuration);
@@ -1979,9 +1924,9 @@ function updateVideoDurationEstimate() {
             return;
         }
         
-        // Use the timestamp strings directly - they already have timezone info
-        const startTimeStr = startTimeInput.value;
-        const endTimeStr = endTimeInput.value;
+        // Convert datetime-local values to ISO for API query
+        const startTimeStr = datetimeLocalToISO(startTimeInput.value);
+        const endTimeStr = datetimeLocalToISO(endTimeInput.value);
         
         fetch(`${API_BASE}/captures/job/${window.currentJobId}/time-range?start_time=${encodeURIComponent(startTimeStr)}&end_time=${encodeURIComponent(endTimeStr)}`)
             .then(r => r.json())
@@ -2112,8 +2057,8 @@ async function processVideo(event) {
         framerate: framerate,
         quality: document.getElementById('video_quality').value,
         output_path: document.getElementById('video_output_path').value.trim() || null,
-        start_time: useRange ? document.getElementById('video_start_datetime').value : null,
-        end_time: useRange ? document.getElementById('video_end_datetime').value : null
+        start_time: useRange ? datetimeLocalToISO(document.getElementById('video_start_datetime').value) : null,
+        end_time: useRange ? datetimeLocalToISO(document.getElementById('video_end_datetime').value) : null
     };
     
     try {
@@ -2182,38 +2127,15 @@ function closeModal(modalId) {
     
     // Clean up video modal listeners to prevent memory leaks
     if (modalId === 'process-video-modal' && window._videoModalListeners) {
-        const startDateInput = document.getElementById('video_start_date');
-        const startTimeInput = document.getElementById('video_start_time');
-        const endDateInput = document.getElementById('video_end_date');
-        const endTimeInput = document.getElementById('video_end_time');
-        const startTimeHidden = document.getElementById('start_time');
-        const endTimeHidden = document.getElementById('end_time');
+        const startInput = document.getElementById('video_start_datetime');
+        const endInput = document.getElementById('video_end_datetime');
         
-        // Remove both change and input listeners
-        if (startDateInput && window._videoModalListeners.startDate) {
-            startDateInput.removeEventListener('change', window._videoModalListeners.startDate);
-            startDateInput.removeEventListener('input', window._videoModalListeners.startDate);
-        }
-        if (startTimeInput && window._videoModalListeners.startTime) {
-            startTimeInput.removeEventListener('change', window._videoModalListeners.startTime);
-            startTimeInput.removeEventListener('input', window._videoModalListeners.startTime);
-        }
-        if (endDateInput && window._videoModalListeners.endDate) {
-            endDateInput.removeEventListener('change', window._videoModalListeners.endDate);
-            endDateInput.removeEventListener('input', window._videoModalListeners.endDate);
-        }
-        if (endTimeInput && window._videoModalListeners.endTime) {
-            endTimeInput.removeEventListener('change', window._videoModalListeners.endTime);
-            endTimeInput.removeEventListener('input', window._videoModalListeners.endTime);
-        }
-        if (startTimeHidden && window._videoModalListeners.hiddenStart) {
-            startTimeHidden.removeEventListener('change', window._videoModalListeners.hiddenStart);
-            startTimeHidden.removeEventListener('input', window._videoModalListeners.hiddenStart);
-        }
-        if (endTimeHidden && window._videoModalListeners.hiddenEnd) {
-            endTimeHidden.removeEventListener('change', window._videoModalListeners.hiddenEnd);
-            endTimeHidden.removeEventListener('input', window._videoModalListeners.hiddenEnd);
-        }
+        [startInput, endInput].forEach(input => {
+            if (input && window._videoModalListeners) {
+                input.removeEventListener('change', window._videoModalListeners);
+                input.removeEventListener('input', window._videoModalListeners);
+            }
+        });
         
         window._videoModalListeners = null;
         window.currentJobId = null;
@@ -2255,11 +2177,7 @@ function showCreateJobModal() {
     document.getElementById('test-result').innerHTML = '';
     document.getElementById('duration-estimate').innerHTML = '';
     
-    // Setup datetime picker sync for start and end dates BEFORE setting values
-    setupDateTimePickerSyncWithTimeInput('start', 'start_datetime');
-    setupDateTimePickerSyncWithTimeInput('end', 'end_datetime');
-    
-    // Set default datetime to now (this will now trigger the sync)
+    // Set default datetime to now
     setDefaultStartTime();
     
     // Set default values for capture path and naming pattern
@@ -2296,9 +2214,6 @@ async function duplicateJob(jobId) {
         document.getElementById('test-result').innerHTML = '';
         document.getElementById('duration-estimate').innerHTML = '';
         
-        setupDateTimePickerSyncWithTimeInput('start', 'start_datetime');
-        setupDateTimePickerSyncWithTimeInput('end', 'end_datetime');
-        
         // Pre-fill fields from source job
         document.getElementById('job_name').value = `${job.name} (Copy)`;
         document.getElementById('job_url').value = job.url;
@@ -2313,12 +2228,7 @@ async function duplicateJob(jobId) {
         
         // Copy end date if it exists
         if (job.end_datetime) {
-            const end = new Date(job.end_datetime);
-            const endDate = document.getElementById('end_date');
-            const endTime = document.getElementById('end_time');
-            endDate.value = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`;
-            endTime.value = `${String(end.getHours()).padStart(2,'0')}:${String(end.getMinutes()).padStart(2,'0')}`;
-            endDate.dispatchEvent(new Event('change'));
+            document.getElementById('end_datetime').value = isoToDatetimeLocal(job.end_datetime);
         }
         
         // Copy time window settings
@@ -2478,6 +2388,28 @@ function formatDateTimeNoSeconds(isoString) {
         minute: '2-digit', 
         hour12: use12 
     });
+}
+
+/** Convert a datetime-local input value to ISO with local timezone offset */
+function datetimeLocalToISO(value) {
+    if (!value) return '';
+    const dt = new Date(value);
+    if (isNaN(dt.getTime())) return value;
+    const pad = n => String(n).padStart(2, '0');
+    const offset = -dt.getTimezoneOffset();
+    const sign = offset >= 0 ? '+' : '-';
+    const offH = pad(Math.floor(Math.abs(offset) / 60));
+    const offM = pad(Math.abs(offset) % 60);
+    return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}:00${sign}${offH}:${offM}`;
+}
+
+/** Convert an ISO datetime string to datetime-local input format */
+function isoToDatetimeLocal(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function formatDuration(seconds) {
@@ -3311,67 +3243,12 @@ function setupDateTimePickerSync(baseId, hiddenId) {
     minuteSelect.addEventListener('change', syncValue);
 }
 
-// Universal datetime picker setup function with time input
-// Provides consistent behavior across job creation, editing, and video processing
-// Syncs date + time inputs to a hidden ISO datetime field
-function setupDateTimePickerSyncWithTimeInput(baseId, hiddenId) {
-    const dateInput = document.getElementById(`${baseId}_date`);
-    const timeInput = document.getElementById(`${baseId}_time`);
-    const hiddenInput = document.getElementById(hiddenId);
-    
-    if (!dateInput || !timeInput || !hiddenInput) {
-        return;
-    }
-    
-    const syncValue = () => {
-        const date = dateInput.value;
-        const time = timeInput.value;
-        
-        if (date && time) {
-            // Create a Date object to get proper timezone offset
-            const dt = new Date(`${date}T${time}`);
-            // Format with timezone offset (e.g., 2025-12-23T18:45:00-06:00)
-            const year = dt.getFullYear();
-            const month = String(dt.getMonth() + 1).padStart(2, '0');
-            const day = String(dt.getDate()).padStart(2, '0');
-            const hours = String(dt.getHours()).padStart(2, '0');
-            const minutes = String(dt.getMinutes()).padStart(2, '0');
-            const offset = -dt.getTimezoneOffset();
-            const offsetHours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
-            const offsetMinutes = String(Math.abs(offset) % 60).padStart(2, '0');
-            const offsetSign = offset >= 0 ? '+' : '-';
-            hiddenInput.value = `${year}-${month}-${day}T${hours}:${minutes}:00${offsetSign}${offsetHours}:${offsetMinutes}`;
-        } else {
-            hiddenInput.value = '';
-        }
-        hiddenInput.dispatchEvent(new Event('change'));
-        hiddenInput.dispatchEvent(new Event('input'));
-    };
-    
-    dateInput.addEventListener('change', syncValue);
-    dateInput.addEventListener('input', syncValue);
-    timeInput.addEventListener('change', syncValue);
-    timeInput.addEventListener('input', syncValue);
-}
-
 function setDefaultStartTime() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
-    const hours = now.getHours().toString().padStart(2, '0');
-    const minutes = now.getMinutes().toString().padStart(2, '0');
-    const timeStr = `${hours}:${minutes}`;
-    
-    const dateInput = document.getElementById('start_date');
-    const timeInput = document.getElementById('start_time');
-    
-    if (dateInput) dateInput.value = dateStr;
-    if (timeInput) timeInput.value = timeStr;
-    
-    // Trigger sync
-    if (dateInput) dateInput.dispatchEvent(new Event('change'));
+    const input = document.getElementById('start_datetime');
+    if (input) {
+        const now = new Date();
+        input.value = isoToDatetimeLocal(now.toISOString());
+    }
 }
 
 function initializeEditTimePickers(job) {
@@ -3379,18 +3256,16 @@ function initializeEditTimePickers(job) {
     setupTimeInputSync('edit_time_window_start');
     setupTimeInputSync('edit_time_window_end');
     
-    // Setup universal datetime picker for end datetime
-    setupDateTimePickerSyncWithTimeInput('edit_end', 'edit_end_datetime');
-    
     // Set initial values for time window if enabled
     if (job.time_window_enabled && job.time_window_start && job.time_window_end) {
         setTimeInputValue('edit_time_window_start', job.time_window_start);
         setTimeInputValue('edit_time_window_end', job.time_window_end);
     }
     
-    // Set initial values for end datetime if present
+    // Set initial value for end datetime if present
     if (job.end_datetime) {
-        setDateTimePickerValueWithTimeInput('edit_end', job.end_datetime, 'edit_end_datetime');
+        const input = document.getElementById('edit_end_datetime');
+        if (input) input.value = isoToDatetimeLocal(job.end_datetime);
     }
 }
 
@@ -3426,31 +3301,6 @@ function setDateTimePickerValue(baseId, datetimeString, hiddenId) {
     if (dateInput) dateInput.value = dateStr;
     if (hourSelect) hourSelect.value = hour;
     if (minuteSelect) minuteSelect.value = minute;
-    
-    // Trigger sync
-    if (dateInput) dateInput.dispatchEvent(new Event('change'));
-}
-
-// Universal function for setting datetime picker values with time inputs
-// Used consistently across job creation, editing, and video processing
-function setDateTimePickerValueWithTimeInput(baseId, datetimeString, hiddenId) {
-    if (!datetimeString) return;
-    
-    const dt = new Date(datetimeString);
-    // Use local date components to avoid UTC conversion issues
-    const year = dt.getFullYear();
-    const month = String(dt.getMonth() + 1).padStart(2, '0');
-    const day = String(dt.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
-    const hour = dt.getHours().toString().padStart(2, '0');
-    const minute = dt.getMinutes().toString().padStart(2, '0');
-    const timeStr = `${hour}:${minute}`;
-    
-    const dateInput = document.getElementById(`${baseId}_date`);
-    const timeInput = document.getElementById(`${baseId}_time`);
-    
-    if (dateInput) dateInput.value = dateStr;
-    if (timeInput) timeInput.value = timeStr;
     
     // Trigger sync
     if (dateInput) dateInput.dispatchEvent(new Event('change'));
@@ -4596,8 +4446,8 @@ async function onCompareJobSelected() {
         compareState.firstTime = range.first_capture_time;
         compareState.lastTime = range.last_capture_time;
 
-        const firstLocal = isoToLocalDatetime(range.first_capture_time);
-        const lastLocal = isoToLocalDatetime(range.last_capture_time);
+        const firstLocal = isoToDatetimeLocal(range.first_capture_time);
+        const lastLocal = isoToDatetimeLocal(range.last_capture_time);
 
         const dateA = document.getElementById('compare-date-a');
         const dateB = document.getElementById('compare-date-b');
@@ -4616,18 +4466,11 @@ async function onCompareJobSelected() {
     }
 }
 
-function isoToLocalDatetime(iso) {
-    if (!iso) return '';
-    const d = new Date(iso);
-    const pad = n => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 async function compareFirstLast() {
     if (!compareState.jobId || !compareState.firstTime || !compareState.lastTime) return;
 
-    document.getElementById('compare-date-a').value = isoToLocalDatetime(compareState.firstTime);
-    document.getElementById('compare-date-b').value = isoToLocalDatetime(compareState.lastTime);
+    document.getElementById('compare-date-a').value = isoToDatetimeLocal(compareState.firstTime);
+    document.getElementById('compare-date-b').value = isoToDatetimeLocal(compareState.lastTime);
 
     await loadCompareCaptures(compareState.firstTime, compareState.lastTime);
 }

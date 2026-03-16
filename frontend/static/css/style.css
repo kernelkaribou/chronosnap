@@ -828,6 +828,10 @@ body {
     color-scheme: dark;
 }
 
+[data-theme="light"] .gallery-filter-input {
+    color-scheme: light;
+}
+
 .gallery-filter-input:focus {
     outline: none;
     border-color: var(--primary-color);
@@ -931,6 +935,11 @@ body {
     color: var(--text-primary);
     font-size: 0.875rem;
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    color-scheme: dark;
+}
+
+[data-theme="light"] .form-control {
+    color-scheme: light;
 }
 
 .form-control:focus {
@@ -1267,26 +1276,6 @@ body {
     color: var(--text-secondary);
 }
 
-/* Custom DateTime Picker */
-.datetime-picker-container {
-    display: flex;
-    gap: 0.75rem;
-    align-items: center;
-    flex-wrap: wrap;
-}
-
-.datetime-picker-container input[type="date"] {
-    flex: 1 1 auto;
-    min-width: 145px;
-    max-width: 180px;
-}
-
-.datetime-picker-container input[type="time"] {
-    flex: 0 0 auto;
-    min-width: 120px;
-    max-width: 140px;
-}
-
 /* Time picker container for time-only inputs (time windows) */
 .time-picker-container {
     display: flex;
@@ -1298,35 +1287,6 @@ body {
     flex: 0 0 auto;
     min-width: 120px;
     max-width: 140px;
-}
-
-.datetime-picker-container .time-part {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-}
-
-.datetime-picker-container select {
-    padding: 0.5rem;
-    background: var(--surface-color);
-    border: 1px solid var(--border-color);
-    border-radius: 0.375rem;
-    color: var(--text-primary);
-    font-size: 1rem;
-    cursor: pointer;
-    min-width: 70px;
-}
-
-.datetime-picker-container select:focus {
-    outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px var(--primary-glow);
-}
-
-.datetime-picker-container .separator {
-    font-size: 1.25rem;
-    font-weight: bold;
-    color: var(--text-secondary);
 }
 
 /* Utility */

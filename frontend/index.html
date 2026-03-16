@@ -330,19 +330,11 @@
                 <div class="form-row">
                     <div class="form-group flex-1">
                         <label>Start Date & Time *</label>
-                        <div class="datetime-picker-container">
-                            <input type="date" id="start_date" class="form-control" required>
-                            <input type="time" id="start_time" class="form-control" required>
-                        </div>
-                        <input type="hidden" id="start_datetime">
+                        <input type="datetime-local" id="start_datetime" class="form-control" required>
                     </div>
                     <div class="form-group flex-1">
                         <label>End Date & Time</label>
-                        <div class="datetime-picker-container">
-                            <input type="date" id="end_date" class="form-control">
-                            <input type="time" id="end_time" class="form-control">
-                        </div>
-                        <input type="hidden" id="end_datetime">
+                        <input type="datetime-local" id="end_datetime" class="form-control">
                         <small>Leave empty for ongoing capture</small>
                     </div>
                 </div>
@@ -571,21 +563,13 @@
                         <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                             <div style="display: flex; gap: 0.5rem; align-items: center;">
                                 <span style="color: var(--text-secondary); font-size: 0.9rem;">From:</span>
-                                <div class="datetime-picker-container">
-                                    <input type="date" id="video_start_date" class="form-control">
-                                    <input type="time" id="video_start_time" class="form-control">
-                                </div>
+                                <input type="datetime-local" id="video_start_datetime" class="form-control">
                             </div>
                             <div style="display: flex; gap: 0.5rem; align-items: center;">
                                 <span style="color: var(--text-secondary); font-size: 0.9rem;">To:</span>
-                                <div class="datetime-picker-container">
-                                    <input type="date" id="video_end_date" class="form-control">
-                                    <input type="time" id="video_end_time" class="form-control">
-                                </div>
+                                <input type="datetime-local" id="video_end_datetime" class="form-control">
                             </div>
                         </div>
-                        <input type="hidden" id="video_start_datetime">
-                        <input type="hidden" id="video_end_datetime">
                     </div>
                 </div>
 
