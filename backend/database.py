@@ -142,6 +142,33 @@ def init_db():
             )
         """)
         
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS shared_links (
+                token TEXT PRIMARY KEY NOT NULL,
+                video_id INTEGER NOT NULL UNIQUE,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (video_id) REFERENCES processed_videos(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_shared_links_token ON shared_links(token)")
+        
+        # Migration: drop legacy columns from shared_links (expires_at, autoincrement id)
+        cursor.execute("PRAGMA table_info(shared_links)")
+        cols = {row[1] for row in cursor.fetchall()}
+        if 'expires_at' in cols:
+            cursor.execute("""
+                CREATE TABLE shared_links_new (
+                    token TEXT PRIMARY KEY NOT NULL,
+                    video_id INTEGER NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (video_id) REFERENCES processed_videos(id) ON DELETE CASCADE
+                )
+            """)
+            cursor.execute("INSERT INTO shared_links_new (token, video_id, created_at) SELECT token, video_id, created_at FROM shared_links")
+            cursor.execute("DROP TABLE shared_links")
+            cursor.execute("ALTER TABLE shared_links_new RENAME TO shared_links")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_shared_links_token ON shared_links(token)")
+        
         # Migrations: jobs table columns
         ensure_column(cursor, 'jobs', 'warning_message', 'TEXT')
         ensure_column(cursor, 'jobs', 'time_window_enabled', 'INTEGER DEFAULT 0')

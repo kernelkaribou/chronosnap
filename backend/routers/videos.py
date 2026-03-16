@@ -20,6 +20,18 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def fetch_share_tokens(cursor, video_ids):
+    """Batch-fetch active shared link tokens for a list of video IDs. Returns {video_id: token}."""
+    if not video_ids:
+        return {}
+    placeholders = ','.join('?' * len(video_ids))
+    cursor.execute(
+        f"SELECT video_id, token FROM shared_links WHERE video_id IN ({placeholders})",
+        video_ids
+    )
+    return {row['video_id']: row['token'] for row in cursor.fetchall()}
+
+
 @router.post("/", response_model=VideoResponse, status_code=201)
 async def create_video(video: VideoCreate, background_tasks: BackgroundTasks):
     """Create a new processed video from captures"""
@@ -185,6 +197,9 @@ async def list_videos(
         job_ids = list(set(row['job_id'] for row in rows if row['job_id']))
         job_tags_map = fetch_tags_for_jobs(cursor, job_ids) if job_ids else {}
         
+        # Batch-fetch share tokens
+        share_map = fetch_share_tokens(cursor, video_ids)
+        
         videos = []
         for row in rows:
             video_dict = dict_from_row(row)
@@ -199,6 +214,7 @@ async def list_videos(
                     seen_ids.add(t['id'])
                     merged.append(t)
             video_dict['tags'] = merged
+            video_dict['share_token'] = share_map.get(video_dict['id'])
             videos.append(video_dict)
         return videos
 
@@ -225,6 +241,7 @@ async def get_video(video_id: int):
                 seen_ids.add(t['id'])
                 merged.append(t)
         video_dict['tags'] = merged
+        video_dict['share_token'] = fetch_share_tokens(cursor, [video_id]).get(video_id)
         return video_dict
 
 

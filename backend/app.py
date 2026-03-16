@@ -11,7 +11,7 @@ import logging
 import sys
 
 from .database import init_db
-from .routers import jobs, captures, videos, settings, storage, tags
+from .routers import jobs, captures, videos, settings, storage, tags, shared
 from .services.capture_scheduler import CaptureScheduler
 from .auth import verify_api_key
 from . import config
@@ -105,6 +105,10 @@ app.include_router(videos.router, prefix="/api/videos", tags=["videos"], depende
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"], dependencies=[Depends(verify_api_key)])
 app.include_router(storage.router, prefix="/api/storage", tags=["storage"], dependencies=[Depends(verify_api_key)])
 app.include_router(tags.router, prefix="/api/tags", tags=["tags"], dependencies=[Depends(verify_api_key)])
+app.include_router(shared.router, prefix="/api/shared", tags=["shared"], dependencies=[Depends(verify_api_key)])
+
+# Public shared link routes — NO auth required
+app.include_router(shared.public_router, prefix="/shared", tags=["shared-public"])
 
 # Serve static files for frontend
 app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
