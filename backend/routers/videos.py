@@ -100,6 +100,7 @@ async def list_fonts():
 class TextOverlayPreviewRequest(BaseModel):
     image_path: str
     config: dict
+    job_name: str = "Sample Job"
 
 
 @router.post("/text-overlay-preview")
@@ -114,7 +115,7 @@ async def text_overlay_preview(request: TextOverlayPreviewRequest):
     from ..utils import get_now
     now = get_now()
     variables = {
-        'job_name': 'Sample Job',
+        'job_name': request.job_name,
         'date': now.strftime('%Y-%m-%d'),
         'time': now.strftime('%H:%M:%S'),
         'datetime': now.strftime('%Y-%m-%d %H:%M:%S'),

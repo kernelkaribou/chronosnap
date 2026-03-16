@@ -1751,7 +1751,9 @@ async function populateVideoFormFromJob(jobId, jobName) {
     if (previewImage && latestCaptures.captures && latestCaptures.captures.length > 0) {
         const cap = latestCaptures.captures[0];
         const img = document.getElementById('job-preview-img');
-        img.src = `${API_BASE}/captures/${cap.id}/thumbnail`;
+        const thumbUrl = `${API_BASE}/captures/${cap.id}/thumbnail`;
+        img.src = thumbUrl;
+        img._originalSrc = thumbUrl;
         document.getElementById('job-preview-label').textContent = `Latest capture: ${formatDateTime(cap.captured_at)}`;
         previewImage.style.display = 'flex';
         if (previewPlaceholder) previewPlaceholder.style.display = 'none';
@@ -1991,12 +1993,10 @@ const OVERLAY_POSITIONS = [
 /**
  * Generate overlay widget HTML for a container.
  * @param {string} prefix  - Unique prefix for element IDs (e.g., "build", "create-ab", "edit-ab")
- * @param {object} opts    - { label: string, compact: bool, showBold: bool, onchange: string|null }
+ * @param {object} opts    - { label: string, onchange: string|null }
  */
 function generateOverlayHTML(prefix, opts = {}) {
-    const label = opts.label || 'Add text overlay';
-    const compact = opts.compact || false;
-    const showBold = opts.showBold !== false;
+    const label = opts.label || 'Text Overlay';
     const onchangeAttr = opts.onchange ? ` onchange="${opts.onchange}"` : '';
     const inputEvent = opts.onchange ? ` oninput="${opts.onchange}" onchange="${opts.onchange}"` : '';
 
@@ -2017,33 +2017,33 @@ function generateOverlayHTML(prefix, opts = {}) {
         </div>
         <div id="${prefix}-overlay-fields" style="display: none;">
             <div class="form-group">
-                ${compact ? '' : '<label>Overlay Text</label>'}
+                <label>Overlay Text</label>
                 <input type="text" id="${prefix}-overlay-text" class="form-control" placeholder="{job_name} - {date} {time}"${inputEvent}>
                 <small style="color: var(--text-secondary);">Variables: <code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code> <code>{total_frames}</code></small>
             </div>
             <div class="form-row">
                 <div class="form-group flex-1">
-                    ${compact ? '' : '<label>Font</label>'}
+                    <label>Font</label>
                     <select id="${prefix}-overlay-font" class="form-control"${inputEvent}>${fontOpts}</select>
                 </div>
                 <div class="form-group" style="width: 80px;">
-                    ${compact ? '' : '<label>Size</label>'}
+                    <label>Size</label>
                     <input type="number" id="${prefix}-overlay-size" class="form-control" value="48" min="8" max="200"${inputEvent}>
                 </div>
-                ${showBold ? `<div class="form-group" style="width: 52px;">
-                    ${compact ? '' : '<label>Bold</label>'}
+                <div class="form-group" style="width: 60px;">
+                    <label>Bold</label>
                     <div style="display:flex;align-items:center;height:38px;">
                         <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr}>
                     </div>
-                </div>` : ''}
+                </div>
             </div>
             <div class="form-row">
                 <div class="form-group" style="width: 80px;">
-                    ${compact ? '' : '<label>Color</label>'}
+                    <label>Color</label>
                     <input type="color" id="${prefix}-overlay-color" value="#FFFFFF" class="form-control" style="padding:2px;height:38px;"${inputEvent}>
                 </div>
                 <div class="form-group flex-1">
-                    ${compact ? '' : '<label>Position</label>'}
+                    <label>Position</label>
                     <div class="overlay-position-grid" id="${prefix}-overlay-grid">${gridBtns}</div>
                 </div>
             </div>
@@ -2051,7 +2051,7 @@ function generateOverlayHTML(prefix, opts = {}) {
                 <div class="form-group" style="width: auto;">
                     <div style="display:flex;align-items:center;gap:0.5rem;">
                         <input type="checkbox" id="${prefix}-overlay-bg" checked${onchangeAttr}>
-                        <span>${compact ? 'BG' : 'Background'}</span>
+                        <span>Background</span>
                     </div>
                 </div>
                 <div class="form-group" style="width: 60px;">
@@ -2178,8 +2178,7 @@ async function loadOverlayFonts() {
 
 function initBuildOverlay() {
     mountOverlayWidget('build-overlay-container', 'build', {
-        label: 'Add text overlay',
-        showBold: true,
+        label: 'Text Overlay',
         onchange: 'debouncedOverlayPreview()',
         onToggle: (enabled) => { if (enabled) debouncedOverlayPreview(); else resetOverlayPreview(); },
         onChange: () => debouncedOverlayPreview(),
@@ -2204,7 +2203,7 @@ async function updateOverlayPreview() {
         const resp = await fetch(`${API_BASE}/videos/text-overlay-preview`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Referer': window.location.href },
-            body: JSON.stringify({ image_path: imagePath, config })
+            body: JSON.stringify({ image_path: imagePath, config, job_name: window._overlayJobName || 'Sample Job' })
         });
         if (!resp.ok) throw new Error('Preview failed');
         const blob = await resp.blob();
@@ -2220,20 +2219,26 @@ async function updateOverlayPreview() {
 
 function resetOverlayPreview() {
     const img = document.getElementById('job-preview-img');
-    if (img && img._overlayUrl) {
-        URL.revokeObjectURL(img._overlayUrl);
-        img._overlayUrl = null;
+    if (img) {
+        if (img._overlayUrl) {
+            URL.revokeObjectURL(img._overlayUrl);
+            img._overlayUrl = null;
+        }
+        // Restore original thumbnail
+        if (img._originalSrc) {
+            img.src = img._originalSrc;
+        }
     }
 }
 
 // ─── Auto-Build Overlay (create-job and edit-job) ───
 
 function initCreateJobOverlay() {
-    mountOverlayWidget('create-ab-overlay-container', 'create-ab', { label: 'Text Overlay', compact: true });
+    mountOverlayWidget('create-ab-overlay-container', 'create-ab', { label: 'Text Overlay' });
 }
 
 function initEditJobOverlay(job) {
-    mountOverlayWidget('edit-ab-overlay-container', 'edit-ab', { label: 'Text Overlay', compact: true });
+    mountOverlayWidget('edit-ab-overlay-container', 'edit-ab', { label: 'Text Overlay' });
     // Load existing config from job
     if (job.auto_build_text_overlay) {
         try {
