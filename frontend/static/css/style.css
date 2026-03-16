@@ -1219,9 +1219,8 @@ body {
     background: var(--bg-color);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    padding: 1rem;
-    margin: 1rem 0;
-    min-height: 60px;
+    padding: 0.75rem;
+    margin: 0.75rem 0;
 }
 
 .duration-estimate:empty {
@@ -1239,8 +1238,8 @@ body {
 }
 
 .duration-estimate h4 {
-    margin-bottom: 0.75rem;
-    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
     color: var(--text-secondary);
     text-align: center;
 }
@@ -1253,15 +1252,16 @@ body {
 }
 
 .duration-row {
-    margin: 0.75rem 0;
-    padding: 0.75rem;
+    margin: 0.5rem 0;
+    padding: 0.5rem;
     background: var(--surface-color);
     border-radius: var(--radius-sm);
 }
 
 .duration-row strong {
     display: block;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
+    font-size: 0.8rem;
     color: var(--text-primary);
     text-align: center;
 }
@@ -1275,10 +1275,10 @@ body {
 
 .duration-item {
     background: var(--surface-color);
-    padding: 0.75rem 1rem;
+    padding: 0.5rem 0.75rem;
     border-radius: var(--radius-sm);
     text-align: center;
-    min-width: 120px;
+    min-width: 100px;
 }
 
 .duration-fps {
@@ -1289,7 +1289,7 @@ body {
 }
 
 .duration-time {
-    font-size: 1.25rem;
+    font-size: 1rem;
     font-weight: 700;
     color: var(--primary-color);
 }
@@ -1907,17 +1907,17 @@ body {
 }
 
 /* Cosmic gradient heart — shared by captures, videos, and filter buttons */
-.fav-heart {
-    background: linear-gradient(135deg, #a78bfa, #e8457e);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+.fav-filter-btn .fav-heart-icon {
+    width: 14px; height: 14px;
+    fill: #a78bfa;
 }
-
-[data-theme="light"] .fav-heart {
-    background: linear-gradient(135deg, #7c3aed, #d03368);
-    -webkit-background-clip: text;
-    background-clip: text;
+.fav-filter-btn.active .fav-heart-icon {
+    fill: #fff;
+}
+.btn-fav-bulk .fav-heart-icon,
+.btn-unfav-bulk .fav-heart-icon {
+    width: 14px; height: 14px;
+    fill: currentColor;
 }
 
 /* Heart button on gallery cards (captures + videos) */
@@ -1987,10 +1987,6 @@ body {
     border-color: transparent;
 }
 
-.fav-filter-btn.active .fav-heart {
-    -webkit-text-fill-color: #fff;
-}
-
 [data-theme="light"] .fav-filter-btn.active {
     background: linear-gradient(135deg, #7c3aed, #d03368);
 }
@@ -2001,10 +1997,6 @@ body {
     color: #fff;
     border: none;
     font-weight: 500;
-}
-
-.btn-fav-bulk .fav-heart {
-    -webkit-text-fill-color: #fff;
 }
 
 .btn-fav-bulk:hover {
@@ -2618,6 +2610,8 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 }
 .share-toggle-inline .share-link-url {
     margin-left: 0.5rem;
+    flex: 1;
+    min-width: 200px;
 }
 .toggle-switch {
     position: relative; display: inline-block; width: 40px; height: 22px;

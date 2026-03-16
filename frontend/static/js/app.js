@@ -842,17 +842,16 @@ async function showJobDetails(jobId) {
                     <small style="color: var(--text-secondary); display: block; margin-top: 0.5rem;">Can span midnight (e.g., 22:00 to 02:00)</small>
                 </div>
 
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label>Capture Interval (seconds) *</label>
-                    <input type="number" id="edit_interval_seconds" class="form-control" value="${job.interval_seconds}" min="10" required>
-                    <small style="color: var(--text-secondary);">Minimum 10 seconds</small>
-                </div>
-
                 <div class="form-row" style="margin-bottom: 1.5rem;">
+                    <div class="form-group flex-1">
+                        <label>Capture Interval (seconds) *</label>
+                        <input type="number" id="edit_interval_seconds" class="form-control" value="${job.interval_seconds}" min="10" required>
+                        <small style="color: var(--text-secondary);">Minimum 10 seconds</small>
+                    </div>
                     <div class="form-group flex-1">
                         <label>Timelapse FPS</label>
                         <input type="number" id="edit_framerate" class="form-control" value="30" min="1" max="120" required>
-                        <small style="color: var(--text-secondary);">Frames per second for generated timelapse videos</small>
+                        <small style="color: var(--text-secondary);">Frames per second for timelapse videos</small>
                     </div>
                     <div class="form-group" style="flex: 0 0 120px;">
                         <label>Warning After</label>
@@ -4267,7 +4266,7 @@ function renderDiskChart(data, colors) {
         type: 'doughnut',
         data: {
             labels: [
-                `App Data (${formatBytes(appUsed)})`,
+                `Timelapse Manager (${formatBytes(appUsed)})`,
                 `Other (${formatBytes(otherUsed)})`,
                 `Free (${formatBytes(free)})`
             ],

@@ -84,7 +84,7 @@
                         <option value="">All Months</option>
                     </select>
                     <button class="btn btn-sm fav-filter-btn" id="video-fav-filter" onclick="toggleVideoFavoritesFilter()" title="Show favorites only">
-                        <span class="fav-heart">♥</span>
+                        <svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                     </button>
                     <div class="tag-filter-wrap" id="video-tag-filter-wrap"></div>
                     <button class="btn btn-secondary btn-sm" id="video-filter-reset" onclick="resetVideoFilters()" style="display:none;" title="Clear all filters">Reset</button>
@@ -99,8 +99,8 @@
                     <span class="selection-clear" onclick="videoSelection.clear()" title="Clear selection">&times;</span>
                     <span id="video-selected-count">0 selected</span>
                     <button class="btn btn-secondary btn-sm" id="video-toggle-selection-btn" onclick="videoSelection.toggleAll()">Select Visible</button>
-                    <button class="btn btn-sm btn-fav-bulk" onclick="videoSelection.favoriteSelected(true)" title="Favorite selected"><span class="fav-heart">♥</span> Favorite</button>
-                    <button class="btn btn-sm btn-unfav-bulk" onclick="videoSelection.favoriteSelected(false)" title="Unfavorite selected"><span class="fav-heart">♥</span> Unfavorite</button>
+                    <button class="btn btn-sm btn-fav-bulk" onclick="videoSelection.favoriteSelected(true)" title="Favorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Favorite</button>
+                    <button class="btn btn-sm btn-unfav-bulk" onclick="videoSelection.favoriteSelected(false)" title="Unfavorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Unfavorite</button>
                     <button class="btn btn-danger btn-sm" onclick="videoSelection.deleteSelected()">Delete Selected</button>
                 </div>
                 <div id="videos-list" class="videos-grid"></div>
@@ -138,7 +138,7 @@
                     <input type="datetime-local" class="gallery-filter-input" id="captures-start-time" onchange="applyCaptureSortAndFilter()" title="From">
                     <input type="datetime-local" class="gallery-filter-input" id="captures-end-time" onchange="applyCaptureSortAndFilter()" title="To">
                     <button class="btn btn-sm fav-filter-btn" id="captures-fav-filter" onclick="toggleCaptureFavoritesFilter()" title="Show favorites only">
-                        <span class="fav-heart">♥</span>
+                        <svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                     </button>
                     <div class="tag-filter-wrap" id="captures-tag-filter-wrap"></div>
                     <select class="gallery-filter-select" id="captures-sort-order" onchange="applyCaptureSortAndFilter()">
@@ -159,8 +159,8 @@
                     <span class="selection-clear" onclick="captureSelection.clear()" title="Clear selection">&times;</span>
                     <span id="captures-selected-count">0 selected</span>
                     <button class="btn btn-secondary btn-sm" id="toggle-selection-btn" onclick="captureSelection.toggleAll()">Select Visible</button>
-                    <button class="btn btn-sm btn-fav-bulk" onclick="captureSelection.favoriteSelected(true)" title="Favorite selected"><span class="fav-heart">♥</span> Favorite</button>
-                    <button class="btn btn-sm btn-unfav-bulk" onclick="captureSelection.favoriteSelected(false)" title="Unfavorite selected"><span class="fav-heart">♥</span> Unfavorite</button>
+                    <button class="btn btn-sm btn-fav-bulk" onclick="captureSelection.favoriteSelected(true)" title="Favorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Favorite</button>
+                    <button class="btn btn-sm btn-unfav-bulk" onclick="captureSelection.favoriteSelected(false)" title="Unfavorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Unfavorite</button>
                     <button class="btn btn-danger btn-sm" onclick="captureSelection.deleteSelected()">Delete Selected</button>
                 </div>
 
