@@ -953,8 +953,12 @@ async function showJobDetails(jobId) {
         // Initialize edit overlay section
         initEditJobOverlay(job);
         
-        // Render tag picker with current job tags
-        renderTagPicker('edit-job-tags', (job.tags || []).map(t => t.id));
+        // Render tag picker with auto-save on toggle
+        renderTagPicker('edit-job-tags', (job.tags || []).map(t => t.id), (tagIds) => {
+            apiRequest(`/jobs/${job.id}`, { method: 'PATCH', body: { tag_ids: tagIds } })
+                .then(() => loadJobs())
+                .catch(err => showNotification(err.message || 'Failed to update tags', 'error'));
+        });
         
         // Track changes to enable/disable save button
         setupJobEditChangeTracking(job);
@@ -1076,8 +1080,6 @@ function setupJobEditChangeTracking(originalJob) {
         const grid = document.getElementById('edit-ab-overlay-grid');
         const activeBtn = grid?.querySelector('.pos-btn.active');
         vals['_overlay_pos'] = activeBtn?.dataset.pos || '';
-        // Include tags
-        vals['_tag_ids'] = JSON.stringify(getSelectedTagIds('edit-job-tags'));
         return vals;
     };
 
@@ -1147,12 +1149,6 @@ function setupJobEditChangeTracking(originalJob) {
         overlayGrid.querySelectorAll('.pos-btn').forEach(btn => {
             btn.addEventListener('click', () => setTimeout(checkForChanges, 10));
         });
-    }
-    
-    // Track tag picker clicks
-    const tagPicker = document.getElementById('edit-job-tags');
-    if (tagPicker) {
-        tagPicker.addEventListener('click', () => setTimeout(checkForChanges, 10));
     }
 }
 
@@ -1357,8 +1353,7 @@ async function saveJobChanges(jobId) {
         auto_build_fps: autoBuildFps,
         auto_build_quality: autoBuildQuality,
         auto_build_resolution: autoBuildResolution,
-        auto_build_text_overlay: JSON.stringify(readOverlayConfig('edit-ab')),
-        tag_ids: getSelectedTagIds('edit-job-tags')
+        auto_build_text_overlay: JSON.stringify(readOverlayConfig('edit-ab'))
     };
     
     try {
@@ -1727,11 +1722,14 @@ async function openVideoDetail(videoId) {
                 <div style="margin: 0.5rem 0;">
                     <label style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Tags</label>
                     <div class="tag-picker" id="video-detail-tag-picker"></div>
-                    <button class="btn btn-purple btn-sm" style="margin-top:0.4rem;font-size:0.75rem;" onclick="saveVideoTags(${video.id})">Save Tags</button>
                 </div>
             `;
             tagsContainer.style.display = 'block';
-            renderTagPicker('video-detail-tag-picker', currentTagIds);
+            renderTagPicker('video-detail-tag-picker', currentTagIds, (tagIds) => {
+                apiRequest(`/videos/${video.id}/tags`, { method: 'PUT', body: { tag_ids: tagIds } })
+                    .then(() => loadVideos())
+                    .catch(err => showNotification(err.message || 'Failed to update tags', 'error'));
+            });
         }
         
         // Build actions
@@ -1770,17 +1768,6 @@ async function deleteVideoFromDetail(videoId, videoName) {
             }
         }
     );
-}
-
-async function saveVideoTags(videoId) {
-    const tagIds = getSelectedTagIds('video-detail-tag-picker');
-    try {
-        await apiRequest(`/videos/${videoId}/tags`, { method: 'PUT', body: { tag_ids: tagIds } });
-        showNotification('Video tags updated');
-        loadVideos();
-    } catch (error) {
-        showNotification(error.message || 'Failed to update tags', 'error');
-    }
 }
 
 async function showProcessVideoModal(jobId, jobName) {
@@ -4449,15 +4436,20 @@ function tagChipHTML(tag, small = false) {
 }
 
 // Tag picker for modals — renders all tags, toggles selection on click
-function renderTagPicker(containerId, selectedTagIds = []) {
+// onToggle(tagIds): optional callback fired after every toggle (for auto-save)
+function renderTagPicker(containerId, selectedTagIds = [], onToggle = null) {
     const container = document.getElementById(containerId);
     if (!container) return;
+
+    // Store callback and containerId for toggle/inline-create to reference
+    container._tagOnToggle = onToggle;
+    container._tagPickerId = containerId;
 
     let html = allTags.map(tag => {
         const isSelected = selectedTagIds.includes(tag.id);
         return `<span class="tag-chip ${isSelected ? 'selected' : ''}" data-tag-id="${tag.id}"
             style="background:${tag.color}22;color:${tag.color};border:1px solid ${tag.color}44;cursor:pointer;opacity:${isSelected ? '1' : '0.4'};"
-            onclick="toggleTagInPicker(this, ${tag.id})">
+            onclick="toggleTagInPicker(this)">
             <span style="width:6px;height:6px;border-radius:50%;background:${tag.color};display:inline-block;"></span>
             ${escapeHtml(tag.name)}</span>`;
     }).join('');
@@ -4473,7 +4465,6 @@ function showInlineTagCreate(containerId) {
     const container = document.getElementById(containerId);
     if (!container || container.querySelector('.tag-inline-form')) return;
 
-    // Remove the "+ New" button
     const createBtn = container.querySelector('.tag-inline-create');
     if (createBtn) createBtn.remove();
 
@@ -4485,14 +4476,20 @@ function showInlineTagCreate(containerId) {
             `<span class="color-swatch${c === '#6366f1' ? ' selected' : ''}" style="background:${c};width:16px;height:16px;" data-color="${c}" onclick="selectSwatch(this)"></span>`
         ).join('')}</div>
         <button class="btn btn-purple btn-sm" style="font-size:0.7rem;padding:0.15rem 0.5rem;" onclick="submitInlineTag('${containerId}')">Add</button>
-        <button class="btn btn-secondary btn-sm" style="font-size:0.7rem;padding:0.15rem 0.4rem;" onclick="renderTagPicker('${containerId}', getSelectedTagIds('${containerId}'))">✕</button>
+        <button class="btn btn-secondary btn-sm" style="font-size:0.7rem;padding:0.15rem 0.4rem;" onclick="cancelInlineTagCreate('${containerId}')">✕</button>
     `;
     container.appendChild(form);
     form.querySelector('input').focus();
     form.querySelector('input').addEventListener('keydown', e => {
         if (e.key === 'Enter') submitInlineTag(containerId);
-        if (e.key === 'Escape') renderTagPicker(containerId, getSelectedTagIds(containerId));
+        if (e.key === 'Escape') cancelInlineTagCreate(containerId);
     });
+}
+
+function cancelInlineTagCreate(containerId) {
+    const container = document.getElementById(containerId);
+    const onToggle = container?._tagOnToggle || null;
+    renderTagPicker(containerId, getSelectedTagIds(containerId), onToggle);
 }
 
 async function submitInlineTag(containerId) {
@@ -4507,19 +4504,27 @@ async function submitInlineTag(containerId) {
     try {
         const newTag = await apiRequest('/tags/', { method: 'POST', body: { name, color } });
         allTags.push(newTag);
-        // Re-render picker with the new tag selected
         const currentIds = getSelectedTagIds(containerId);
         currentIds.push(newTag.id);
-        renderTagPicker(containerId, currentIds);
+        const onToggle = container._tagOnToggle || null;
+        renderTagPicker(containerId, currentIds, onToggle);
+        // Fire callback for the newly added tag
+        if (onToggle) onToggle(currentIds);
         showNotification(`Tag "${name}" created`);
     } catch (error) {
         showNotification(error.message || 'Failed to create tag', 'error');
     }
 }
 
-function toggleTagInPicker(el, tagId) {
+function toggleTagInPicker(el) {
     el.classList.toggle('selected');
     el.style.opacity = el.classList.contains('selected') ? '1' : '0.4';
+    // Fire auto-save callback if present
+    const container = el.closest('.tag-picker');
+    if (container?._tagOnToggle) {
+        const tagIds = getSelectedTagIds(container._tagPickerId);
+        container._tagOnToggle(tagIds);
+    }
 }
 
 function getSelectedTagIds(containerId) {
