@@ -582,8 +582,11 @@ async function showJobDetails(jobId) {
                         </button>
                         <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); openCompareModal(${job.id})" title="Compare Captures" style="padding: 0.25rem;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="2" y="3" width="8" height="18" rx="1"></rect>
-                                <rect x="14" y="3" width="8" height="18" rx="1"></rect>
+                                <path d="M12 2v20"/>
+                                <path d="M2 20l5-8 3 4 2-6"/>
+                                <circle cx="6" cy="6" r="1.5"/>
+                                <path d="M22 20l-5-8-3 4-2-6"/>
+                                <circle cx="18" cy="8" r="1.5" fill="currentColor"/>
                             </svg>
                         </button>
                         <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); performMaintenanceScan(${job.id}, '${escapeHtml(job.name)}')" title="Sync" style="padding: 0.25rem;">

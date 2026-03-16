@@ -2151,7 +2151,8 @@ body {
 
 .compare-slider-img {
     width: 100%;
-    height: auto;
+    max-height: 65vh;
+    object-fit: contain;
     display: block;
     background: #000;
 }
