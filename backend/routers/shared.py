@@ -2,11 +2,13 @@
 Shared links — public (no auth) routes for viewing shared timelapses,
 and API routes (auth-protected) for managing shared links.
 """
+import os
+import re
 import secrets
 import string
 from datetime import datetime, timezone
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Path
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -18,10 +20,33 @@ router = APIRouter()
 
 TOKEN_LENGTH = 24
 TOKEN_ALPHABET = string.ascii_letters + string.digits
+TOKEN_PATTERN = re.compile(r'^[A-Za-z0-9]{24}$')
+
+# Allowed base directories for served video files
+ALLOWED_VIDEO_DIRS = [
+    os.path.realpath('/timelapses'),
+    os.path.realpath('/app/data/timelapses'),
+]
 
 
 def generate_token() -> str:
     return ''.join(secrets.choice(TOKEN_ALPHABET) for _ in range(TOKEN_LENGTH))
+
+
+def _validate_token_format(token: str):
+    """Reject tokens that don't match the expected format before any DB query."""
+    if not TOKEN_PATTERN.match(token):
+        raise HTTPException(status_code=404, detail="Not found")
+
+
+def _safe_file_path(file_path: str) -> str:
+    """Validate file_path is within allowed directories to prevent path traversal."""
+    real = os.path.realpath(file_path)
+    if not any(real.startswith(d + os.sep) or real == d for d in ALLOWED_VIDEO_DIRS):
+        raise HTTPException(status_code=404, detail="Not found")
+    if not os.path.isfile(real):
+        raise HTTPException(status_code=404, detail="Not found")
+    return real
 
 
 class ToggleShareRequest(BaseModel):
@@ -74,7 +99,7 @@ async def revoke_shared_link(link_id: int):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM shared_links WHERE id = ?", (link_id,))
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Shared link not found")
+            raise HTTPException(status_code=404, detail="Not found")
         return {"status": "revoked"}
 
 
@@ -84,7 +109,8 @@ public_router = APIRouter()
 
 
 def _resolve_shared_link(cursor, token: str):
-    """Look up a shared link by token; raises 404 or 410 on failure."""
+    """Look up a shared link by token; raises 404 on failure with generic message."""
+    _validate_token_format(token)
     cursor.execute(
         "SELECT sl.*, pv.file_path FROM shared_links sl "
         "LEFT JOIN processed_videos pv ON sl.video_id = pv.id "
@@ -93,15 +119,15 @@ def _resolve_shared_link(cursor, token: str):
     )
     row = cursor.fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="Shared link not found")
+        raise HTTPException(status_code=404, detail="Not found")
 
     if row["expires_at"]:
         expires = datetime.fromisoformat(row["expires_at"])
         if datetime.now(timezone.utc) > expires:
-            raise HTTPException(status_code=410, detail="This shared link has expired")
+            raise HTTPException(status_code=404, detail="Not found")
 
     if not row["file_path"]:
-        raise HTTPException(status_code=404, detail="Video no longer available")
+        raise HTTPException(status_code=404, detail="Not found")
 
     return row
 
@@ -122,10 +148,11 @@ async def shared_video_stream(token: str):
     with get_db() as conn:
         cursor = conn.cursor()
         row = _resolve_shared_link(cursor, token)
+        safe_path = _safe_file_path(row["file_path"])
         return FileResponse(
-            row["file_path"],
+            safe_path,
             media_type="video/mp4",
-            filename=f"timelapse.mp4"
+            filename="timelapse.mp4"
         )
 
 
@@ -135,8 +162,9 @@ async def shared_video_download(token: str):
     with get_db() as conn:
         cursor = conn.cursor()
         row = _resolve_shared_link(cursor, token)
+        safe_path = _safe_file_path(row["file_path"])
         return FileResponse(
-            row["file_path"],
+            safe_path,
             media_type="video/mp4",
             filename="timelapse.mp4",
             headers={"Content-Disposition": "attachment; filename=timelapse.mp4"}
