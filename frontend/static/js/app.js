@@ -728,7 +728,7 @@ async function showJobDetails(jobId) {
         let latestImageHtml = '';
         if (capturesData.captures && capturesData.captures.length > 0) {
             latestImageHtml = `
-                <div style="margin: 1.5rem 0;">
+                <div style="margin: 0.5rem 0 1rem;">
                     <img src="${API_BASE}/captures/${capturesData.captures[0].id}/image" alt="Latest capture" style="max-width: 100%; border-radius: 0.5rem; border: 1px solid var(--border-color);">
                 </div>
             `;
@@ -855,7 +855,7 @@ async function showJobDetails(jobId) {
 
                 <h4 style="margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border-color);">Job Settings</h4>
 
-                <div class="form-group" style="margin-bottom: 1.5rem;">
+                <div class="form-group" style="margin-bottom: 0.75rem;">
                     <label>Stream URL *</label>
                     <div style="display: flex; gap: 0.5rem; align-items: center;">
                         <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required style="flex: 1; min-width: 0;">
