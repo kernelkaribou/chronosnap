@@ -211,15 +211,17 @@ def render_overlay(
 
 
 def render_preview_bytes(
-    image_path: str,
-    config: Dict[str, Any],
+    image_path: Optional[str] = None,
+    image_data: Optional[str] = None,
+    config: Dict[str, Any] = None,
     variables: Optional[Dict[str, str]] = None,
     max_width: int = 800,
 ) -> bytes:
     """Render a preview image with overlay and return as JPEG bytes.
 
     Args:
-        image_path: Path to source image
+        image_path: Path to source image (file on disk)
+        image_data: Base64-encoded image (e.g. from test-url)
         config: Overlay config dict
         variables: Template variables
         max_width: Max width for preview (downscale for performance)
@@ -227,7 +229,13 @@ def render_preview_bytes(
     Returns:
         JPEG image bytes
     """
-    img = Image.open(image_path)
+    if image_data:
+        # Decode base64 — strip data URI prefix if present
+        import base64
+        b64 = image_data.split(',', 1)[-1] if ',' in image_data else image_data
+        img = Image.open(BytesIO(base64.b64decode(b64)))
+    else:
+        img = Image.open(image_path)
 
     # Downscale for preview performance
     if img.width > max_width:

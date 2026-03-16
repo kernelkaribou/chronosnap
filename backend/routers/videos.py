@@ -98,7 +98,8 @@ async def list_fonts():
 
 
 class TextOverlayPreviewRequest(BaseModel):
-    image_path: str
+    image_path: Optional[str] = None
+    image_data: Optional[str] = None  # Base64-encoded image (from test-url)
     config: dict
     job_name: str = "Sample Job"
 
@@ -108,7 +109,10 @@ async def text_overlay_preview(request: TextOverlayPreviewRequest):
     """Generate a preview image with text overlay applied"""
     from ..services.text_overlay import render_preview_bytes
 
-    if not os.path.isfile(request.image_path):
+    if not request.image_path and not request.image_data:
+        raise HTTPException(status_code=400, detail="Either image_path or image_data required")
+
+    if request.image_path and not os.path.isfile(request.image_path):
         raise HTTPException(status_code=404, detail="Image not found")
 
     # Build sample variables for preview
@@ -126,6 +130,7 @@ async def text_overlay_preview(request: TextOverlayPreviewRequest):
     try:
         preview_bytes = render_preview_bytes(
             image_path=request.image_path,
+            image_data=request.image_data,
             config=request.config,
             variables=variables,
         )

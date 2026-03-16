@@ -2289,8 +2289,22 @@ function resetOverlayPreview() {
 
 // ─── Auto-Build Overlay (create-job and edit-job) ───
 
+let _createOverlayPreviewTimeout = null;
+
 function initCreateJobOverlay() {
-    mountOverlayWidget('create-ab-overlay-container', 'create-ab', { label: 'Text Overlay' });
+    const triggerCreatePreview = () => {
+        clearTimeout(_createOverlayPreviewTimeout);
+        _createOverlayPreviewTimeout = setTimeout(() => updateOverlayFromUrl('create-ab'), 300);
+    };
+
+    mountOverlayWidget('create-ab-overlay-container', 'create-ab', {
+        label: 'Text Overlay',
+        showPreview: true,
+        onchange: '_createAbOverlayChanged()',
+        onToggle: (enabled) => { if (enabled) fetchOverlayPreviewFromUrl('create-ab'); },
+        onChange: () => triggerCreatePreview(),
+    });
+    window._createAbOverlayChanged = triggerCreatePreview;
 }
 
 let _editOverlayPreviewTimeout = null;
@@ -2348,17 +2362,120 @@ async function loadOverlayPreviewImage(prefix, job) {
                 setTimeout(() => updateGenericOverlayPreview(prefix, job), 100);
             }
         } else {
-            if (placeholder) placeholder.textContent = 'No captures yet';
+            // No captures — try to fetch from the job's URL
+            showOverlayPreviewPlaceholder(prefix, 'No captures yet', job.url);
         }
     } catch (e) {
-        if (placeholder) placeholder.textContent = 'Preview unavailable';
+        showOverlayPreviewPlaceholder(prefix, 'Preview unavailable');
     }
+}
+
+function showOverlayPreviewPlaceholder(prefix, message, streamUrl) {
+    const placeholder = document.getElementById(`${prefix}-overlay-preview-placeholder`);
+    if (!placeholder) return;
+    const refreshBtn = streamUrl
+        ? `<button type="button" class="btn btn-secondary" style="font-size:0.75rem; padding:0.3rem 0.6rem; margin-top:0.4rem;" onclick="fetchOverlayPreviewFromUrl('${prefix}')">
+               Fetch Preview
+           </button>`
+        : '';
+    placeholder.innerHTML = `
+        <div style="text-align:center;">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4; margin-bottom:0.25rem;">
+                <rect x="2" y="2" width="20" height="20" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <path d="m21 15-5-5L5 21"/>
+            </svg>
+            <div style="font-size:0.8rem;">${message}</div>
+            ${refreshBtn}
+        </div>`;
+}
+
+async function fetchOverlayPreviewFromUrl(prefix) {
+    const placeholder = document.getElementById(`${prefix}-overlay-preview-placeholder`);
+    const img = document.getElementById(`${prefix}-overlay-preview-img`);
+    if (!img) return;
+
+    // Determine URL source based on context
+    let url;
+    if (prefix === 'create-ab') {
+        url = document.getElementById('job_url')?.value;
+    } else if (prefix === 'edit-ab') {
+        url = document.getElementById('edit_url')?.value;
+    }
+    if (!url) {
+        showOverlayPreviewPlaceholder(prefix, 'Enter a stream URL first');
+        return;
+    }
+
+    if (placeholder) placeholder.innerHTML = '<div style="font-size:0.8rem; color:var(--text-secondary);">Fetching…</div>';
+
+    try {
+        const result = await apiRequest('/jobs/test-url', { method: 'POST', query: { url } });
+        if (result.success && result.image_data) {
+            img._base64 = result.image_data;
+            img._originalSrc = result.image_data;
+            img.src = result.image_data;
+            img.style.display = 'block';
+            if (placeholder) placeholder.style.display = 'none';
+            // If overlay is enabled, render with overlay
+            const cb = document.getElementById(`${prefix}-overlay-enabled`);
+            if (cb && cb.checked) {
+                setTimeout(() => updateOverlayFromUrl(prefix), 100);
+            }
+        } else {
+            showOverlayPreviewPlaceholder(prefix, 'Could not fetch preview', url);
+        }
+    } catch (e) {
+        showOverlayPreviewPlaceholder(prefix, 'Could not fetch preview', url);
+    }
+}
+
+async function updateOverlayFromUrl(prefix) {
+    const config = readOverlayConfig(prefix);
+    const img = document.getElementById(`${prefix}-overlay-preview-img`);
+    if (!img) return;
+    if (!config) {
+        if (img._originalSrc) img.src = img._originalSrc;
+        if (img._overlayUrl) { URL.revokeObjectURL(img._overlayUrl); img._overlayUrl = null; }
+        return;
+    }
+    // Need either file_path or base64
+    const hasFile = img._filePath;
+    const hasBase64 = img._base64;
+    if (!hasFile && !hasBase64) return;
+
+    const jobName = prefix === 'create-ab'
+        ? (document.getElementById('job_name')?.value || 'New Job')
+        : (window._editOverlayJob?.name || 'Sample Job');
+
+    try {
+        const body = { config, job_name: jobName };
+        if (hasFile) body.image_path = img._filePath;
+        else body.image_data = img._base64;
+
+        const resp = await fetch(`${API_BASE}/videos/text-overlay-preview`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Referer': window.location.href },
+            body: JSON.stringify(body)
+        });
+        if (!resp.ok) throw new Error('Preview failed');
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        if (img._overlayUrl) URL.revokeObjectURL(img._overlayUrl);
+        img._overlayUrl = url;
+        img.src = url;
+    } catch (e) { console.error('Overlay preview error:', e); }
 }
 
 async function updateGenericOverlayPreview(prefix, job) {
     const config = readOverlayConfig(prefix);
     const img = document.getElementById(`${prefix}-overlay-preview-img`);
-    if (!img || !img._filePath) return;
+    if (!img) return;
+    // Delegate to URL-based previewer if we have base64 but no file
+    if (!img._filePath && img._base64) {
+        return updateOverlayFromUrl(prefix);
+    }
+    if (!img._filePath) return;
     if (!config) {
         // Restore original
         if (img._originalSrc) img.src = img._originalSrc;
