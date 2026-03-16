@@ -15,7 +15,7 @@ from ..services.capture_scheduler import get_scheduler
 from ..services.maintenance import scan_job_files, cleanup_missing_captures, import_orphaned_files
 from ..services.job_state import calculate_job_state
 from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware
-from ..helpers.db_helpers import get_or_404
+from ..helpers.db_helpers import get_or_404, fetch_tags_for_jobs, set_job_tags
 from ..helpers.file_helpers import validate_writable_directory
 
 router = APIRouter()
@@ -125,6 +125,11 @@ async def create_job(job: JobCreate):
         cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
         final_job = dict_from_row(cursor.fetchone())
         
+        # Set tags if provided
+        if job.tag_ids:
+            set_job_tags(cursor, job_id, job.tag_ids)
+        final_job['tags'] = fetch_tags_for_jobs(cursor, [job_id]).get(job_id, [])
+        
         logger.info(f"Created job '{job.name}' (ID: {job_id}) with status: {status} - {reason}")
         return enrich_job_with_next_capture(final_job)
 
@@ -168,10 +173,14 @@ async def list_jobs(
             for cap_row in cursor.fetchall():
                 latest_captures[cap_row['job_id']] = dict_from_row(cap_row)
         
+        # Batch-fetch tags per job
+        tags_by_job = fetch_tags_for_jobs(cursor, job_ids) if job_ids else {}
+        
         jobs = []
         for row in rows:
             job = dict_from_row(row)
             job['latest_capture'] = latest_captures.get(job['id'])
+            job['tags'] = tags_by_job.get(job['id'], [])
             jobs.append(enrich_job_with_next_capture(job))
         
         return jobs
@@ -191,6 +200,7 @@ async def get_job(job_id: int):
         )
         latest_capture_row = cursor.fetchone()
         job['latest_capture'] = dict_from_row(latest_capture_row) if latest_capture_row else None
+        job['tags'] = fetch_tags_for_jobs(cursor, [job_id]).get(job_id, [])
         
         return enrich_job_with_next_capture(job)
 
@@ -334,15 +344,16 @@ async def update_job(job_id: int, job_update: JobUpdate):
         if job_update.end_datetime is not None:
             schedule_changed = True
         
-        if not updates:
+        if not updates and job_update.tag_ids is None:
             raise HTTPException(status_code=400, detail="No updates provided")
         
-        updates.append("updated_at = ?")
-        values.append(to_iso(get_now()))
-        values.append(job_id)
-        
-        query = f"UPDATE jobs SET {', '.join(updates)} WHERE id = ?"
-        cursor.execute(query, values)
+        if updates:
+            updates.append("updated_at = ?")
+            values.append(to_iso(get_now()))
+            values.append(job_id)
+            
+            query = f"UPDATE jobs SET {', '.join(updates)} WHERE id = ?"
+            cursor.execute(query, values)
         
         # Reload job with updates
         cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
@@ -387,6 +398,11 @@ async def update_job(job_id: int, job_update: JobUpdate):
             cursor.execute("UPDATE jobs SET warning_message = NULL WHERE id = ?", (job_id,))
             updated_job['warning_message'] = None
             logger.info(f"Job {job_id}: Cleared warning on manual {job_update.status.value}")
+        
+        # Update tags if provided
+        if job_update.tag_ids is not None:
+            set_job_tags(cursor, job_id, job_update.tag_ids)
+        updated_job['tags'] = fetch_tags_for_jobs(cursor, [job_id]).get(job_id, [])
         
         # Log changes
         changes = [f"{field}" for field in job_update.model_fields_set]

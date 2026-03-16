@@ -13,7 +13,7 @@ from ..models import VideoCreate, VideoResponse
 from ..database import get_db, dict_from_row
 from ..services.video_processor import process_video
 from ..utils import get_now, to_iso
-from ..helpers.db_helpers import get_or_404, normalize_favorite
+from ..helpers.db_helpers import get_or_404, normalize_favorite, fetch_tags_for_videos, fetch_tags_for_jobs, set_video_tags
 from ..helpers.file_helpers import validate_writable_directory, delete_video_files
 
 router = APIRouter()
@@ -175,10 +175,30 @@ async def list_videos(
         params.extend([limit, offset])
         
         cursor.execute(query, params)
+        rows = cursor.fetchall()
+        video_ids = [row['id'] for row in rows]
+        
+        # Batch-fetch video-specific tags
+        video_tags_map = fetch_tags_for_videos(cursor, video_ids)
+        
+        # Batch-fetch inherited job tags
+        job_ids = list(set(row['job_id'] for row in rows if row['job_id']))
+        job_tags_map = fetch_tags_for_jobs(cursor, job_ids) if job_ids else {}
+        
         videos = []
-        for row in cursor.fetchall():
+        for row in rows:
             video_dict = dict_from_row(row)
             normalize_favorite(video_dict)
+            # Merge own tags + inherited job tags (deduplicate by id)
+            own_tags = video_tags_map.get(video_dict['id'], [])
+            inherited_tags = job_tags_map.get(video_dict.get('job_id'), [])
+            seen_ids = set()
+            merged = []
+            for t in own_tags + inherited_tags:
+                if t['id'] not in seen_ids:
+                    seen_ids.add(t['id'])
+                    merged.append(t)
+            video_dict['tags'] = merged
             videos.append(video_dict)
         return videos
 
@@ -195,6 +215,16 @@ async def get_video(video_id: int):
             WHERE v.id = ?
         """, (video_id,), "Video not found")
         normalize_favorite(video_dict)
+        # Merge own tags + inherited job tags
+        own_tags = fetch_tags_for_videos(cursor, [video_id]).get(video_id, [])
+        inherited_tags = fetch_tags_for_jobs(cursor, [video_dict['job_id']]).get(video_dict.get('job_id'), []) if video_dict.get('job_id') else []
+        seen_ids = set()
+        merged = []
+        for t in own_tags + inherited_tags:
+            if t['id'] not in seen_ids:
+                seen_ids.add(t['id'])
+                merged.append(t)
+        video_dict['tags'] = merged
         return video_dict
 
 
@@ -331,6 +361,23 @@ async def set_video_favorites(request: BulkFavoriteRequest):
         updated = cursor.rowcount
     
     return {"updated": updated, "requested": len(request.ids)}
+
+
+class VideoTagsRequest(BaseModel):
+    tag_ids: List[int]
+
+
+@router.put("/{video_id}/tags")
+async def update_video_tags(video_id: int, request: VideoTagsRequest):
+    """Set tags on a video"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM processed_videos WHERE id = ?", (video_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Video not found")
+        set_video_tags(cursor, video_id, request.tag_ids)
+        tags = fetch_tags_for_videos(cursor, [video_id]).get(video_id, [])
+        return {"tags": tags}
 
 
 def _cleanup_empty_folder(file_path: str):

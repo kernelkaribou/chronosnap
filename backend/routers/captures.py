@@ -13,7 +13,7 @@ import logging
 from ..models import CaptureResponse, CaptureListResponse, CaptureDeleteRequest
 from ..database import get_db, dict_from_row
 from ..utils import get_now, to_iso, parse_iso
-from ..helpers.db_helpers import get_or_404, fetch_one, enrich_capture, decrement_job_stats
+from ..helpers.db_helpers import get_or_404, fetch_one, enrich_capture, decrement_job_stats, fetch_tags_for_jobs
 from ..helpers.file_helpers import delete_capture_file
 from ..services.thumbnail_generator import get_thumbnail_path, has_thumbnail, delete_thumbnail
 from .. import config
@@ -94,10 +94,15 @@ async def list_captures(
         """
         cursor.execute(query, params + [page_size, offset])
         
+        rows = cursor.fetchall()
+        job_ids_in_page = list(set(row['job_id'] for row in rows if row['job_id']))
+        job_tags_map = fetch_tags_for_jobs(cursor, job_ids_in_page) if job_ids_in_page else {}
+        
         captures = []
-        for row in cursor.fetchall():
+        for row in rows:
             capture_dict = dict_from_row(row)
             enrich_capture(capture_dict, has_thumbnail, get_thumbnail_path)
+            capture_dict['tags'] = job_tags_map.get(capture_dict['job_id'], [])
             captures.append(capture_dict)
         
         total_pages = (total + page_size - 1) // page_size
