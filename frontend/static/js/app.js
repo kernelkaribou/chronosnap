@@ -3216,11 +3216,11 @@ function showCreateJobModal() {
     
     // Reset time window
     document.getElementById('time_window_enabled').checked = false;
-    document.getElementById('time-window-fields').style.display = 'none';
+    document.getElementById('time-window-fields').classList.add('disabled');
     
     // Reset auto-build
     document.getElementById('auto_build_enabled').checked = false;
-    document.getElementById('auto-build-fields').style.display = 'none';
+    document.getElementById('auto-build-fields').classList.add('disabled');
     
     showModal('create-job-modal');
     
@@ -3266,7 +3266,7 @@ async function duplicateJob(jobId) {
         const twFields = document.getElementById('time-window-fields');
         if (job.time_window_enabled) {
             twEnabled.checked = true;
-            twFields.style.display = '';
+            twFields.classList.remove('disabled');
             if (job.time_window_start) {
                 document.getElementById('time_window_start_time').value = job.time_window_start;
                 document.getElementById('time_window_start_time').dispatchEvent(new Event('change'));
@@ -3277,7 +3277,7 @@ async function duplicateJob(jobId) {
             }
         } else {
             twEnabled.checked = false;
-            twFields.style.display = 'none';
+            twFields.classList.add('disabled');
         }
         
         // Copy auto-build settings
@@ -3285,7 +3285,7 @@ async function duplicateJob(jobId) {
         const abFields = document.getElementById('auto-build-fields');
         if (job.auto_build_enabled) {
             abEnabled.checked = true;
-            abFields.style.display = 'block';
+            abFields.classList.remove('disabled');
             document.getElementById('auto_build_interval_hours').value = job.auto_build_interval_hours || 168;
             document.getElementById('auto_build_fps').value = job.auto_build_fps || 30;
             document.getElementById('auto_build_quality').value = job.auto_build_quality || 'medium';
@@ -3304,7 +3304,7 @@ async function duplicateJob(jobId) {
             }
         } else {
             abEnabled.checked = false;
-            abFields.style.display = 'none';
+            abFields.classList.add('disabled');
         }
         
         updateEndDateMin();
