@@ -399,7 +399,7 @@ function renderJobs(jobs) {
         
         // Determine status display
         let statusLabel, statusClass;
-        if (job.warning_message) {
+        if (job.warning_message && job.status !== 'disabled' && job.status !== 'completed') {
             statusLabel = '⚠ Warning';
             statusClass = 'warning';
         } else if (job.status === 'sleeping') {
@@ -493,7 +493,7 @@ async function showJobDetails(jobId) {
         
         // Determine status display
         let statusLabel, statusClass;
-        if (job.warning_message) {
+        if (job.warning_message && job.status !== 'disabled' && job.status !== 'completed') {
             statusLabel = 'Warning';
             statusClass = 'warning';
         } else if (job.status === 'sleeping') {
@@ -543,7 +543,7 @@ async function showJobDetails(jobId) {
             <div style="padding: 1.5rem;">
                 ${latestImageHtml}
                 
-                ${job.warning_message ? `
+                ${job.warning_message && job.status !== 'disabled' && job.status !== 'completed' ? `
                 <div class="info-box" style="margin: 1rem 0; border-left-color: var(--warning-color);">
                     <div style="display: flex; align-items: start; gap: 0.5rem;">
                         <span style="font-size: 1.25rem;">⚠</span>
@@ -3752,8 +3752,8 @@ function updateJobWarningBadge(jobs) {
     const existing = jobsLink.querySelector('.nav-warning-badge');
     if (existing) existing.remove();
 
-    // Check if any job has a warning
-    const hasWarnings = jobs && jobs.some(j => j.warning_message);
+    // Check if any active/sleeping job has a warning
+    const hasWarnings = jobs && jobs.some(j => j.warning_message && j.status !== 'disabled' && j.status !== 'completed');
     if (hasWarnings) {
         const badge = document.createElement('span');
         badge.className = 'nav-warning-badge';

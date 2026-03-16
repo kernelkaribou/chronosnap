@@ -361,6 +361,12 @@ async def update_job(job_id: int, job_update: JobUpdate):
             updated_job = dict_from_row(cursor.fetchone())
             logger.info(f"Job {job_id}: Re-enabled, new status: {new_status} - {reason}")
         
+        # Clear warning when manually disabling or completing a job
+        if manual_status_change and updated_job.get('warning_message'):
+            cursor.execute("UPDATE jobs SET warning_message = NULL WHERE id = ?", (job_id,))
+            updated_job['warning_message'] = None
+            logger.info(f"Job {job_id}: Cleared warning on manual {job_update.status.value}")
+        
         # Log changes
         changes = [f"{field}" for field in job_update.model_fields_set]
         if changes:
