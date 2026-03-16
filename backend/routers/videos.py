@@ -11,7 +11,7 @@ import logging
 
 from ..models import VideoCreate, VideoResponse
 from ..database import get_db, dict_from_row
-from ..services.video_processor import process_video
+from ..services.video_processor import process_video, cancel_video
 from ..utils import get_now, to_iso
 from ..helpers.db_helpers import get_or_404, normalize_favorite, fetch_tags_for_videos, fetch_tags_for_jobs, set_video_tags
 from ..helpers.file_helpers import validate_writable_directory, delete_video_files
@@ -301,6 +301,22 @@ async def download_video(video_id: int):
             media_type="video/mp4",
             filename=f"{vid['name']}.mp4"
         )
+
+
+@router.post("/{video_id}/cancel")
+async def cancel_video_build(video_id: int):
+    """Cancel an in-progress video build"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        vid = get_or_404(cursor,
+            "SELECT id, status FROM processed_videos WHERE id = ?",
+            (video_id,), "Video not found")
+        if vid['status'] != 'processing':
+            raise HTTPException(status_code=400, detail="Video is not currently processing")
+    
+    if cancel_video(video_id):
+        return {"status": "cancelled"}
+    raise HTTPException(status_code=400, detail="No active build process found")
 
 
 @router.delete("/{video_id}", status_code=204)

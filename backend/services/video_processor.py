@@ -3,6 +3,7 @@ Video processing service - builds timelapse videos from captured images
 """
 import subprocess
 import os
+import threading
 from datetime import datetime
 from typing import Dict, Any, Optional
 import logging
@@ -11,6 +12,10 @@ from ..database import get_db
 from .. import config
 
 logger = logging.getLogger(__name__)
+
+# Track active ffmpeg processes by video_id for cancellation
+_active_processes: Dict[int, subprocess.Popen] = {}
+_process_lock = threading.Lock()
 
 
 def process_video(
@@ -178,29 +183,36 @@ def process_video(
                 universal_newlines=True
             )
             
-            # Monitor progress, collecting stderr for error reporting
-            stderr_lines = []
-            while True:
-                line = process.stderr.readline()
-                if not line:
-                    break
-                stderr_lines.append(line)
-                
-                # Parse progress from ffmpeg output
-                if 'frame=' in line:
-                    try:
-                        frame_str = line.split('frame=')[1].split()[0]
-                        current_frame = int(frame_str)
-                        if use_overlay:
-                            # Overlay used 40%, encoding uses remaining 60%
-                            progress = 40 + (current_frame / total_frames) * 60
-                        else:
-                            progress = (current_frame / total_frames) * 100
-                        _update_progress(video_id, progress)
-                    except (ValueError, IndexError):
-                        pass
+            with _process_lock:
+                _active_processes[video_id] = process
             
-            process.wait()
+            try:
+                # Monitor progress, collecting stderr for error reporting
+                stderr_lines = []
+                while True:
+                    line = process.stderr.readline()
+                    if not line:
+                        break
+                    stderr_lines.append(line)
+                    
+                    # Parse progress from ffmpeg output
+                    if 'frame=' in line:
+                        try:
+                            frame_str = line.split('frame=')[1].split()[0]
+                            current_frame = int(frame_str)
+                            if use_overlay:
+                                # Overlay used 40%, encoding uses remaining 60%
+                                progress = 40 + (current_frame / total_frames) * 60
+                            else:
+                                progress = (current_frame / total_frames) * 100
+                            _update_progress(video_id, progress)
+                        except (ValueError, IndexError):
+                            pass
+                
+                process.wait()
+            finally:
+                with _process_lock:
+                    _active_processes.pop(video_id, None)
             
             if process.returncode == 0 and os.path.exists(output_path):
                 file_size = os.path.getsize(output_path)
@@ -214,6 +226,9 @@ def process_video(
                 )
                 
                 logger.info(f"Video processing completed: {output_path}")
+            elif process.returncode in (-9, -15):
+                # Killed by cancel_video — status already set by cancel_video()
+                logger.info(f"Video processing cancelled for video_id={video_id}")
             else:
                 error_msg = ''.join(stderr_lines[-20:]) if stderr_lines else "Unknown error"
                 _update_video_status(video_id, 'failed', 0, f"FFMPEG error: {error_msg[:200]}")
@@ -236,6 +251,25 @@ def _update_progress(video_id: int, progress: float):
     """Update video processing progress"""
     from .state_manager import update_video_state
     update_video_state(video_id, 'processing', min(progress, 100.0))
+
+
+def cancel_video(video_id: int) -> bool:
+    """Cancel an in-progress video build. Returns True if cancelled."""
+    with _process_lock:
+        process = _active_processes.get(video_id)
+    if process and process.poll() is None:
+        process.kill()
+        _update_video_status(video_id, 'failed', 0, "Cancelled by user")
+        # Clean up partial output file
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT file_path FROM processed_videos WHERE id = ?", (video_id,))
+            row = cursor.fetchone()
+            if row and row[0] and os.path.exists(row[0]):
+                os.remove(row[0])
+        logger.info(f"Video build cancelled: video_id={video_id}")
+        return True
+    return False
 
 
 def _update_video_status(video_id: int, status: str, progress: float, message: str = ""):

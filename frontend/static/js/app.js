@@ -1741,6 +1741,9 @@ async function openVideoDetail(videoId) {
         
         // Build actions
         let actionsHtml = '';
+        if (video.status === 'processing') {
+            actionsHtml += `<button class="btn btn-danger btn-sm" onclick="cancelVideoBuild(${video.id}, '${escapeHtml(video.name)}')">Cancel Build</button>`;
+        }
         if (video.status === 'completed') {
             actionsHtml += `<a href="${API_BASE}/videos/${video.id}/download" class="btn btn-primary btn-sm">Download</a>`;
         }
@@ -1775,6 +1778,22 @@ async function deleteVideoFromDetail(videoId, videoName) {
                 showNotification(`Video "${videoName}" deleted successfully`);
             } catch (error) {
                 showNotification(`Failed to delete video "${videoName}"`, 'error');
+            }
+        }
+    );
+}
+
+async function cancelVideoBuild(videoId, videoName) {
+    confirmAction(
+        `Cancel the build for "${videoName}"? The partial file will be deleted.`,
+        async () => {
+            try {
+                await apiRequest(`/videos/${videoId}/cancel`, { method: 'POST' });
+                closeVideoDetail();
+                loadVideos();
+                showNotification(`Build cancelled for "${videoName}"`);
+            } catch (error) {
+                showNotification(`Failed to cancel: ${error.message}`, 'error');
             }
         }
     );
