@@ -409,6 +409,7 @@ function preventEnterSubmit(event) {
 let _timeWindowListenersAdded = false;
 function toggleTimeWindow() {
     toggleFieldGroup('time_window_enabled', 'time-window-fields', {
+        display: 'flex',
         requiredIds: ['time_window_start', 'time_window_end'],
         onToggle: (enabled) => {
             if (enabled && !_timeWindowListenersAdded) {
@@ -882,31 +883,24 @@ async function showJobDetails(jobId) {
                 </div>
                 
                 <div class="form-group" style="margin-bottom: 1rem;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
-                        <input type="checkbox" id="edit_time_window_enabled" ${job.time_window_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditTimeWindow()">
-                        <span><strong>Enable Daily Time Window</strong></span>
-                    </label>
-                    <small style="color: var(--text-secondary); display: block; margin-left: 1.5rem;">Restrict captures to specific hours each day</small>
-                </div>
-                
-                <div id="edit-time-window-fields" style="display: ${job.time_window_enabled ? 'block' : 'none'}; margin-bottom: 1rem; margin-left: 1.5rem;">
-                    <div style="display: flex; gap: 1rem;">
-                        <div style="flex: 1;">
-                            <label>Window Start Time</label>
-                            <div class="time-picker-container">
-                                <input type="time" id="edit_time_window_start_time" class="form-control">
+                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
+                            <input type="checkbox" id="edit_time_window_enabled" ${job.time_window_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditTimeWindow()">
+                            <span><strong>Daily Time Window</strong></span>
+                        </label>
+                        <div id="edit-time-window-fields" style="display: ${job.time_window_enabled ? 'flex' : 'none'}; align-items: center; gap: 0.5rem;">
+                            <label style="font-size: 0.8rem; margin: 0;">Start</label>
+                            <div class="time-picker-container" style="margin: 0;">
+                                <input type="time" id="edit_time_window_start_time" class="form-control" style="padding: 0.3rem 0.5rem;">
                             </div>
                             <input type="hidden" id="edit_time_window_start">
-                        </div>
-                        <div style="flex: 1;">
-                            <label>Window End Time</label>
-                            <div class="time-picker-container">
-                                <input type="time" id="edit_time_window_end_time" class="form-control">
+                            <label style="font-size: 0.8rem; margin: 0;">End</label>
+                            <div class="time-picker-container" style="margin: 0;">
+                                <input type="time" id="edit_time_window_end_time" class="form-control" style="padding: 0.3rem 0.5rem;">
                             </div>
                             <input type="hidden" id="edit_time_window_end">
                         </div>
                     </div>
-                    <small style="color: var(--text-secondary); display: block; margin-top: 0.5rem;">Can span midnight (e.g., 22:00 to 02:00)</small>
                 </div>
 
                 <div style="display: flex; gap: 0.75rem; align-items: stretch; margin-bottom: 1.5rem;">
@@ -1355,6 +1349,7 @@ async function updateJobInterval(jobId) {
 
 function toggleEditTimeWindow() {
     toggleFieldGroup('edit_time_window_enabled', 'edit-time-window-fields', {
+        display: 'flex',
         requiredIds: ['edit_time_window_start', 'edit_time_window_end']
     });
 }

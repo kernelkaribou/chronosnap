@@ -444,36 +444,23 @@
                 </div>
 
                 <div class="form-group">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                        <input type="checkbox" id="time_window_enabled" style="cursor: pointer;" onchange="toggleTimeWindow()">
-                        <span>Enable Daily Time Window</span>
-                    </label>
-                    <small>Restrict captures to a specific time range each day, otherwise always capture on specified interval</small>
-                </div>
-
-                <div id="time-window-fields" style="display: none;">
-                    <div class="form-row">
-                        <div class="form-group flex-1">
-                            <label>Window Start Time *</label>
-                            <div class="time-picker-container">
-                                <input type="time" id="time_window_start_time" class="form-control">
+                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
+                            <input type="checkbox" id="time_window_enabled" style="cursor: pointer;" onchange="toggleTimeWindow()">
+                            <span>Daily Time Window</span>
+                        </label>
+                        <div id="time-window-fields" style="display: none; align-items: center; gap: 0.5rem;">
+                            <label style="font-size: 0.8rem; margin: 0;">Start</label>
+                            <div class="time-picker-container" style="margin: 0;">
+                                <input type="time" id="time_window_start_time" class="form-control" style="padding: 0.3rem 0.5rem;">
                             </div>
                             <input type="hidden" id="time_window_start">
-                            <small>Start of daily capture window</small>
-                        </div>
-                        <div class="form-group flex-1">
-                            <label>Window End Time *</label>
-                            <div class="time-picker-container">
-                                <input type="time" id="time_window_end_time" class="form-control">
+                            <label style="font-size: 0.8rem; margin: 0;">End</label>
+                            <div class="time-picker-container" style="margin: 0;">
+                                <input type="time" id="time_window_end_time" class="form-control" style="padding: 0.3rem 0.5rem;">
                             </div>
                             <input type="hidden" id="time_window_end">
-                            <small>End of daily capture window (can be next day)</small>
                         </div>
-                    </div>
-                    <div class="info-box" style="margin-bottom: 1rem;">
-                        <p style="margin: 0; font-size: 0.875rem;">
-                            <strong>Note:</strong> The time window can span days. For example, 22:00 to 02:00 will capture from 10 PM to 2 AM.
-                        </p>
                     </div>
                 </div>
 
