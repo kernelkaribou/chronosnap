@@ -348,13 +348,17 @@ async def update_job(job_id: int, job_update: JobUpdate):
             logger.info(f"Job {job_id}: Schedule updated, new status: {new_status} - {reason}")
             
         elif job_update.status is not None and job_update.status.value == 'active':
-            # Re-enabling - recalculate state
+            # Re-enabling - recalculate state and clear warnings/failure counts
             new_status, next_capture, reason = calculate_job_state(updated_job, get_now(), pending_capture_time=None)
             
             cursor.execute(
-                "UPDATE jobs SET status = ?, next_scheduled_capture_at = ? WHERE id = ?",
+                "UPDATE jobs SET status = ?, next_scheduled_capture_at = ?, warning_message = NULL WHERE id = ?",
                 (new_status, to_iso(next_capture) if next_capture else None, job_id)
             )
+            
+            # Reset in-memory failure count so it gets a fresh start
+            scheduler = get_scheduler()
+            scheduler.failure_counts.pop(job_id, None)
             
             # Reload with new state
             cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
