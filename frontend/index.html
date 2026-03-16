@@ -15,6 +15,15 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
+    <!-- Shared SVG gradient for favorite hearts -->
+    <svg width="0" height="0" style="position:absolute">
+        <defs>
+            <linearGradient id="fav-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#a78bfa"/>
+                <stop offset="100%" stop-color="#e8457e"/>
+            </linearGradient>
+        </defs>
+    </svg>
     <div class="app-container">
         <!-- Navigation -->
         <nav class="navbar">
