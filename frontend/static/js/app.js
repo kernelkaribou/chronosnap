@@ -2691,12 +2691,21 @@ function updateEditDurationEstimate() {
     });
 }
 
-// Close modals on outside click
-window.onclick = function(event) {
-    if (event.target.classList.contains('modal') && event.target.id !== 'confirm-modal') {
-        event.target.classList.remove('active');
+// Close modals on outside click — only if mousedown AND mouseup both on backdrop
+let _modalMouseDownTarget = null;
+window.addEventListener('mousedown', function(e) {
+    _modalMouseDownTarget = e.target;
+}, true);
+
+window.addEventListener('mouseup', function(e) {
+    if (_modalMouseDownTarget &&
+        _modalMouseDownTarget === e.target &&
+        e.target.classList.contains('modal') &&
+        e.target.id !== 'confirm-modal') {
+        e.target.classList.remove('active');
     }
-}
+    _modalMouseDownTarget = null;
+}, true);
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {
