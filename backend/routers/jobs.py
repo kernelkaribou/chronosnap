@@ -73,7 +73,7 @@ async def create_job(job: JobCreate):
                 interval_seconds, framerate, capture_path, naming_pattern,
                 time_window_enabled, time_window_start, time_window_end,
                 warning_threshold,
-                auto_build_enabled, auto_build_interval_days, auto_build_fps,
+                auto_build_enabled, auto_build_interval_hours, auto_build_fps,
                 auto_build_quality, auto_build_resolution,
                 created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -88,7 +88,7 @@ async def create_job(job: JobCreate):
             job.time_window_end if job.time_window_enabled else None,
             job.warning_threshold,
             1 if job.auto_build_enabled else 0,
-            job.auto_build_interval_days,
+            job.auto_build_interval_hours,
             job.auto_build_fps,
             job.auto_build_quality,
             job.auto_build_resolution,
@@ -302,9 +302,9 @@ async def update_job(job_id: int, job_update: JobUpdate):
                 updates.append("last_auto_build_at = ?")
                 values.append(to_iso(get_now()))
         
-        if job_update.auto_build_interval_days is not None:
-            updates.append("auto_build_interval_days = ?")
-            values.append(job_update.auto_build_interval_days)
+        if job_update.auto_build_interval_hours is not None:
+            updates.append("auto_build_interval_hours = ?")
+            values.append(job_update.auto_build_interval_hours)
         
         if job_update.auto_build_fps is not None:
             updates.append("auto_build_fps = ?")

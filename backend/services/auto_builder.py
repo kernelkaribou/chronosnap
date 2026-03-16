@@ -49,7 +49,7 @@ def _is_auto_build_due(job: dict, now: datetime) -> bool:
         return False
 
     last_build_dt = parse_iso(last_build)
-    interval = timedelta(days=job.get('auto_build_interval_days', 7))
+    interval = timedelta(hours=job.get('auto_build_interval_hours', 168))
     return now >= last_build_dt + interval
 
 

@@ -144,6 +144,11 @@ def init_db():
             cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_enabled INTEGER DEFAULT 0")
         if 'auto_build_interval_days' not in columns:
             cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_interval_days INTEGER DEFAULT 7")
+        # Migration: rename interval_days to interval_hours
+        if 'auto_build_interval_hours' not in columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_interval_hours INTEGER DEFAULT 168")
+            # Migrate existing values: days * 24
+            cursor.execute("UPDATE jobs SET auto_build_interval_hours = auto_build_interval_days * 24 WHERE auto_build_interval_days IS NOT NULL")
         if 'auto_build_fps' not in columns:
             cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_fps INTEGER DEFAULT 30")
         if 'auto_build_quality' not in columns:

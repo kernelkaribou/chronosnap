@@ -662,6 +662,18 @@ body {
     letter-spacing: 0.03em;
 }
 
+.auto-build-presets {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.25rem;
+}
+
+.auto-build-presets .btn {
+    padding: 0.2rem 0.6rem;
+    font-size: 0.75rem;
+}
+
 .video-gallery-progress {
     padding: 0 0.75rem 0.6rem;
 }

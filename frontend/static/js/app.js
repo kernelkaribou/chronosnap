@@ -677,11 +677,21 @@ async function showJobDetails(jobId) {
                 </div>
 
                 <div id="edit-auto-build-fields" style="display: ${job.auto_build_enabled ? 'block' : 'none'}; margin-bottom: 1rem; margin-left: 1.5rem;">
-                    <div class="form-row">
-                        <div class="form-group flex-1">
-                            <label>Build Every (days)</label>
-                            <input type="number" id="edit_auto_build_interval_days" class="form-control" min="1" max="365" value="${job.auto_build_interval_days || 7}">
+                    <div class="form-group" style="margin-bottom: 0.75rem;">
+                        <label>Build Interval</label>
+                        <div class="auto-build-presets">
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 1)">Hourly</button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 6)">6 Hours</button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 24)">Daily</button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 168)">Weekly</button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 720)">Monthly</button>
                         </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                            <input type="number" id="edit_auto_build_interval_hours" class="form-control" min="1" max="8760" value="${job.auto_build_interval_hours || 168}" style="width: 100px;">
+                            <small style="color: var(--text-secondary);">hours</small>
+                        </div>
+                    </div>
+                    <div class="form-row">
                         <div class="form-group flex-1">
                             <label>FPS</label>
                             <input type="number" id="edit_auto_build_fps" class="form-control" min="1" max="120" value="${job.auto_build_fps || 30}">
@@ -778,7 +788,7 @@ async function createJob(event) {
         time_window_start: {},
         time_window_end: {},
         auto_build_enabled: { parse: 'bool' },
-        auto_build_interval_days: { parse: 'int' },
+        auto_build_interval_hours: { parse: 'int' },
         auto_build_fps: { parse: 'int' },
         auto_build_quality: {},
         auto_build_resolution: {}
@@ -832,7 +842,7 @@ async function createJob(event) {
         time_window_start: values.time_window_enabled ? values.time_window_start : null,
         time_window_end: values.time_window_enabled ? values.time_window_end : null,
         auto_build_enabled: values.auto_build_enabled,
-        auto_build_interval_days: values.auto_build_interval_days || 7,
+        auto_build_interval_hours: values.auto_build_interval_hours || 168,
         auto_build_fps: values.auto_build_fps || 30,
         auto_build_quality: values.auto_build_quality || 'medium',
         auto_build_resolution: values.auto_build_resolution || '1920x1080'
@@ -878,7 +888,7 @@ function setupJobEditChangeTracking(originalJob) {
         'edit_stream_type',
         'edit_warning_threshold',
         'edit_auto_build_enabled',
-        'edit_auto_build_interval_days',
+        'edit_auto_build_interval_hours',
         'edit_auto_build_fps',
         'edit_auto_build_quality',
         'edit_auto_build_resolution'
@@ -1116,6 +1126,12 @@ function toggleEditAutoBuildFields() {
     document.getElementById('edit-auto-build-fields').style.display = enabled ? 'block' : 'none';
 }
 
+function setAutoBuildInterval(inputId, hours) {
+    const input = document.getElementById(inputId);
+    input.value = hours;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 async function saveJobChanges(jobId) {
     // Collect all form values
     const interval = parseInt(document.getElementById('edit_interval_seconds').value);
@@ -1126,7 +1142,7 @@ async function saveJobChanges(jobId) {
     const timeWindowEnd = document.getElementById('edit_time_window_end').value;
     const warningThreshold = parseInt(document.getElementById('edit_warning_threshold').value) || 3;
     const autoBuildEnabled = document.getElementById('edit_auto_build_enabled').checked;
-    const autoBuildIntervalDays = parseInt(document.getElementById('edit_auto_build_interval_days').value) || 7;
+    const autoBuildIntervalHours = parseInt(document.getElementById('edit_auto_build_interval_hours').value) || 168;
     const autoBuildFps = parseInt(document.getElementById('edit_auto_build_fps').value) || 30;
     const autoBuildQuality = document.getElementById('edit_auto_build_quality').value;
     const autoBuildResolution = document.getElementById('edit_auto_build_resolution').value;
@@ -1180,7 +1196,7 @@ async function saveJobChanges(jobId) {
         time_window_end: timeWindowEnabled ? timeWindowEnd : null,
         warning_threshold: warningThreshold,
         auto_build_enabled: autoBuildEnabled,
-        auto_build_interval_days: autoBuildIntervalDays,
+        auto_build_interval_hours: autoBuildIntervalHours,
         auto_build_fps: autoBuildFps,
         auto_build_quality: autoBuildQuality,
         auto_build_resolution: autoBuildResolution
@@ -2320,7 +2336,7 @@ async function duplicateJob(jobId) {
         if (job.auto_build_enabled) {
             abEnabled.checked = true;
             abFields.style.display = 'block';
-            document.getElementById('auto_build_interval_days').value = job.auto_build_interval_days || 7;
+            document.getElementById('auto_build_interval_hours').value = job.auto_build_interval_hours || 168;
             document.getElementById('auto_build_fps').value = job.auto_build_fps || 30;
             document.getElementById('auto_build_quality').value = job.auto_build_quality || 'medium';
             document.getElementById('auto_build_resolution').value = job.auto_build_resolution || '1920x1080';

@@ -398,17 +398,25 @@
                 </div>
 
                 <div id="auto-build-fields" style="display: none; margin-bottom: 1rem; margin-left: 1.5rem;">
-                    <div class="form-row">
-                        <div class="form-group flex-1">
-                            <label>Build Every (days)</label>
-                            <input type="number" id="auto_build_interval_days" class="form-control" min="1" max="365" value="7">
+                    <div class="form-group" style="margin-bottom: 0.75rem;">
+                        <label>Build Interval</label>
+                        <div class="auto-build-presets">
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 1)">Hourly</button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 6)">6 Hours</button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 24)">Daily</button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 168)">Weekly</button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 720)">Monthly</button>
                         </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                            <input type="number" id="auto_build_interval_hours" class="form-control" min="1" max="8760" value="168" style="width: 100px;">
+                            <small style="color: var(--text-secondary);">hours</small>
+                        </div>
+                    </div>
+                    <div class="form-row">
                         <div class="form-group flex-1">
                             <label>FPS</label>
                             <input type="number" id="auto_build_fps" class="form-control" min="1" max="120" value="30">
                         </div>
-                    </div>
-                    <div class="form-row">
                         <div class="form-group flex-1">
                             <label>Quality</label>
                             <select id="auto_build_quality" class="form-control">
