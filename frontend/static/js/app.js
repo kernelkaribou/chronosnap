@@ -253,6 +253,137 @@ function setButtonState(btnOrId, disabled) {
     btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
 }
 
+// =============================================================================
+// SelectionManager — reusable bulk selection for card grids
+// =============================================================================
+
+class SelectionManager {
+    constructor({ name, cardSelector, dataAttr, controlsId, countId, toggleBtnId, deleteEndpoint, deleteBodyKey, favoriteEndpoint, itemLabel, onReload }) {
+        this.name = name;
+        this.selected = new Set();
+        this.cardSelector = cardSelector;
+        this.dataAttr = dataAttr;
+        this.controlsId = controlsId;
+        this.countId = countId;
+        this.toggleBtnId = toggleBtnId;
+        this.deleteEndpoint = deleteEndpoint;
+        this.deleteBodyKey = deleteBodyKey;
+        this.favoriteEndpoint = favoriteEndpoint;
+        this.itemLabel = itemLabel;
+        this.onReload = onReload;
+    }
+
+    has(id) { return this.selected.has(id); }
+    get size() { return this.selected.size; }
+
+    handleCardClick(id, event, openFn) {
+        if (event.target.type === 'checkbox') return;
+        if (this.selected.size > 0) {
+            this.toggle(id, event);
+        } else {
+            openFn(id);
+        }
+    }
+
+    toggle(id, event) {
+        if (event) event.stopPropagation();
+        if (this.selected.has(id)) {
+            this.selected.delete(id);
+        } else {
+            this.selected.add(id);
+        }
+        const card = document.querySelector(`${this.cardSelector}[${this.dataAttr}="${id}"]`);
+        if (card) {
+            card.classList.toggle('selected', this.selected.has(id));
+            const cb = card.querySelector('.capture-checkbox');
+            if (cb) cb.checked = this.selected.has(id);
+        }
+        this.updateControls();
+    }
+
+    toggleAll() {
+        const cards = document.querySelectorAll(`${this.cardSelector}[${this.dataAttr}]`);
+        const allSelected = cards.length > 0 && [...cards].every(c => this.selected.has(parseInt(c.getAttribute(this.dataAttr))));
+        cards.forEach(card => {
+            const id = parseInt(card.getAttribute(this.dataAttr));
+            if (allSelected) {
+                this.selected.delete(id);
+                card.classList.remove('selected');
+                const cb = card.querySelector('.capture-checkbox');
+                if (cb) cb.checked = false;
+            } else {
+                this.selected.add(id);
+                card.classList.add('selected');
+                const cb = card.querySelector('.capture-checkbox');
+                if (cb) cb.checked = true;
+            }
+        });
+        this.updateControls();
+    }
+
+    updateControls() {
+        const count = this.selected.size;
+        const controls = document.getElementById(this.controlsId);
+        controls.style.display = count > 0 ? 'flex' : 'none';
+        document.getElementById(this.countId).textContent = `${count} selected`;
+
+        const cards = document.querySelectorAll(`${this.cardSelector}[${this.dataAttr}]`);
+        const allSelected = cards.length > 0 && [...cards].every(c => this.selected.has(parseInt(c.getAttribute(this.dataAttr))));
+        document.getElementById(this.toggleBtnId).textContent = allSelected ? 'Clear Selection' : 'Select Visible';
+    }
+
+    clear() {
+        this.selected.clear();
+        document.querySelectorAll(`${this.cardSelector}.selected`).forEach(c => c.classList.remove('selected'));
+        document.querySelectorAll(`${this.cardSelector} .capture-checkbox`).forEach(cb => cb.checked = false);
+        this.updateControls();
+    }
+
+    deleteSelected() {
+        const count = this.selected.size;
+        if (count === 0) return;
+        const plural = count > 1 ? 's' : '';
+        confirmAction(
+            `Are you sure you want to delete ${count} ${this.itemLabel}${plural}?`,
+            async () => {
+                try {
+                    const result = await apiRequest(this.deleteEndpoint, {
+                        method: 'POST',
+                        body: { [this.deleteBodyKey]: [...this.selected] }
+                    });
+                    if (result.errors && result.errors.length > 0) {
+                        showNotification(`Deleted ${result.deleted} of ${result.requested} ${this.itemLabel}s. Some errors occurred.`, 'warning');
+                    } else {
+                        showNotification(`Deleted ${result.deleted} ${this.itemLabel}${result.deleted > 1 ? 's' : ''}`);
+                    }
+                    this.selected.clear();
+                    this.onReload();
+                    this.updateControls();
+                } catch (error) {
+                    showNotification(`Failed to delete ${this.itemLabel}s`, 'error');
+                }
+            }
+        );
+    }
+
+    favoriteSelected(isFavorite) {
+        const count = this.selected.size;
+        if (count === 0) return;
+        (async () => {
+            try {
+                await apiRequest(this.favoriteEndpoint, {
+                    method: 'POST',
+                    body: { ids: [...this.selected], is_favorite: isFavorite }
+                });
+                showNotification(`${count} ${this.itemLabel}${count > 1 ? 's' : ''} ${isFavorite ? 'favorited' : 'unfavorited'}`);
+                this.onReload();
+            } catch (error) {
+                showNotification('Failed to update favorites', 'error');
+            }
+        })();
+    }
+}
+
 // Prevent Enter key from submitting forms
 function preventEnterSubmit(event) {
     if (event.key === 'Enter' && event.target.tagName !== 'TEXTAREA') {
@@ -1275,7 +1406,19 @@ let allVideos = [];
 let currentFilteredVideos = [];
 const VIDEO_PAGE_SIZE = 24;
 let videosDisplayed = 0;
-let selectedVideos = new Set();
+const videoSelection = new SelectionManager({
+    name: 'videos',
+    cardSelector: '.video-gallery-card',
+    dataAttr: 'data-video-id',
+    controlsId: 'video-selection-controls',
+    countId: 'video-selected-count',
+    toggleBtnId: 'video-toggle-selection-btn',
+    deleteEndpoint: '/videos/delete-multiple',
+    deleteBodyKey: 'video_ids',
+    favoriteEndpoint: '/videos/favorite',
+    itemLabel: 'timelapse',
+    onReload: () => loadVideos()
+});
 
 async function loadVideos() {
     try {
@@ -1296,7 +1439,7 @@ async function loadVideos() {
         }
         
         populateVideoFilters(videos);
-        filterVideos();
+        filterVideos({ preserveSelection: true });
     } catch (error) {
         console.error('Failed to load videos:', error);
     }
@@ -1350,7 +1493,7 @@ function resetVideoFilters() {
     filterVideos();
 }
 
-function filterVideos() {
+function filterVideos(opts = {}) {
     const search = (document.getElementById('video-search').value || '').toLowerCase();
     const yearFilter = document.getElementById('video-year-filter').value;
     const monthFilter = document.getElementById('video-month-filter').value;
@@ -1391,8 +1534,7 @@ function filterVideos() {
     
     currentFilteredVideos = filtered;
     videosDisplayed = 0;
-    selectedVideos.clear();
-    updateVideoSelectionControls();
+    if (!opts.preserveSelection) videoSelection.clear();
     document.getElementById('videos-list').innerHTML = '';
     showMoreVideos();
 }
@@ -1450,15 +1592,15 @@ function renderVideos(videos, isEmpty) {
         const isCompleted = video.status === 'completed';
         const isProcessing = video.status === 'processing';
         const thumbSrc = video.thumbnail_path ? `${API_BASE}/videos/${video.id}/thumbnail` : '';
-        const isSelected = selectedVideos.has(video.id);
+        const isSelected = videoSelection.has(video.id);
         
         return `
         <div class="video-gallery-card ${isSelected ? 'selected' : ''}" style="--i:${globalIdx}" 
              data-video-id="${video.id}"
-             onclick="handleVideoCardClick(${video.id}, event)" title="${escapeHtml(video.name)}">
+             onclick="videoSelection.handleCardClick(${video.id}, event, openVideoDetail)" title="${escapeHtml(video.name)}">
             <input type="checkbox" class="capture-checkbox"
                    ${isSelected ? 'checked' : ''}
-                   onclick="event.stopPropagation(); toggleVideoSelection(${video.id}, event)">
+                   onclick="event.stopPropagation(); videoSelection.toggle(${video.id}, event)">
             <button class="card-fav-btn ${video.is_favorite ? 'favorited' : ''}" 
                     onclick="event.stopPropagation(); toggleFavorite('videos', ${video.id}, ${video.is_favorite ? 'true' : 'false'})"
                     title="${video.is_favorite ? 'Remove from favorites' : 'Add to favorites'}">
@@ -1570,95 +1712,6 @@ async function deleteVideoFromDetail(videoId, videoName) {
                 showNotification(`Video "${videoName}" deleted successfully`);
             } catch (error) {
                 showNotification(`Failed to delete video "${videoName}"`, 'error');
-            }
-        }
-    );
-}
-
-// Video selection for bulk operations
-function handleVideoCardClick(videoId, event) {
-    if (event.target.type === 'checkbox') return;
-    if (selectedVideos.size > 0) {
-        toggleVideoSelection(videoId, event);
-    } else {
-        openVideoDetail(videoId);
-    }
-}
-
-function toggleVideoSelection(videoId, event) {
-    if (event) event.stopPropagation();
-    
-    if (selectedVideos.has(videoId)) {
-        selectedVideos.delete(videoId);
-    } else {
-        selectedVideos.add(videoId);
-    }
-    
-    const card = document.querySelector(`.video-gallery-card[data-video-id="${videoId}"]`);
-    if (card) {
-        card.classList.toggle('selected', selectedVideos.has(videoId));
-        const cb = card.querySelector('.capture-checkbox');
-        if (cb) cb.checked = selectedVideos.has(videoId);
-    }
-    
-    updateVideoSelectionControls();
-}
-
-function toggleSelectAllVisibleVideos() {
-    const cards = document.querySelectorAll('.video-gallery-card[data-video-id]');
-    const allSelected = [...cards].every(c => selectedVideos.has(parseInt(c.dataset.videoId)));
-    
-    cards.forEach(card => {
-        const id = parseInt(card.dataset.videoId);
-        if (allSelected) {
-            selectedVideos.delete(id);
-            card.classList.remove('selected');
-            card.querySelector('.capture-checkbox').checked = false;
-        } else {
-            selectedVideos.add(id);
-            card.classList.add('selected');
-            card.querySelector('.capture-checkbox').checked = true;
-        }
-    });
-    
-    updateVideoSelectionControls();
-}
-
-function updateVideoSelectionControls() {
-    const count = selectedVideos.size;
-    const controls = document.getElementById('video-selection-controls');
-    controls.style.display = count > 0 ? 'flex' : 'none';
-    document.getElementById('video-selected-count').textContent = `${count} selected`;
-    
-    const cards = document.querySelectorAll('.video-gallery-card[data-video-id]');
-    const allSelected = cards.length > 0 && [...cards].every(c => selectedVideos.has(parseInt(c.dataset.videoId)));
-    document.getElementById('video-toggle-selection-btn').textContent = allSelected ? 'Clear Selection' : 'Select Visible';
-}
-
-function clearVideoSelection() {
-    selectedVideos.clear();
-    document.querySelectorAll('.video-gallery-card.selected').forEach(c => c.classList.remove('selected'));
-    document.querySelectorAll('.video-gallery-card .capture-checkbox').forEach(cb => cb.checked = false);
-    updateVideoSelectionControls();
-}
-
-async function deleteSelectedVideos() {
-    const count = selectedVideos.size;
-    if (count === 0) return;
-    
-    confirmAction(
-        `Are you sure you want to delete ${count} timelapse${count > 1 ? 's' : ''}?`,
-        async () => {
-            try {
-                const result = await apiRequest('/videos/delete-multiple', {
-                    method: 'POST',
-                    body: { video_ids: [...selectedVideos] }
-                });
-                selectedVideos.clear();
-                loadVideos();
-                showNotification(`Deleted ${result.deleted} timelapse${result.deleted > 1 ? 's' : ''}`);
-            } catch (error) {
-                showNotification('Failed to delete timelapses', 'error');
             }
         }
     );
@@ -4204,9 +4257,22 @@ let capturesState = {
     startTime: null,
     endTime: null,
     favoritesOnly: false,
-    selectedCaptures: new Set(),
     currentCaptureId: null
 };
+
+const captureSelection = new SelectionManager({
+    name: 'captures',
+    cardSelector: '.capture-card',
+    dataAttr: 'data-capture-id',
+    controlsId: 'captures-selection-controls',
+    countId: 'captures-selected-count',
+    toggleBtnId: 'toggle-selection-btn',
+    deleteEndpoint: '/captures/delete-multiple',
+    deleteBodyKey: 'capture_ids',
+    favoriteEndpoint: '/captures/favorite',
+    itemLabel: 'capture',
+    onReload: () => loadCapturesPage()
+});
 
 async function loadCaptures() {
     try {
@@ -4438,7 +4504,7 @@ async function loadCapturesPage() {
         
         renderCaptures(data.captures);
         renderPagination(data);
-        updateSelectionControls();
+        captureSelection.updateControls();
     } catch (error) {
         console.error('Failed to load captures page:', error);
         showNotification('Failed to load captures', 'error');
@@ -4454,14 +4520,14 @@ function renderCaptures(captures) {
     }
     
     grid.innerHTML = captures.map((capture, idx) => `
-        <div class="capture-card ${capturesState.selectedCaptures.has(capture.id) ? 'selected' : ''}" 
+        <div class="capture-card ${captureSelection.has(capture.id) ? 'selected' : ''}" 
              style="--i:${idx}"
              data-capture-id="${capture.id}"
-             onclick="handleCaptureCardClick(${capture.id}, event)">
+             onclick="captureSelection.handleCardClick(${capture.id}, event, showCapturePreview)">
             <input type="checkbox" 
                    class="capture-checkbox" 
-                   ${capturesState.selectedCaptures.has(capture.id) ? 'checked' : ''}
-                   onclick="event.stopPropagation(); toggleCaptureSelection(${capture.id}, event)">
+                   ${captureSelection.has(capture.id) ? 'checked' : ''}
+                   onclick="event.stopPropagation(); captureSelection.toggle(${capture.id}, event)">
             <button class="card-fav-btn ${capture.is_favorite ? 'favorited' : ''}" 
                     onclick="event.stopPropagation(); toggleFavorite('captures', ${capture.id}, ${capture.is_favorite ? 'true' : 'false'})"
                     title="${capture.is_favorite ? 'Remove from favorites' : 'Add to favorites'}">
@@ -4526,113 +4592,6 @@ function renderPagination(data) {
 function goToPage(page) {
     capturesState.currentPage = page;
     loadCapturesPage();
-}
-
-function handleCaptureCardClick(captureId, event) {
-    // If any captures are selected (selection mode), toggle this capture's selection
-    if (capturesState.selectedCaptures.size > 0) {
-        toggleCaptureSelection(captureId, event);
-    } else {
-        // If no captures are selected, show preview
-        showCapturePreview(captureId);
-    }
-}
-
-function toggleCaptureSelection(captureId, event) {
-    if (event) {
-        event.stopPropagation();
-    }
-    
-    if (capturesState.selectedCaptures.has(captureId)) {
-        capturesState.selectedCaptures.delete(captureId);
-    } else {
-        capturesState.selectedCaptures.add(captureId);
-    }
-    
-    // Update UI
-    const card = document.querySelector(`[data-capture-id="${captureId}"]`);
-    if (card) {
-        card.classList.toggle('selected', capturesState.selectedCaptures.has(captureId));
-        const checkbox = card.querySelector('.capture-checkbox');
-        if (checkbox) {
-            checkbox.checked = capturesState.selectedCaptures.has(captureId);
-        }
-    }
-    updateSelectionControls();
-}
-
-function toggleSelectAllVisibleVisible() {
-    const allCards = document.querySelectorAll('.capture-card');
-    const visibleCaptureIds = Array.from(allCards).map(card => parseInt(card.dataset.captureId));
-    const selectedVisibleCount = visibleCaptureIds.filter(id => capturesState.selectedCaptures.has(id)).length;
-    const allVisibleSelected = visibleCaptureIds.length > 0 && selectedVisibleCount === visibleCaptureIds.length;
-    
-    if (allVisibleSelected) {
-        // Clear selection
-        clearCaptureSelection();
-    } else {
-        // Select all visible
-        allCards.forEach(card => {
-            const captureId = parseInt(card.dataset.captureId);
-            capturesState.selectedCaptures.add(captureId);
-            card.classList.add('selected');
-            const checkbox = card.querySelector('.capture-checkbox');
-            if (checkbox) checkbox.checked = true;
-        });
-        updateSelectionControls();
-    }
-}
-
-function updateSelectionControls() {
-    const controls = document.getElementById('captures-selection-controls');
-    const count = capturesState.selectedCaptures.size;
-    
-    if (count > 0) {
-        controls.style.display = 'flex';
-        document.getElementById('captures-selected-count').textContent = `${count} selected`;
-        
-        // Update toggle button text based on whether all visible are selected
-        const allCards = document.querySelectorAll('.capture-card');
-        const visibleCaptureIds = Array.from(allCards).map(card => parseInt(card.dataset.captureId));
-        const selectedVisibleCount = visibleCaptureIds.filter(id => capturesState.selectedCaptures.has(id)).length;
-        const allVisibleSelected = visibleCaptureIds.length > 0 && selectedVisibleCount === visibleCaptureIds.length;
-        
-        const toggleBtn = document.getElementById('toggle-selection-btn');
-        if (toggleBtn) {
-            toggleBtn.textContent = allVisibleSelected ? 'Clear Selection' : 'Select visible';
-        }
-    } else {
-        controls.style.display = 'none';
-    }
-}
-
-function toggleSelectAllVisible() {
-    const allCards = document.querySelectorAll('.capture-card');
-    const visibleCaptureIds = Array.from(allCards).map(card => parseInt(card.dataset.captureId));
-    const selectedVisibleCount = visibleCaptureIds.filter(id => capturesState.selectedCaptures.has(id)).length;
-    const allVisibleSelected = visibleCaptureIds.length > 0 && selectedVisibleCount === visibleCaptureIds.length;
-    
-    if (allVisibleSelected) {
-        // Clear selection
-        clearCaptureSelection();
-    } else {
-        // Select all visible
-        allCards.forEach(card => {
-            const captureId = parseInt(card.dataset.captureId);
-            capturesState.selectedCaptures.add(captureId);
-            card.classList.add('selected');
-            const checkbox = card.querySelector('.capture-checkbox');
-            if (checkbox) checkbox.checked = true;
-        });
-        updateSelectionControls();
-    }
-}
-
-function clearCaptureSelection() {
-    capturesState.selectedCaptures.clear();
-    document.querySelectorAll('.capture-card').forEach(card => card.classList.remove('selected'));
-    document.querySelectorAll('.capture-checkbox').forEach(cb => cb.checked = false);
-    updateSelectionControls();
 }
 
 function applyCaptureSortAndFilter() {
@@ -4712,34 +4671,6 @@ function deleteSingleCapture() {
     });
 }
 
-function deleteSelectedCaptures() {
-    const count = capturesState.selectedCaptures.size;
-    if (count === 0) return;
-    
-    confirmAction(`Are you sure you want to delete ${count} capture${count > 1 ? 's' : ''}? This action cannot be undone.`, async () => {
-        try {
-            const captureIds = Array.from(capturesState.selectedCaptures);
-            const result = await apiRequest('/captures/delete-multiple', {
-                method: 'POST',
-                body: { capture_ids: captureIds }
-            });
-            
-            if (result.errors && result.errors.length > 0) {
-                showNotification(`Deleted ${result.deleted} of ${result.requested} captures. Some errors occurred.`, 'warning');
-                console.error('Deletion errors:', result.errors);
-            } else {
-                showNotification(`Successfully deleted ${result.deleted} capture${result.deleted > 1 ? 's' : ''}`, 'success');
-            }
-            
-            clearCaptureSelection();
-            loadCapturesPage();
-        } catch (error) {
-            console.error('Failed to delete captures:', error);
-            showNotification('Failed to delete captures', 'error');
-        }
-    });
-}
-
 // Shared favorite toggle — works for both captures and videos
 async function toggleFavorite(type, id, currentState) {
     const endpoint = type === 'captures' ? '/captures/favorite' : '/videos/favorite';
@@ -4765,38 +4696,6 @@ async function toggleFavorite(type, id, currentState) {
     } catch (error) {
         console.error('Failed to toggle favorite:', error);
         showNotification('Failed to update favorite', 'error');
-    }
-}
-
-async function favoriteSelectedCaptures(isFavorite) {
-    const count = capturesState.selectedCaptures.size;
-    if (count === 0) return;
-    try {
-        await apiRequest('/captures/favorite', {
-            method: 'POST',
-            body: { ids: Array.from(capturesState.selectedCaptures), is_favorite: isFavorite }
-        });
-        showNotification(`${count} capture${count > 1 ? 's' : ''} ${isFavorite ? 'favorited' : 'unfavorited'}`);
-        clearCaptureSelection();
-        loadCapturesPage();
-    } catch (error) {
-        showNotification('Failed to update favorites', 'error');
-    }
-}
-
-async function favoriteSelectedVideos(isFavorite) {
-    const count = selectedVideos.size;
-    if (count === 0) return;
-    try {
-        await apiRequest('/videos/favorite', {
-            method: 'POST',
-            body: { ids: Array.from(selectedVideos), is_favorite: isFavorite }
-        });
-        showNotification(`${count} timelapse${count > 1 ? 's' : ''} ${isFavorite ? 'favorited' : 'unfavorited'}`);
-        selectedVideos.clear();
-        loadVideos();
-    } catch (error) {
-        showNotification('Failed to update favorites', 'error');
     }
 }
 

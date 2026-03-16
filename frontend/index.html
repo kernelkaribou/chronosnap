@@ -84,12 +84,12 @@
                     <span class="gallery-count" id="video-count"></span>
                 </div>
                 <div class="captures-selection-controls" id="video-selection-controls" style="display: none;">
-                    <span class="selection-clear" onclick="clearVideoSelection()" title="Clear selection">&times;</span>
+                    <span class="selection-clear" onclick="videoSelection.clear()" title="Clear selection">&times;</span>
                     <span id="video-selected-count">0 selected</span>
-                    <button class="btn btn-secondary btn-sm" id="video-toggle-selection-btn" onclick="toggleSelectAllVisibleVideos()">Select Visible</button>
-                    <button class="btn btn-sm btn-fav-bulk" onclick="favoriteSelectedVideos(true)" title="Favorite selected"><span class="fav-heart">♥</span> Favorite</button>
-                    <button class="btn btn-sm btn-unfav-bulk" onclick="favoriteSelectedVideos(false)" title="Unfavorite selected"><span class="fav-heart">♥</span> Unfavorite</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteSelectedVideos()">Delete Selected</button>
+                    <button class="btn btn-secondary btn-sm" id="video-toggle-selection-btn" onclick="videoSelection.toggleAll()">Select Visible</button>
+                    <button class="btn btn-sm btn-fav-bulk" onclick="videoSelection.favoriteSelected(true)" title="Favorite selected"><span class="fav-heart">♥</span> Favorite</button>
+                    <button class="btn btn-sm btn-unfav-bulk" onclick="videoSelection.favoriteSelected(false)" title="Unfavorite selected"><span class="fav-heart">♥</span> Unfavorite</button>
+                    <button class="btn btn-danger btn-sm" onclick="videoSelection.deleteSelected()">Delete Selected</button>
                 </div>
                 <div id="videos-list" class="videos-grid"></div>
             </div>
@@ -143,12 +143,12 @@
 
                 <!-- Selection controls -->
                 <div class="captures-selection-controls" id="captures-selection-controls" style="display: none;">
-                    <span class="selection-clear" onclick="clearCaptureSelection()" title="Clear selection">&times;</span>
+                    <span class="selection-clear" onclick="captureSelection.clear()" title="Clear selection">&times;</span>
                     <span id="captures-selected-count">0 selected</span>
-                    <button class="btn btn-secondary btn-sm" id="toggle-selection-btn" onclick="toggleSelectAllVisible()">Select Visible</button>
-                    <button class="btn btn-sm btn-fav-bulk" onclick="favoriteSelectedCaptures(true)" title="Favorite selected"><span class="fav-heart">♥</span> Favorite</button>
-                    <button class="btn btn-sm btn-unfav-bulk" onclick="favoriteSelectedCaptures(false)" title="Unfavorite selected"><span class="fav-heart">♥</span> Unfavorite</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteSelectedCaptures()">Delete Selected</button>
+                    <button class="btn btn-secondary btn-sm" id="toggle-selection-btn" onclick="captureSelection.toggleAll()">Select Visible</button>
+                    <button class="btn btn-sm btn-fav-bulk" onclick="captureSelection.favoriteSelected(true)" title="Favorite selected"><span class="fav-heart">♥</span> Favorite</button>
+                    <button class="btn btn-sm btn-unfav-bulk" onclick="captureSelection.favoriteSelected(false)" title="Unfavorite selected"><span class="fav-heart">♥</span> Unfavorite</button>
+                    <button class="btn btn-danger btn-sm" onclick="captureSelection.deleteSelected()">Delete Selected</button>
                 </div>
 
                 <!-- Grid -->
