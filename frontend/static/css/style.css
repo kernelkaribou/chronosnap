@@ -2458,13 +2458,17 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .tag-list-item .tag-actions {
     display: flex; gap: 0.25rem;
 }
-.tag-list-item .tag-actions button {
+.tag-action-btn {
     background: none; border: none; cursor: pointer;
-    padding: 0.25rem; color: var(--text-secondary);
-    font-size: 0.85rem; border-radius: 4px;
+    padding: 0.3rem; color: var(--text-secondary);
+    border-radius: 4px; display: inline-flex; align-items: center;
+    opacity: 0.5; transition: opacity 0.15s, color 0.15s, background 0.15s;
 }
-.tag-list-item .tag-actions button:hover {
-    color: var(--text-primary); background: var(--hover-bg);
+.tag-action-btn:hover {
+    opacity: 1; background: var(--hover-bg);
+}
+.tag-action-delete:hover {
+    color: #ef4444;
 }
 
 .tag-chip {

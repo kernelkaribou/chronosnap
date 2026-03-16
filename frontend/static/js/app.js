@@ -4317,8 +4317,12 @@ function renderTagList() {
             </span>
             <span class="tag-usage">${tag.job_count} job${tag.job_count !== 1 ? 's' : ''}, ${tag.video_count} video${tag.video_count !== 1 ? 's' : ''}</span>
             <span class="tag-actions">
-                <button onclick="editTagInline(${tag.id})" title="Edit">✏️</button>
-                <button onclick="deleteTag(${tag.id}, '${escapeHtml(tag.name)}')" title="Delete">🗑️</button>
+                <button onclick="editTagInline(${tag.id})" title="Edit" class="tag-action-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                </button>
+                <button onclick="deleteTag(${tag.id}, '${escapeHtml(tag.name)}')" title="Delete" class="tag-action-btn tag-action-delete">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                </button>
             </span>
         </div>
     `).join('');
