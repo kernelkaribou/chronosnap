@@ -1368,6 +1368,9 @@ function resetVideoFilters() {
     document.getElementById('video-year-filter').value = '';
     document.getElementById('video-month-filter').value = '';
     document.getElementById('video-month-filter').disabled = true;
+    videoFavoritesOnly = false;
+    const favBtn = document.getElementById('video-fav-filter');
+    if (favBtn) favBtn.classList.remove('active');
     filterVideos();
 }
 
@@ -1395,8 +1398,12 @@ function filterVideos() {
         }
     }
     
+    if (videoFavoritesOnly) {
+        filtered = filtered.filter(v => v.is_favorite);
+    }
+    
     // Show/hide reset button
-    const hasFilters = search || yearFilter || monthFilter !== '';
+    const hasFilters = search || yearFilter || monthFilter !== '' || videoFavoritesOnly;
     document.getElementById('video-filter-reset').style.display = hasFilters ? '' : 'none';
     
     const countEl = document.getElementById('video-count');
@@ -1476,6 +1483,11 @@ function renderVideos(videos, isEmpty) {
             <input type="checkbox" class="capture-checkbox"
                    ${isSelected ? 'checked' : ''}
                    onclick="event.stopPropagation(); toggleVideoSelection(${video.id}, event)">
+            <button class="card-fav-btn ${video.is_favorite ? 'favorited' : ''}" 
+                    onclick="event.stopPropagation(); toggleFavorite('videos', ${video.id}, ${video.is_favorite ? 'true' : 'false'})"
+                    title="${video.is_favorite ? 'Remove from favorites' : 'Add to favorites'}">
+                <svg class="fav-heart-icon" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            </button>
             <div class="video-gallery-thumb">
                 ${thumbSrc ? 
                     `<img src="${thumbSrc}" alt="" loading="lazy">` : 
@@ -3802,6 +3814,7 @@ let capturesState = {
     jobFilter: null,
     startTime: null,
     endTime: null,
+    favoritesOnly: false,
     selectedCaptures: new Set(),
     currentCaptureId: null
 };
@@ -4029,6 +4042,10 @@ async function loadCapturesPage() {
             query.end_time = capturesState.endTime;
         }
         
+        if (capturesState.favoritesOnly) {
+            query.favorites_only = true;
+        }
+        
         const data = await apiRequest('/captures/', { query });
         
         const countEl = document.getElementById('captures-count');
@@ -4060,6 +4077,11 @@ function renderCaptures(captures) {
                    class="capture-checkbox" 
                    ${capturesState.selectedCaptures.has(capture.id) ? 'checked' : ''}
                    onclick="event.stopPropagation(); toggleCaptureSelection(${capture.id}, event)">
+            <button class="card-fav-btn ${capture.is_favorite ? 'favorited' : ''}" 
+                    onclick="event.stopPropagation(); toggleFavorite('captures', ${capture.id}, ${capture.is_favorite ? 'true' : 'false'})"
+                    title="${capture.is_favorite ? 'Remove from favorites' : 'Add to favorites'}">
+                <svg class="fav-heart-icon" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            </button>
             <img src="${API_BASE}/captures/${capture.id}/thumbnail" 
                  class="capture-thumbnail"
                  alt="Capture thumbnail"
@@ -4243,7 +4265,7 @@ function applyCaptureSortAndFilter() {
     capturesState.currentPage = 1;
     
     // Show/hide reset button
-    const hasFilters = jobFilter || startTime || endTime;
+    const hasFilters = jobFilter || startTime || endTime || capturesState.favoritesOnly;
     document.getElementById('captures-filter-reset').style.display = hasFilters ? '' : 'none';
     
     loadCapturesPage();
@@ -4257,7 +4279,10 @@ function clearCaptureFilters() {
     capturesState.jobFilter = null;
     capturesState.startTime = null;
     capturesState.endTime = null;
+    capturesState.favoritesOnly = false;
     capturesState.currentPage = 1;
+    const favBtn = document.getElementById('captures-fav-filter');
+    if (favBtn) favBtn.classList.remove('active');
     loadCapturesPage();
 }
 
@@ -4334,6 +4359,89 @@ function deleteSelectedCaptures() {
             showNotification('Failed to delete captures', 'error');
         }
     });
+}
+
+// Shared favorite toggle — works for both captures and videos
+async function toggleFavorite(type, id, currentState) {
+    const endpoint = type === 'captures' ? '/captures/favorite' : '/videos/favorite';
+    try {
+        await apiRequest(endpoint, {
+            method: 'POST',
+            body: { ids: [id], is_favorite: !currentState }
+        });
+        
+        const selector = type === 'captures' 
+            ? `[data-capture-id="${id}"]` 
+            : `.video-gallery-card[data-video-id="${id}"]`;
+        const card = document.querySelector(selector);
+        if (card) {
+            const btn = card.querySelector('.card-fav-btn');
+            if (btn) {
+                const nowFav = !currentState;
+                btn.classList.toggle('favorited', nowFav);
+                btn.title = nowFav ? 'Remove from favorites' : 'Add to favorites';
+                btn.setAttribute('onclick', `event.stopPropagation(); toggleFavorite('${type}', ${id}, ${nowFav})`);
+            }
+        }
+    } catch (error) {
+        console.error('Failed to toggle favorite:', error);
+        showNotification('Failed to update favorite', 'error');
+    }
+}
+
+async function favoriteSelectedCaptures(isFavorite) {
+    const count = capturesState.selectedCaptures.size;
+    if (count === 0) return;
+    try {
+        await apiRequest('/captures/favorite', {
+            method: 'POST',
+            body: { ids: Array.from(capturesState.selectedCaptures), is_favorite: isFavorite }
+        });
+        showNotification(`${count} capture${count > 1 ? 's' : ''} ${isFavorite ? 'favorited' : 'unfavorited'}`);
+        clearCaptureSelection();
+        loadCapturesPage();
+    } catch (error) {
+        showNotification('Failed to update favorites', 'error');
+    }
+}
+
+async function favoriteSelectedVideos(isFavorite) {
+    const count = selectedVideos.size;
+    if (count === 0) return;
+    try {
+        await apiRequest('/videos/favorite', {
+            method: 'POST',
+            body: { ids: Array.from(selectedVideos), is_favorite: isFavorite }
+        });
+        showNotification(`${count} timelapse${count > 1 ? 's' : ''} ${isFavorite ? 'favorited' : 'unfavorited'}`);
+        selectedVideos.clear();
+        loadVideos();
+    } catch (error) {
+        showNotification('Failed to update favorites', 'error');
+    }
+}
+
+function toggleCaptureFavoritesFilter() {
+    capturesState.favoritesOnly = !capturesState.favoritesOnly;
+    capturesState.currentPage = 1;
+    document.getElementById('captures-fav-filter').classList.toggle('active', capturesState.favoritesOnly);
+    const jobFilter = getValue('captures-job-filter');
+    const startTime = getValue('captures-start-time');
+    const endTime = getValue('captures-end-time');
+    document.getElementById('captures-filter-reset').style.display = 
+        (jobFilter || startTime || endTime || capturesState.favoritesOnly) ? '' : 'none';
+    loadCapturesPage();
+}
+
+let videoFavoritesOnly = false;
+
+function toggleVideoFavoritesFilter() {
+    videoFavoritesOnly = !videoFavoritesOnly;
+    document.getElementById('video-fav-filter').classList.toggle('active', videoFavoritesOnly);
+    if (videoFavoritesOnly) {
+        document.getElementById('video-filter-reset').style.display = '';
+    }
+    loadVideos();
 }
 
 // Helper to escape HTML

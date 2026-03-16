@@ -238,6 +238,16 @@ def init_db():
         if 'error_message' not in video_columns:
             cursor.execute("ALTER TABLE processed_videos ADD COLUMN error_message TEXT")
             logger.info("Migration complete: added error_message column to processed_videos")
+        if 'is_favorite' not in video_columns:
+            cursor.execute("ALTER TABLE processed_videos ADD COLUMN is_favorite BOOLEAN DEFAULT 0")
+            logger.info("Migration complete: added is_favorite column to processed_videos")
+        
+        # Migration: Add is_favorite column to captures
+        cursor.execute("PRAGMA table_info(captures)")
+        capture_columns = {row[1] for row in cursor.fetchall()}
+        if 'is_favorite' not in capture_columns:
+            cursor.execute("ALTER TABLE captures ADD COLUMN is_favorite BOOLEAN DEFAULT 0")
+            logger.info("Migration complete: added is_favorite column to captures")
         
         # Initialize API key if not exists
         cursor.execute("SELECT value FROM settings WHERE key = 'api_key'")

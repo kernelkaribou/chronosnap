@@ -154,6 +154,7 @@ class CaptureResponse(BaseModel):
     file_path: str
     file_size: int
     captured_at: str
+    is_favorite: bool = False
     thumbnail_path: Optional[str] = None
     has_thumbnail: bool = False
 
@@ -205,6 +206,7 @@ class VideoResponse(BaseModel):
     completed_at: Optional[str]
     thumbnail_path: Optional[str] = None
     build_source: str = "manual"
+    is_favorite: bool = False
 
 
 class TestUrlResponse(BaseModel):

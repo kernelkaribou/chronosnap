@@ -20,11 +20,17 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+class FavoriteRequest(BaseModel):
+    ids: List[int]
+    is_favorite: bool = True
+
+
 @router.get("/", response_model=CaptureListResponse)
 async def list_captures(
     job_id: Optional[int] = Query(None, description="Filter by job ID"),
     start_time: Optional[str] = Query(None, description="Start time (ISO format)"),
     end_time: Optional[str] = Query(None, description="End time (ISO format)"),
+    favorites_only: bool = Query(False, description="Show only favorites"),
     sort_order: str = Query("asc", regex="^(asc|desc)$", description="Sort order: asc or desc"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page")
@@ -59,6 +65,9 @@ async def list_captures(
             except (ValueError, TypeError):
                 raise HTTPException(status_code=400, detail="Invalid end_time format")
         
+        if favorites_only:
+            conditions.append("c.is_favorite = 1")
+        
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         
         # Determine sort order
@@ -88,6 +97,7 @@ async def list_captures(
             capture_dict = dict_from_row(row)
             capture_dict['has_thumbnail'] = has_thumbnail(capture_dict['file_path'])
             capture_dict['thumbnail_path'] = get_thumbnail_path(capture_dict['file_path']) if capture_dict['has_thumbnail'] else None
+            capture_dict['is_favorite'] = bool(capture_dict.get('is_favorite', 0))
             captures.append(capture_dict)
         
         total_pages = (total + page_size - 1) // page_size
@@ -351,6 +361,7 @@ async def get_capture(capture_id: int):
         capture_dict = dict_from_row(row)
         capture_dict['has_thumbnail'] = has_thumbnail(capture_dict['file_path'])
         capture_dict['thumbnail_path'] = get_thumbnail_path(capture_dict['file_path']) if capture_dict['has_thumbnail'] else None
+        capture_dict['is_favorite'] = bool(capture_dict.get('is_favorite', 0))
         return capture_dict
 
 
@@ -460,6 +471,26 @@ async def delete_multiple_captures(request: CaptureDeleteRequest):
         "requested": len(request.capture_ids),
         "errors": errors
     }
+
+
+@router.post("/favorite", status_code=200)
+async def set_capture_favorites(request: FavoriteRequest):
+    """Set or unset favorite status on multiple captures"""
+    if not request.ids:
+        raise HTTPException(status_code=400, detail="No capture IDs provided")
+    
+    value = 1 if request.is_favorite else 0
+    placeholders = ','.join('?' * len(request.ids))
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"UPDATE captures SET is_favorite = ? WHERE id IN ({placeholders})",
+            [value] + request.ids
+        )
+        updated = cursor.rowcount
+    
+    return {"updated": updated, "requested": len(request.ids)}
 
 
 @router.get("/job/{job_id}/count")

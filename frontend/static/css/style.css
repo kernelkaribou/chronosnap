@@ -1807,6 +1807,122 @@ body {
     z-index: 10;
 }
 
+/* Cosmic gradient heart — shared by captures, videos, and filter buttons */
+.fav-heart {
+    background: linear-gradient(135deg, #a78bfa, #e8457e);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+[data-theme="light"] .fav-heart {
+    background: linear-gradient(135deg, #7c3aed, #d03368);
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+/* Heart button on gallery cards (captures + videos) */
+.card-fav-btn {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.4rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+    padding: 0;
+    line-height: 1;
+}
+
+.fav-heart-icon {
+    width: 24px;
+    height: 24px;
+    fill: rgba(255, 255, 255, 0.35);
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+    transition: fill var(--transition-fast);
+}
+
+.capture-card:hover .card-fav-btn,
+.video-gallery-card:hover .card-fav-btn,
+.card-fav-btn.favorited {
+    opacity: 1;
+}
+
+.card-fav-btn:hover .fav-heart-icon {
+    fill: #e8457e;
+}
+
+.card-fav-btn.favorited .fav-heart-icon {
+    fill: url(#fav-gradient);
+}
+
+[data-theme="light"] .fav-heart-icon {
+    fill: rgba(0, 0, 0, 0.2);
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+}
+
+[data-theme="light"] .card-fav-btn:hover .fav-heart-icon {
+    fill: #d03368;
+}
+
+/* Favorites filter toggle in toolbar */
+.fav-filter-btn {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    font-size: 1rem;
+    padding: 0.35rem 0.55rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    line-height: 1;
+}
+
+.fav-filter-btn:hover {
+    border-color: #e8457e;
+}
+
+.fav-filter-btn.active {
+    background: linear-gradient(135deg, #a78bfa, #e8457e);
+    border-color: transparent;
+}
+
+.fav-filter-btn.active .fav-heart {
+    -webkit-text-fill-color: #fff;
+}
+
+[data-theme="light"] .fav-filter-btn.active {
+    background: linear-gradient(135deg, #7c3aed, #d03368);
+}
+
+/* Bulk favorite buttons in selection bar */
+.btn-fav-bulk {
+    background: linear-gradient(135deg, #a78bfa, #e8457e);
+    color: #fff;
+    border: none;
+    font-weight: 500;
+}
+
+.btn-fav-bulk .fav-heart {
+    -webkit-text-fill-color: #fff;
+}
+
+.btn-fav-bulk:hover {
+    filter: brightness(1.1);
+}
+
+.btn-unfav-bulk {
+    background: var(--surface-color);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    font-weight: 500;
+}
+
+.btn-unfav-bulk:hover {
+    border-color: var(--text-secondary);
+}
+
 .capture-info {
     padding: 0.75rem;
 }
