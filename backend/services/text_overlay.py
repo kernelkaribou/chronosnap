@@ -132,10 +132,10 @@ def _calculate_position(
     return positions.get(position, positions['bottom-left'])
 
 
-def _get_text_bbox(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont) -> Tuple[int, int]:
-    """Get width and height of rendered text."""
+def _get_text_bbox(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont) -> Tuple[int, int, int, int]:
+    """Get bounding box of rendered text. Returns (width, height, x_offset, y_offset)."""
     bbox = draw.multiline_textbbox((0, 0), text, font=font)
-    return (bbox[2] - bbox[0], bbox[3] - bbox[1])
+    return (bbox[2] - bbox[0], bbox[3] - bbox[1], bbox[0], bbox[1])
 
 
 def render_overlay(
@@ -185,8 +185,8 @@ def render_overlay(
     overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 
-    text_w, text_h = _get_text_bbox(draw, text, font)
-    bg_pad = int(font_size * 0.3)
+    text_w, text_h, text_x_off, text_y_off = _get_text_bbox(draw, text, font)
+    bg_pad = int(font_size * 0.25)
     box_w = text_w + bg_pad * 2
     box_h = text_h + bg_pad * 2
 
@@ -200,9 +200,9 @@ def render_overlay(
             fill=bg_rgba,
         )
 
-    # Draw text on the overlay
-    text_x = x + bg_pad
-    text_y = y + bg_pad
+    # Draw text on the overlay, compensating for font's internal offset
+    text_x = x + bg_pad - text_x_off
+    text_y = y + bg_pad - text_y_off
     draw.multiline_text((text_x, text_y), text, font=font, fill=color_rgba)
 
     # Composite overlay onto image
