@@ -2620,14 +2620,6 @@ function openOverlayLightbox(imgEl) {
     lb.className = 'overlay-lightbox';
     lb.innerHTML = `<img src="${imgEl.src}" alt="Preview">`;
     lb.addEventListener('click', () => lb.remove());
-    document.addEventListener('keydown', function esc(e) {
-        if (e.key === 'Escape') {
-            e.stopImmediatePropagation();
-            e.preventDefault();
-            lb.remove();
-            document.removeEventListener('keydown', esc);
-        }
-    }, true);
     document.body.appendChild(lb);
 }
 
@@ -3124,6 +3116,13 @@ function closeModal(modalId) {
 // Close the topmost active modal on Escape key
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
+        // Close lightbox first if open
+        const lightbox = document.querySelector('.overlay-lightbox');
+        if (lightbox) {
+            lightbox.remove();
+            return;
+        }
+        
         // Check custom modals first (video detail, confirm dialog)
         const videoDetail = document.getElementById('video-detail-modal');
         if (videoDetail && videoDetail.classList.contains('active')) {
