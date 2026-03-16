@@ -230,7 +230,11 @@ function confirmAction(message, actionFn, opts = {}) {
 function toggleFieldGroup(checkboxId, containerId, opts = {}) {
     const enabled = document.getElementById(checkboxId).checked;
     const container = document.getElementById(containerId);
-    container.style.display = enabled ? (opts.display || 'block') : 'none';
+    if (enabled) {
+        container.classList.remove('disabled');
+    } else {
+        container.classList.add('disabled');
+    }
     if (opts.requiredIds) {
         opts.requiredIds.forEach(id => {
             const el = document.getElementById(id);
@@ -409,7 +413,6 @@ function preventEnterSubmit(event) {
 let _timeWindowListenersAdded = false;
 function toggleTimeWindow() {
     toggleFieldGroup('time_window_enabled', 'time-window-fields', {
-        display: 'flex',
         requiredIds: ['time_window_start', 'time_window_end'],
         onToggle: (enabled) => {
             if (enabled && !_timeWindowListenersAdded) {
@@ -893,7 +896,7 @@ async function showJobDetails(jobId) {
                                 <input type="checkbox" id="edit_time_window_enabled" ${job.time_window_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditTimeWindow()">
                                 <span><strong>Daily Time Window</strong></span>
                             </label>
-                            <div id="edit-time-window-fields" style="display: ${job.time_window_enabled ? 'flex' : 'none'}; align-items: center; gap: 0.5rem;">
+                            <div id="edit-time-window-fields" class="toggle-fields ${job.time_window_enabled ? '' : 'disabled'}" style="display: flex; align-items: center; gap: 0.5rem;">
                                 <label style="font-size: 0.8rem; margin: 0;">Start</label>
                                 <div class="time-picker-container" style="margin: 0;">
                                     <input type="time" id="edit_time_window_start_time" class="form-control" style="padding: 0.3rem 0.5rem;">
@@ -933,7 +936,7 @@ async function showJobDetails(jobId) {
                         <small style="color: var(--text-secondary); display: block; margin-left: 1.5rem;">Automatically build timelapse videos on a recurring schedule</small>
                     </div>
 
-                    <div id="edit-auto-build-fields" style="display: ${job.auto_build_enabled ? 'block' : 'none'}; margin-bottom: 1rem; margin-left: 1.5rem;">
+                    <div id="edit-auto-build-fields" class="toggle-fields ${job.auto_build_enabled ? '' : 'disabled'}" style="margin-bottom: 1rem; margin-left: 1.5rem;">
                         <div class="form-group" style="margin-bottom: 0.75rem;">
                             <label>Build Interval</label>
                             <div class="auto-build-presets">
@@ -1358,7 +1361,6 @@ async function updateJobInterval(jobId) {
 
 function toggleEditTimeWindow() {
     toggleFieldGroup('edit_time_window_enabled', 'edit-time-window-fields', {
-        display: 'flex',
         requiredIds: ['edit_time_window_start', 'edit_time_window_end']
     });
 }

@@ -877,7 +877,7 @@ body {
 }
 
 .form-section {
-    margin-bottom: 1.25rem;
+    margin-bottom: 1.75rem;
 }
 .form-section-title {
     font-size: 0.95rem;
@@ -889,6 +889,14 @@ body {
 }
 .form-section > *:last-child {
     margin-bottom: 0;
+}
+.toggle-fields {
+    transition: opacity 0.2s ease;
+}
+.toggle-fields.disabled {
+    opacity: 0.35;
+    pointer-events: none;
+    user-select: none;
 }
 
 .form-group label {
