@@ -2606,3 +2606,50 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
 }
 .tag-picker-inline .tag-color-picker { width: 24px; height: 24px; }
+
+/* =============================================================================
+   Shared Links Panel
+   ============================================================================= */
+
+.share-panel {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+.share-panel-header {
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+.share-create-row {
+    display: flex; gap: 0.5rem; align-items: center;
+    margin-bottom: 0.75rem;
+}
+.share-links-list {
+    display: flex; flex-direction: column; gap: 0.5rem;
+}
+.share-link-item {
+    padding: 0.4rem 0.6rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+}
+.share-link-item.expired { opacity: 0.5; }
+.share-link-url {
+    display: flex; gap: 0.3rem; align-items: center;
+}
+.share-link-url input {
+    flex: 1; font-size: 0.75rem; padding: 0.25rem 0.4rem;
+    background: var(--input-bg); border: 1px solid var(--border-color);
+    border-radius: 4px; color: var(--text-primary); outline: none;
+    font-family: monospace;
+}
+.share-link-url input:focus { border-color: var(--primary-color); }
+.share-link-meta {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 0.25rem;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}

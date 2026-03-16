@@ -142,6 +142,18 @@ def init_db():
             )
         """)
         
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS shared_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token TEXT NOT NULL UNIQUE,
+                video_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT,
+                FOREIGN KEY (video_id) REFERENCES processed_videos(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_shared_links_token ON shared_links(token)")
+        
         # Migrations: jobs table columns
         ensure_column(cursor, 'jobs', 'warning_message', 'TEXT')
         ensure_column(cursor, 'jobs', 'time_window_enabled', 'INTEGER DEFAULT 0')
