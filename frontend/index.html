@@ -60,6 +60,24 @@
                     <h2>Jobs</h2>
                     <button class="btn btn-purple" onclick="showCreateJobModal()">+ Create Job</button>
                 </div>
+                <div class="filter-bar" id="job-filter-bar">
+                    <input type="text" id="job-search" class="form-control" placeholder="Search jobs..." oninput="filterJobs()" style="max-width:220px;">
+                    <select id="job-status-filter" class="form-control" onchange="filterJobs()" style="max-width:160px;">
+                        <option value="">All Statuses</option>
+                        <option value="active">Active</option>
+                        <option value="sleeping">Sleeping</option>
+                        <option value="completed">Completed</option>
+                        <option value="disabled">Disabled</option>
+                    </select>
+                    <select id="job-sort" class="form-control" onchange="filterJobs()" style="max-width:160px;">
+                        <option value="created_desc">Newest First</option>
+                        <option value="created_asc">Oldest First</option>
+                        <option value="name_asc">Name A-Z</option>
+                        <option value="name_desc">Name Z-A</option>
+                        <option value="captures_desc">Most Captures</option>
+                    </select>
+                    <button class="btn btn-secondary btn-sm" id="job-filter-reset" onclick="resetJobFilters()" style="display:none;">Reset</button>
+                </div>
                 <div id="jobs-list" class="jobs-grid"></div>
             </div>
 

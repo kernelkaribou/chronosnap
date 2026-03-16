@@ -557,14 +557,63 @@ function switchView(view, pushState = true) {
 }
 
 // Jobs
+let allJobs = [];
+
 async function loadJobs() {
     try {
         const jobs = await apiRequest('/jobs/');
-        renderJobs(jobs);
+        allJobs = jobs;
+        filterJobs();
         updateJobWarningBadge(jobs);
     } catch (error) {
         console.error('Failed to load jobs:', error);
     }
+}
+
+function filterJobs() {
+    const search = (document.getElementById('job-search').value || '').toLowerCase();
+    const status = document.getElementById('job-status-filter').value;
+    const sort = document.getElementById('job-sort').value;
+    
+    let filtered = allJobs;
+    
+    if (search) {
+        filtered = filtered.filter(j =>
+            j.name.toLowerCase().includes(search) ||
+            j.url.toLowerCase().includes(search)
+        );
+    }
+    
+    if (status) {
+        if (status === 'active') {
+            // Include active and jobs with warnings
+            filtered = filtered.filter(j => j.status === 'active');
+        } else {
+            filtered = filtered.filter(j => j.status === status);
+        }
+    }
+    
+    // Sort
+    filtered = [...filtered];
+    switch (sort) {
+        case 'created_asc': filtered.sort((a, b) => a.created_at.localeCompare(b.created_at)); break;
+        case 'name_asc': filtered.sort((a, b) => a.name.localeCompare(b.name)); break;
+        case 'name_desc': filtered.sort((a, b) => b.name.localeCompare(a.name)); break;
+        case 'captures_desc': filtered.sort((a, b) => b.capture_count - a.capture_count); break;
+        default: filtered.sort((a, b) => b.created_at.localeCompare(a.created_at)); break;
+    }
+    
+    const hasFilters = search || status || sort !== 'created_desc';
+    document.getElementById('job-filter-reset').style.display = hasFilters ? '' : 'none';
+    
+    renderJobs(filtered);
+}
+
+function resetJobFilters() {
+    document.getElementById('job-search').value = '';
+    document.getElementById('job-status-filter').value = '';
+    document.getElementById('job-sort').value = 'created_desc';
+    filterJobs();
 }
 
 function renderJobs(jobs) {
