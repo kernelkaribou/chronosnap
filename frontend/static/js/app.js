@@ -595,9 +595,17 @@ async function showJobDetails(jobId) {
 
                 <div class="form-group" style="margin-bottom: 1.5rem;">
                     <label>Stream URL *</label>
-                    <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required style="flex: 1;">
+                        <button type="button" class="btn btn-secondary" onclick="previewStream('edit_url', 'edit-preview-result')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            Preview
+                        </button>
+                    </div>
                     <small style="color: var(--text-secondary);">HTTP or RTSP stream URL</small>
-                    <button type="button" class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="previewStream('edit_url', 'edit-preview-result')">Preview</button>
                     <div id="edit-preview-result" class="test-result"></div>
                 </div>
 
