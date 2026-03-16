@@ -13,6 +13,8 @@ import logging
 from ..models import CaptureResponse, CaptureListResponse, CaptureDeleteRequest
 from ..database import get_db, dict_from_row
 from ..utils import get_now, to_iso, parse_iso
+from ..helpers.db_helpers import get_or_404, enrich_capture, decrement_job_stats
+from ..helpers.file_helpers import delete_capture_file
 from ..services.thumbnail_generator import get_thumbnail_path, has_thumbnail, delete_thumbnail
 from .. import config
 
@@ -95,9 +97,7 @@ async def list_captures(
         captures = []
         for row in cursor.fetchall():
             capture_dict = dict_from_row(row)
-            capture_dict['has_thumbnail'] = has_thumbnail(capture_dict['file_path'])
-            capture_dict['thumbnail_path'] = get_thumbnail_path(capture_dict['file_path']) if capture_dict['has_thumbnail'] else None
-            capture_dict['is_favorite'] = bool(capture_dict.get('is_favorite', 0))
+            enrich_capture(capture_dict, has_thumbnail, get_thumbnail_path)
             captures.append(capture_dict)
         
         total_pages = (total + page_size - 1) // page_size
@@ -347,21 +347,10 @@ async def get_capture(capture_id: int):
     """Get a specific capture by ID with job name and thumbnail info"""
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT c.*, j.name as job_name
-            FROM captures c
-            LEFT JOIN jobs j ON c.job_id = j.id
-            WHERE c.id = ?
-        """, (capture_id,))
-        row = cursor.fetchone()
-        
-        if not row:
-            raise HTTPException(status_code=404, detail="Capture not found")
-        
-        capture_dict = dict_from_row(row)
-        capture_dict['has_thumbnail'] = has_thumbnail(capture_dict['file_path'])
-        capture_dict['thumbnail_path'] = get_thumbnail_path(capture_dict['file_path']) if capture_dict['has_thumbnail'] else None
-        capture_dict['is_favorite'] = bool(capture_dict.get('is_favorite', 0))
+        capture_dict = get_or_404(cursor,
+            "SELECT c.*, j.name as job_name FROM captures c LEFT JOIN jobs j ON c.job_id = j.id WHERE c.id = ?",
+            (capture_id,), "Capture not found")
+        enrich_capture(capture_dict, has_thumbnail, get_thumbnail_path)
         return capture_dict
 
 
@@ -371,43 +360,21 @@ async def delete_capture(capture_id: int):
     with get_db() as conn:
         cursor = conn.cursor()
         
-        # Get capture info before deleting
-        cursor.execute("SELECT file_path, file_size, job_id FROM captures WHERE id = ?", (capture_id,))
-        row = cursor.fetchone()
-        
-        if not row:
-            raise HTTPException(status_code=404, detail="Capture not found")
-        
-        file_path, file_size, job_id = row
+        cap = get_or_404(cursor,
+            "SELECT file_path, file_size, job_id FROM captures WHERE id = ?",
+            (capture_id,), "Capture not found")
         
         # Delete the image file
         try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                logger.info(f"Deleted capture file: {file_path}")
+            delete_capture_file(cap['file_path'], delete_thumbnail)
         except Exception as e:
-            logger.error(f"Failed to delete capture file {file_path}: {e}")
-        
-        # Delete thumbnail
-        delete_thumbnail(file_path)
+            logger.error(f"Failed to delete capture file {cap['file_path']}: {e}")
         
         # Delete capture record
         cursor.execute("DELETE FROM captures WHERE id = ?", (capture_id,))
         
         # Update job statistics
-        cursor.execute("""
-            UPDATE jobs
-            SET capture_count = CASE 
-                    WHEN capture_count > 0 THEN capture_count - 1 
-                    ELSE 0 
-                END,
-                storage_size = CASE 
-                    WHEN storage_size >= ? THEN storage_size - ? 
-                    ELSE 0 
-                END,
-                updated_at = ?
-            WHERE id = ?
-        """, (file_size, file_size, to_iso(get_now()), job_id))
+        decrement_job_stats(cursor, cap['job_id'], cap['file_size'], to_iso(get_now()))
 
 
 @router.post("/delete-multiple", status_code=200)
@@ -425,20 +392,18 @@ async def delete_multiple_captures(request: CaptureDeleteRequest):
         for capture_id in request.capture_ids:
             try:
                 # Get capture info
-                cursor.execute("SELECT file_path, file_size, job_id FROM captures WHERE id = ?", (capture_id,))
-                row = cursor.fetchone()
+                from ..helpers.db_helpers import fetch_one
+                cap = fetch_one(cursor,
+                    "SELECT file_path, file_size, job_id FROM captures WHERE id = ?",
+                    (capture_id,))
                 
-                if not row:
+                if not cap:
                     errors.append(f"Capture {capture_id} not found")
                     continue
                 
-                file_path, file_size, job_id = row
-                
                 # Delete files
                 try:
-                    if os.path.exists(file_path):
-                        os.remove(file_path)
-                    delete_thumbnail(file_path)
+                    delete_capture_file(cap['file_path'], delete_thumbnail)
                 except Exception as e:
                     logger.error(f"Failed to delete files for capture {capture_id}: {e}")
                 
@@ -446,19 +411,7 @@ async def delete_multiple_captures(request: CaptureDeleteRequest):
                 cursor.execute("DELETE FROM captures WHERE id = ?", (capture_id,))
                 
                 # Update job statistics
-                cursor.execute("""
-                    UPDATE jobs
-                    SET capture_count = CASE 
-                            WHEN capture_count > 0 THEN capture_count - 1 
-                            ELSE 0 
-                        END,
-                        storage_size = CASE 
-                            WHEN storage_size >= ? THEN storage_size - ? 
-                            ELSE 0 
-                        END,
-                        updated_at = ?
-                    WHERE id = ?
-                """, (file_size, file_size, to_iso(get_now()), job_id))
+                decrement_job_stats(cursor, cap['job_id'], cap['file_size'], to_iso(get_now()))
                 
                 deleted_count += 1
                 
@@ -570,8 +523,7 @@ async def get_nearest_capture(
         cursor.execute("SELECT name FROM jobs WHERE id = ?", (job_id,))
         job_row = cursor.fetchone()
         capture['job_name'] = job_row[0] if job_row else None
-        capture['has_thumbnail'] = has_thumbnail(capture['file_path'])
-        capture['thumbnail_path'] = get_thumbnail_path(capture['file_path']) if capture['has_thumbnail'] else None
+        enrich_capture(capture, has_thumbnail, get_thumbnail_path)
         
         return capture
 
@@ -581,13 +533,11 @@ async def get_capture_image(capture_id: int):
     """Serve the actual capture image file"""
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT file_path FROM captures WHERE id = ?", (capture_id,))
-        row = cursor.fetchone()
+        cap = get_or_404(cursor,
+            "SELECT file_path FROM captures WHERE id = ?",
+            (capture_id,), "Capture not found")
         
-        if not row:
-            raise HTTPException(status_code=404, detail="Capture not found")
-        
-        file_path = row[0]
+        file_path = cap['file_path']
         
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail="Capture file not found on disk")
@@ -603,13 +553,11 @@ async def get_capture_thumbnail(capture_id: int):
     """Serve the thumbnail image file"""
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT file_path FROM captures WHERE id = ?", (capture_id,))
-        row = cursor.fetchone()
+        cap = get_or_404(cursor,
+            "SELECT file_path FROM captures WHERE id = ?",
+            (capture_id,), "Capture not found")
         
-        if not row:
-            raise HTTPException(status_code=404, detail="Capture not found")
-        
-        file_path = row[0]
+        file_path = cap['file_path']
         thumbnail_path = get_thumbnail_path(file_path)
         
         if not os.path.exists(thumbnail_path):
