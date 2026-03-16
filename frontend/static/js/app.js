@@ -412,6 +412,9 @@ function toggleTimeWindow() {
 document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
     
+    // Load tags globally (needed by tag pickers in modals)
+    loadTagManager();
+    
     // Load initial view based on URL hash or default to jobs
     const hash = window.location.hash.slice(1); // Remove #
     const validViews = ['jobs', 'videos', 'settings'];
@@ -631,6 +634,7 @@ function renderJobs(jobs) {
                 </div>
             </div>
             <div class="job-card-badges">
+                ${job.tags && job.tags.length ? `<div class="card-tags">${job.tags.map(t => tagChipHTML(t, true)).join('')}</div>` : ''}
                 ${job.auto_build_enabled ? '<span class="auto-build-badge">Auto-Build</span>' : ''}
                 <span class="job-status ${statusClass}">${statusLabel}</span>
             </div>
@@ -899,6 +903,11 @@ async function showJobDetails(jobId) {
                     ${job.last_auto_build_at ? `<small style="color: var(--text-secondary);">Last auto-build: ${formatDateTime(job.last_auto_build_at)}</small>` : ''}
                 </div>
 
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label>Tags</label>
+                    <div class="tag-picker" id="edit-job-tags"></div>
+                </div>
+
                 <input type="hidden" id="edit_start_datetime" value="${job.start_datetime}">
                 
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: space-between; align-items: center; padding-top: 1rem; border-top: 2px solid var(--border-color);">
@@ -943,6 +952,9 @@ async function showJobDetails(jobId) {
         
         // Initialize edit overlay section
         initEditJobOverlay(job);
+        
+        // Render tag picker with current job tags
+        renderTagPicker('edit-job-tags', (job.tags || []).map(t => t.id));
         
         // Track changes to enable/disable save button
         setupJobEditChangeTracking(job);
@@ -1028,7 +1040,8 @@ async function createJob(event) {
         auto_build_fps: values.auto_build_fps || 30,
         auto_build_quality: values.auto_build_quality || 'medium',
         auto_build_resolution: values.auto_build_resolution || '1920x1080',
-        auto_build_text_overlay: values.auto_build_enabled ? JSON.stringify(readOverlayConfig('create-ab')) : null
+        auto_build_text_overlay: values.auto_build_enabled ? JSON.stringify(readOverlayConfig('create-ab')) : null,
+        tag_ids: getSelectedTagIds('create-job-tags')
     };
     
     try {
@@ -1063,6 +1076,8 @@ function setupJobEditChangeTracking(originalJob) {
         const grid = document.getElementById('edit-ab-overlay-grid');
         const activeBtn = grid?.querySelector('.pos-btn.active');
         vals['_overlay_pos'] = activeBtn?.dataset.pos || '';
+        // Include tags
+        vals['_tag_ids'] = JSON.stringify(getSelectedTagIds('edit-job-tags'));
         return vals;
     };
 
@@ -1132,6 +1147,12 @@ function setupJobEditChangeTracking(originalJob) {
         overlayGrid.querySelectorAll('.pos-btn').forEach(btn => {
             btn.addEventListener('click', () => setTimeout(checkForChanges, 10));
         });
+    }
+    
+    // Track tag picker clicks
+    const tagPicker = document.getElementById('edit-job-tags');
+    if (tagPicker) {
+        tagPicker.addEventListener('click', () => setTimeout(checkForChanges, 10));
     }
 }
 
@@ -1336,7 +1357,8 @@ async function saveJobChanges(jobId) {
         auto_build_fps: autoBuildFps,
         auto_build_quality: autoBuildQuality,
         auto_build_resolution: autoBuildResolution,
-        auto_build_text_overlay: JSON.stringify(readOverlayConfig('edit-ab'))
+        auto_build_text_overlay: JSON.stringify(readOverlayConfig('edit-ab')),
+        tag_ids: getSelectedTagIds('edit-job-tags')
     };
     
     try {
@@ -1452,6 +1474,15 @@ function populateVideoFilters(videos) {
     yearSelect.innerHTML = '<option value="">All Years</option>' +
         years.map(y => `<option value="${y}">${y}</option>`).join('');
     yearSelect.value = currentYear;
+    
+    // Populate tag filter
+    const tagSelect = document.getElementById('video-tag-filter');
+    if (tagSelect) {
+        const currentTag = tagSelect.value;
+        tagSelect.innerHTML = '<option value="">All Tags</option>' +
+            allTags.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+        tagSelect.value = currentTag;
+    }
 }
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -1487,6 +1518,8 @@ function resetVideoFilters() {
     document.getElementById('video-year-filter').value = '';
     document.getElementById('video-month-filter').value = '';
     document.getElementById('video-month-filter').disabled = true;
+    const tagFilter = document.getElementById('video-tag-filter');
+    if (tagFilter) tagFilter.value = '';
     videoFavoritesOnly = false;
     const favBtn = document.getElementById('video-fav-filter');
     if (favBtn) favBtn.classList.remove('active');
@@ -1497,6 +1530,7 @@ function filterVideos(opts = {}) {
     const search = (document.getElementById('video-search').value || '').toLowerCase();
     const yearFilter = document.getElementById('video-year-filter').value;
     const monthFilter = document.getElementById('video-month-filter').value;
+    const tagFilter = document.getElementById('video-tag-filter')?.value || '';
     
     let filtered = allVideos;
     
@@ -1521,8 +1555,13 @@ function filterVideos(opts = {}) {
         filtered = filtered.filter(v => v.is_favorite);
     }
     
+    if (tagFilter) {
+        const tagId = parseInt(tagFilter);
+        filtered = filtered.filter(v => v.tags && v.tags.some(t => t.id === tagId));
+    }
+    
     // Show/hide reset button
-    const hasFilters = search || yearFilter || monthFilter !== '' || videoFavoritesOnly;
+    const hasFilters = search || yearFilter || monthFilter !== '' || videoFavoritesOnly || tagFilter;
     document.getElementById('video-filter-reset').style.display = hasFilters ? '' : 'none';
     
     const countEl = document.getElementById('video-count');
@@ -1625,6 +1664,7 @@ function renderVideos(videos, isEmpty) {
             <div class="video-gallery-info">
                 <div class="video-gallery-name">${escapeHtml(video.name)}</div>
                 <div class="video-gallery-job">${video.job_name ? escapeHtml(video.job_name) : 'No job'}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}</div>
+                ${video.tags && video.tags.length ? `<div class="card-tags">${video.tags.map(t => tagChipHTML(t, true)).join('')}</div>` : ''}
             </div>
         </div>`;
     }).join('');
@@ -1678,6 +1718,18 @@ async function openVideoDetail(videoId) {
         metaHtml += `<dt>Quality</dt><dd>${video.quality}</dd><dt>Frames</dt><dd>${video.total_frames.toLocaleString()}</dd>`;
         
         meta.innerHTML = metaHtml;
+        
+        // Build tags section
+        const tagsContainer = document.getElementById('video-detail-tags');
+        if (tagsContainer) {
+            if (video.tags && video.tags.length) {
+                tagsContainer.innerHTML = `<div class="card-tags" style="margin-bottom: 0.5rem;">${video.tags.map(t => tagChipHTML(t)).join('')}</div>`;
+                tagsContainer.style.display = 'block';
+            } else {
+                tagsContainer.innerHTML = '';
+                tagsContainer.style.display = 'none';
+            }
+        }
         
         // Build actions
         let actionsHtml = '';
@@ -2714,6 +2766,9 @@ function showCreateJobModal() {
     
     showModal('create-job-modal');
     
+    // Render tag picker
+    renderTagPicker('create-job-tags');
+    
     // Trigger initial duration estimate with default values
     setTimeout(() => {
         updateDurationEstimate();
@@ -2796,6 +2851,9 @@ async function duplicateJob(jobId) {
         
         updateEndDateMin();
         showModal('create-job-modal');
+        
+        // Pre-select tags from source job
+        renderTagPicker('create-job-tags', (job.tags || []).map(t => t.id));
         
         setTimeout(() => updateDurationEstimate(), 100);
     } catch (error) {
@@ -4073,6 +4131,7 @@ async function loadSettings() {
 
     // Load webhook settings
     loadWebhookSettings();
+    loadTagManager();
 }
 
 function updateTimeFormatButtons() {
@@ -4226,6 +4285,153 @@ async function testWebhook() {
     }
 }
 
+// =============================================================================
+// Tags Manager & Tag Picker
+// =============================================================================
+
+let allTags = [];
+
+async function loadTagManager() {
+    try {
+        allTags = await apiRequest('/tags/');
+        renderTagList();
+    } catch (error) {
+        console.error('Failed to load tags:', error);
+    }
+}
+
+function renderTagList() {
+    const container = document.getElementById('tag-list');
+    if (!container) return;
+
+    if (allTags.length === 0) {
+        container.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">No tags yet. Create one above.</div>';
+        return;
+    }
+
+    container.innerHTML = allTags.map(tag => `
+        <div class="tag-list-item" data-tag-id="${tag.id}">
+            <span class="tag-chip" style="background: ${tag.color}22; color: ${tag.color}; border: 1px solid ${tag.color}44;">
+                <span style="width:8px;height:8px;border-radius:50%;background:${tag.color};display:inline-block;"></span>
+                ${escapeHtml(tag.name)}
+            </span>
+            <span class="tag-usage">${tag.job_count} job${tag.job_count !== 1 ? 's' : ''}, ${tag.video_count} video${tag.video_count !== 1 ? 's' : ''}</span>
+            <span class="tag-actions">
+                <button onclick="editTagInline(${tag.id})" title="Edit">✏️</button>
+                <button onclick="deleteTag(${tag.id}, '${escapeHtml(tag.name)}')" title="Delete">🗑️</button>
+            </span>
+        </div>
+    `).join('');
+}
+
+async function createTag() {
+    const nameInput = document.getElementById('tag-create-name');
+    const colorInput = document.getElementById('tag-create-color');
+    const name = nameInput.value.trim();
+    if (!name) {
+        showNotification('Enter a tag name', 'error');
+        return;
+    }
+    try {
+        await apiRequest('/tags/', {
+            method: 'POST',
+            body: { name, color: colorInput.value }
+        });
+        nameInput.value = '';
+        colorInput.value = '#6366f1';
+        await loadTagManager();
+        showNotification(`Tag "${name}" created`);
+    } catch (error) {
+        showNotification(error.message || 'Failed to create tag', 'error');
+    }
+}
+
+function editTagInline(tagId) {
+    const tag = allTags.find(t => t.id === tagId);
+    if (!tag) return;
+
+    const item = document.querySelector(`.tag-list-item[data-tag-id="${tagId}"]`);
+    if (!item) return;
+
+    item.innerHTML = `
+        <input type="text" class="form-control" value="${escapeHtml(tag.name)}" id="tag-edit-name-${tagId}" style="flex:1;max-width:200px;font-size:0.85rem;padding:0.25rem 0.5rem;">
+        <input type="color" value="${tag.color}" id="tag-edit-color-${tagId}" class="tag-color-picker" style="width:30px;height:30px;">
+        <button class="btn btn-sm btn-purple" onclick="saveTagEdit(${tagId})">Save</button>
+        <button class="btn btn-sm btn-secondary" onclick="renderTagList()">Cancel</button>
+    `;
+    document.getElementById(`tag-edit-name-${tagId}`).focus();
+}
+
+async function saveTagEdit(tagId) {
+    const name = document.getElementById(`tag-edit-name-${tagId}`).value.trim();
+    const color = document.getElementById(`tag-edit-color-${tagId}`).value;
+    if (!name) {
+        showNotification('Tag name cannot be empty', 'error');
+        return;
+    }
+    try {
+        await apiRequest(`/tags/${tagId}`, {
+            method: 'PUT',
+            body: { name, color }
+        });
+        await loadTagManager();
+        showNotification('Tag updated');
+    } catch (error) {
+        showNotification(error.message || 'Failed to update tag', 'error');
+    }
+}
+
+async function deleteTag(tagId, tagName) {
+    confirmAction(`Delete tag "${tagName}"? It will be removed from all jobs and timelapses.`, async () => {
+        try {
+            await apiRequest(`/tags/${tagId}`, { method: 'DELETE' });
+            await loadTagManager();
+            showNotification(`Tag "${tagName}" deleted`);
+        } catch (error) {
+            showNotification('Failed to delete tag', 'error');
+        }
+    });
+}
+
+// Tag chip HTML helper
+function tagChipHTML(tag, small = false) {
+    const sizeStyle = small ? 'font-size:0.6rem;padding:0.1rem 0.4rem;' : '';
+    return `<span class="tag-chip" style="${sizeStyle}background:${tag.color}22;color:${tag.color};border:1px solid ${tag.color}44;">
+        <span style="width:6px;height:6px;border-radius:50%;background:${tag.color};display:inline-block;"></span>
+        ${escapeHtml(tag.name)}</span>`;
+}
+
+// Tag picker for modals — renders all tags, toggles selection on click
+function renderTagPicker(containerId, selectedTagIds = []) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (allTags.length === 0) {
+        container.innerHTML = '<span style="color:var(--text-secondary);font-size:0.8rem;">No tags available</span>';
+        return;
+    }
+
+    container.innerHTML = allTags.map(tag => {
+        const isSelected = selectedTagIds.includes(tag.id);
+        return `<span class="tag-chip ${isSelected ? 'selected' : ''}" data-tag-id="${tag.id}"
+            style="background:${tag.color}22;color:${tag.color};border:1px solid ${tag.color}44;cursor:pointer;opacity:${isSelected ? '1' : '0.4'};"
+            onclick="toggleTagInPicker(this, ${tag.id})">
+            <span style="width:6px;height:6px;border-radius:50%;background:${tag.color};display:inline-block;"></span>
+            ${escapeHtml(tag.name)}</span>`;
+    }).join('');
+}
+
+function toggleTagInPicker(el, tagId) {
+    el.classList.toggle('selected');
+    el.style.opacity = el.classList.contains('selected') ? '1' : '0.4';
+}
+
+function getSelectedTagIds(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return [];
+    return Array.from(container.querySelectorAll('.tag-chip.selected')).map(el => parseInt(el.dataset.tagId));
+}
+
 // Nav Warning Badge
 function updateJobWarningBadge(jobs) {
     const jobsLink = document.querySelector('.nav-link[data-view="jobs"]');
@@ -4254,6 +4460,7 @@ let capturesState = {
     pageSize: 16,
     sortOrder: 'desc',
     jobFilter: null,
+    tagFilter: null,
     startTime: null,
     endTime: null,
     favoritesOnly: false,
@@ -4286,6 +4493,15 @@ async function loadCaptures() {
                 option.textContent = job.name;
                 jobSelect.appendChild(option);
             });
+        }
+        
+        // Populate tag filter
+        const tagSelect = document.getElementById('captures-tag-filter');
+        if (tagSelect) {
+            const currentTag = tagSelect.value;
+            tagSelect.innerHTML = '<option value="">All Tags</option>' +
+                allTags.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+            tagSelect.value = currentTag;
         }
         
         await loadCapturesPage();
@@ -4497,6 +4713,10 @@ async function loadCapturesPage() {
             query.favorites_only = true;
         }
         
+        if (capturesState.tagFilter) {
+            query.tag_id = capturesState.tagFilter;
+        }
+        
         const data = await apiRequest('/captures/', { query });
         
         const countEl = document.getElementById('captures-count');
@@ -4540,6 +4760,7 @@ function renderCaptures(captures) {
             <div class="capture-info">
                 <div class="capture-job-name">${escapeHtml(capture.job_name || 'Unknown Job')}</div>
                 <div class="capture-time">${formatDateTime(capture.captured_at)}</div>
+                ${capture.tags && capture.tags.length ? `<div class="card-tags">${capture.tags.map(t => tagChipHTML(t, true)).join('')}</div>` : ''}
             </div>
         </div>
     `).join('');
@@ -4596,12 +4817,14 @@ function goToPage(page) {
 
 function applyCaptureSortAndFilter() {
     const jobFilter = getValue('captures-job-filter');
+    const tagFilter = getValue('captures-tag-filter');
     const startTime = getValue('captures-start-time');
     const endTime = getValue('captures-end-time');
     const sortOrder = getValue('captures-sort-order');
     const pageSize = getValue('captures-page-size');
     
     capturesState.jobFilter = jobFilter || null;
+    capturesState.tagFilter = tagFilter || null;
     capturesState.startTime = startTime ? new Date(startTime).toISOString() : null;
     capturesState.endTime = endTime ? new Date(endTime).toISOString() : null;
     capturesState.sortOrder = sortOrder || 'desc';
@@ -4609,7 +4832,7 @@ function applyCaptureSortAndFilter() {
     capturesState.currentPage = 1;
     
     // Show/hide reset button
-    const hasFilters = jobFilter || startTime || endTime || capturesState.favoritesOnly;
+    const hasFilters = jobFilter || tagFilter || startTime || endTime || capturesState.favoritesOnly;
     document.getElementById('captures-filter-reset').style.display = hasFilters ? '' : 'none';
     
     loadCapturesPage();
@@ -4617,10 +4840,12 @@ function applyCaptureSortAndFilter() {
 
 function clearCaptureFilters() {
     setValue('captures-job-filter', '');
+    setValue('captures-tag-filter', '');
     setValue('captures-start-time', '');
     setValue('captures-end-time', '');
     document.getElementById('captures-filter-reset').style.display = 'none';
     capturesState.jobFilter = null;
+    capturesState.tagFilter = null;
     capturesState.startTime = null;
     capturesState.endTime = null;
     capturesState.favoritesOnly = false;

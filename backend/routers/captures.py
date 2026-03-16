@@ -30,6 +30,7 @@ class FavoriteRequest(BaseModel):
 @router.get("/", response_model=CaptureListResponse)
 async def list_captures(
     job_id: Optional[int] = Query(None, description="Filter by job ID"),
+    tag_id: Optional[int] = Query(None, description="Filter by tag ID (inherited from job)"),
     start_time: Optional[str] = Query(None, description="Start time (ISO format)"),
     end_time: Optional[str] = Query(None, description="End time (ISO format)"),
     favorites_only: bool = Query(False, description="Show only favorites"),
@@ -69,6 +70,10 @@ async def list_captures(
         
         if favorites_only:
             conditions.append("c.is_favorite = 1")
+        
+        if tag_id is not None:
+            conditions.append("c.job_id IN (SELECT job_id FROM job_tags WHERE tag_id = ?)")
+            params.append(tag_id)
         
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         
