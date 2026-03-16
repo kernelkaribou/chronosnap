@@ -3118,6 +3118,70 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
+// ── Directory Import ──────────────────────────────────────────────────────
+
+function showImportModal() {
+    document.getElementById('import-directory').value = '';
+    document.getElementById('import-scan-result').style.display = 'none';
+    document.getElementById('import-fields').style.display = 'none';
+    document.getElementById('import-name').value = '';
+    document.getElementById('import-url').value = '';
+    showModal('import-modal');
+}
+
+async function scanImportDirectory() {
+    const dir = document.getElementById('import-directory').value.trim();
+    if (!dir) { showNotification('Enter a directory path', 'error'); return; }
+    
+    try {
+        const result = await apiRequest('/jobs/import/scan', { method: 'POST', body: { directory: dir } });
+        const info = document.getElementById('import-scan-info');
+        
+        if (result.count === 0) {
+            info.innerHTML = '<strong>No images found</strong> in this directory.';
+            document.getElementById('import-scan-result').style.display = 'block';
+            document.getElementById('import-fields').style.display = 'none';
+            return;
+        }
+        
+        info.innerHTML = `
+            <strong>${result.count.toLocaleString()} images</strong> found · ${formatBytes(result.total_size)}<br>
+            <small style="color:var(--text-secondary);">
+                Range: ${formatDateTimeNoSeconds(result.first_capture)} → ${formatDateTimeNoSeconds(result.last_capture)}
+            </small>
+        `;
+        document.getElementById('import-scan-result').style.display = 'block';
+        document.getElementById('import-fields').style.display = 'block';
+        
+        // Auto-suggest name from directory
+        const dirName = dir.split('/').filter(Boolean).pop() || 'Imported';
+        document.getElementById('import-name').value = dirName;
+    } catch (error) {
+        showNotification(error.message || 'Failed to scan directory', 'error');
+    }
+}
+
+async function performDirectoryImport() {
+    const dir = document.getElementById('import-directory').value.trim();
+    const name = document.getElementById('import-name').value.trim();
+    const url = document.getElementById('import-url').value.trim();
+    
+    if (!name) { showNotification('Enter a job name', 'error'); return; }
+    
+    try {
+        showNotification('Importing...', 'info');
+        const job = await apiRequest('/jobs/import', {
+            method: 'POST',
+            body: { name, directory: dir, url: url || null }
+        });
+        closeModal('import-modal');
+        showNotification(`Imported ${job.capture_count} captures as "${job.name}"`, 'success');
+        loadJobs();
+    } catch (error) {
+        showNotification(error.message || 'Import failed', 'error');
+    }
+}
+
 function showCreateJobModal() {
     // Reset the form to clear any previous values
     document.getElementById('create-job-form').reset();

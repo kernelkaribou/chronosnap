@@ -275,3 +275,15 @@ class MaintenanceCleanup(BaseModel):
 
 class MaintenanceImport(BaseModel):
     orphaned_files: List[Dict[str, Any]]
+
+
+class DirectoryScanRequest(BaseModel):
+    directory: str
+
+
+class DirectoryImportRequest(BaseModel):
+    name: str
+    directory: str
+    url: Optional[str] = None
+    stream_type: str = "rtsp"
+    interval_seconds: int = Field(default=60, gt=0)

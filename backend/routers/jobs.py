@@ -6,13 +6,13 @@ from typing import List, Optional
 import os
 import logging
 
-from ..models import JobCreate, JobUpdate, JobResponse, TestUrlResponse, DurationEstimate, DurationCalculation, MaintenanceResult, MaintenanceCleanup, MaintenanceImport
+from ..models import JobCreate, JobUpdate, JobResponse, TestUrlResponse, DurationEstimate, DurationCalculation, MaintenanceResult, MaintenanceCleanup, MaintenanceImport, DirectoryScanRequest, DirectoryImportRequest
 from ..database import get_db, dict_from_row
 from ..services.url_tester import test_stream_url
 from ..services.duration_calculator import calculate_duration
 from ..services.image_capture import capture_image
 from ..services.capture_scheduler import get_scheduler
-from ..services.maintenance import scan_job_files, cleanup_missing_captures, import_orphaned_files
+from ..services.maintenance import scan_job_files, cleanup_missing_captures, import_orphaned_files, scan_directory
 from ..services.job_state import calculate_job_state
 from ..services.auto_builder import get_next_auto_build_at
 from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware
@@ -573,4 +573,97 @@ async def import_job_maintenance(job_id: int, import_data: MaintenanceImport):
     except Exception as e:
         logger.error(f"Error during maintenance import for job {job_id}: {str(e)}")
         raise HTTPException(status_code=500, detail="Maintenance import failed")
+
+
+# ── Directory Import ─────────────────────────────────────────────────────
+
+@router.post("/import/scan")
+async def scan_import_directory(request: DirectoryScanRequest):
+    """Scan a directory for importable image files."""
+    try:
+        result = scan_directory(request.directory)
+        # Don't send the full file list for scan — just summary
+        return {
+            'count': result['count'],
+            'total_size': result['total_size'],
+            'first_capture': result['first_capture'],
+            'last_capture': result['last_capture'],
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Directory scan error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to scan directory")
+
+
+@router.post("/import", response_model=JobResponse)
+async def import_directory(request: DirectoryImportRequest):
+    """Import a directory of images as a new job with pre-populated captures."""
+    try:
+        scan = scan_directory(request.directory)
+        if scan['count'] == 0:
+            raise HTTPException(status_code=400, detail="No images found in directory")
+        
+        now = to_iso(get_now())
+        first_ts = scan['first_capture']
+        last_ts = scan['last_capture']
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO jobs (
+                    name, url, stream_type, start_datetime, end_datetime,
+                    interval_seconds, framerate, status, capture_path,
+                    naming_pattern, capture_count, storage_size, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 30, 'completed', ?, 'capture_%Y%m%d_%H%M%S', 0, 0, ?, ?)
+            """, (
+                request.name,
+                request.url or '',
+                request.stream_type,
+                first_ts,
+                last_ts,
+                request.interval_seconds,
+                request.directory,
+                now, now
+            ))
+            job_id = cursor.lastrowid
+            
+            # Bulk insert captures
+            for f in scan['files']:
+                cursor.execute(
+                    "INSERT INTO captures (job_id, file_path, file_size, captured_at) VALUES (?, ?, ?, ?)",
+                    (job_id, f['file_path'], f['file_size'], f['captured_at'])
+                )
+            
+            # Update job stats
+            cursor.execute("""
+                UPDATE jobs SET capture_count = ?, storage_size = ? WHERE id = ?
+            """, (scan['count'], scan['total_size'], job_id))
+            
+            logger.info(f"Imported directory '{request.directory}' as job '{request.name}' "
+                       f"(ID: {job_id}): {scan['count']} captures, {scan['total_size']} bytes")
+            
+            # Return the created job
+            job = get_or_404(cursor, "SELECT * FROM jobs WHERE id = ?", (job_id,), "Job not found")
+            job['latest_capture'] = None
+            job['tags'] = []
+            if scan['count'] > 0:
+                cursor.execute(
+                    "SELECT * FROM captures WHERE job_id = ? ORDER BY captured_at DESC LIMIT 1",
+                    (job_id,)
+                )
+                row = cursor.fetchone()
+                if row:
+                    job['latest_capture'] = dict_from_row(row)
+            
+            return enrich_job_with_next_capture(job)
+    
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Directory import error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to import directory")
 
