@@ -2122,7 +2122,6 @@ function generateOverlayHTML(prefix, opts = {}) {
             ${fieldsInner}
         </div>`;
 }
-}
 
 /**
  * Initialize an overlay widget after its HTML is in the DOM.
