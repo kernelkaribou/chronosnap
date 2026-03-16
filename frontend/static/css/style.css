@@ -2082,22 +2082,31 @@ body {
 }
 
 /* ===== Capture Comparison ===== */
-.compare-date-row {
+.compare-toolbar {
     display: flex;
-    gap: 1rem;
+    align-items: center;
+    gap: 0.6rem;
     margin-bottom: 0.75rem;
+    flex-wrap: wrap;
 }
 
-.compare-date-group {
-    flex: 1;
+.compare-date-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
 }
 
-.compare-date-group label {
-    display: block;
+.compare-date-inline label {
     font-weight: 600;
-    font-size: 0.85rem;
-    margin-bottom: 0.35rem;
+    font-size: 0.8rem;
     color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.compare-date-inline .form-control-sm {
+    padding: 0.3rem 0.4rem;
+    font-size: 0.8rem;
+    width: auto;
 }
 
 .compare-mode-btn {
@@ -2217,7 +2226,7 @@ body {
     .compare-side-by-side {
         flex-direction: column;
     }
-    .compare-date-row {
-        flex-direction: column;
+    .compare-toolbar {
+        flex-wrap: wrap;
     }
 }

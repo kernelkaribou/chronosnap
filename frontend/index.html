@@ -666,18 +666,16 @@
 
                 <!-- Controls (hidden until job selected) -->
                 <div id="compare-controls" style="display: none;">
-                    <div class="compare-date-row">
-                        <div class="compare-date-group">
-                            <label>Capture A</label>
-                            <input type="datetime-local" id="compare-date-a" class="form-control" onchange="onCompareDateChanged('a')">
-                        </div>
-                        <div class="compare-date-group">
-                            <label>Capture B</label>
-                            <input type="datetime-local" id="compare-date-b" class="form-control" onchange="onCompareDateChanged('b')">
-                        </div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                    <div class="compare-toolbar">
                         <button class="btn btn-secondary btn-sm" onclick="compareFirstLast()">First vs Last</button>
+                        <div class="compare-date-inline">
+                            <label>A</label>
+                            <input type="datetime-local" id="compare-date-a" class="form-control form-control-sm" onchange="onCompareDateChanged('a')">
+                        </div>
+                        <div class="compare-date-inline">
+                            <label>B</label>
+                            <input type="datetime-local" id="compare-date-b" class="form-control form-control-sm" onchange="onCompareDateChanged('b')">
+                        </div>
                         <div style="margin-left: auto; display: flex; gap: 0.25rem;">
                             <button class="btn btn-sm compare-mode-btn active" id="compare-mode-side" onclick="setCompareMode('side')">Side by Side</button>
                             <button class="btn btn-sm compare-mode-btn" id="compare-mode-slider" onclick="setCompareMode('slider')">Slider</button>
