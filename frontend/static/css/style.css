@@ -2106,7 +2106,17 @@ body {
 .compare-date-inline .form-control-sm {
     padding: 0.3rem 0.4rem;
     font-size: 0.8rem;
-    width: auto;
+    width: 13rem;
+}
+
+/* Fix datetime-local calendar/clock icons invisible in dark mode */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.7);
+    cursor: pointer;
+}
+
+[data-theme="light"] input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: none;
 }
 
 .compare-mode-btn {
