@@ -153,6 +153,7 @@ class JobResponse(BaseModel):
     auto_build_in_progress: int = 0
     next_scheduled_capture_at: Optional[str] = None
     next_capture_at: Optional[str] = None
+    next_auto_build_at: Optional[str] = None
     latest_capture: Optional[Dict[str, Any]] = None
     tags: List[TagBrief] = []
     created_at: str

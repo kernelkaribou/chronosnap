@@ -14,6 +14,7 @@ from ..services.image_capture import capture_image
 from ..services.capture_scheduler import get_scheduler
 from ..services.maintenance import scan_job_files, cleanup_missing_captures, import_orphaned_files
 from ..services.job_state import calculate_job_state
+from ..services.auto_builder import get_next_auto_build_at
 from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware
 from ..helpers.db_helpers import get_or_404, fetch_tags_for_jobs, set_job_tags
 from ..helpers.file_helpers import validate_writable_directory
@@ -23,11 +24,12 @@ logger = logging.getLogger(__name__)
 
 
 def enrich_job_with_next_capture(job_dict: dict) -> dict:
-    """Add next_capture_at field to job dict using context-aware calculator"""
+    """Add next_capture_at and next_auto_build_at fields to job dict"""
     now = get_now()
     pending = parse_iso(job_dict['next_scheduled_capture_at']) if job_dict.get('next_scheduled_capture_at') else None
     status, next_capture, reason = calculate_job_state(job_dict, now, pending)
     job_dict['next_capture_at'] = to_iso(next_capture) if next_capture else None
+    job_dict['next_auto_build_at'] = get_next_auto_build_at(job_dict)
     return job_dict
 
 

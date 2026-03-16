@@ -623,6 +623,11 @@ function renderJobs(jobs) {
             nextCaptureInfo = `<div><strong>Next Capture:</strong> ${formatDateTime(nextCapture)}</div>`;
         }
         
+        let nextAutoBuildInfo = '';
+        if (job.next_auto_build_at && job.auto_build_enabled) {
+            nextAutoBuildInfo = `<div><strong>Next Auto-Build:</strong> ${formatDateTime(job.next_auto_build_at)}</div>`;
+        }
+        
         return `
         <div class="job-card" style="--i:${idx}" onclick="showJobDetails(${job.id})">
             ${thumbnailHtml}
@@ -636,6 +641,7 @@ function renderJobs(jobs) {
                 ${job.start_datetime ? `<div><strong>Start:</strong> ${formatDateTimeNoSeconds(job.start_datetime)}</div>` : ''}
                 ${job.end_datetime ? `<div><strong>End:</strong> ${formatDateTimeNoSeconds(job.end_datetime)}</div>` : '<div><strong>Ongoing capture</strong></div>'}
                 ${nextCaptureInfo}
+                ${nextAutoBuildInfo}
                 ${lastCaptureInfo}
                 <div style="margin-top: 0.5rem;">
                     <a href="#" onclick="event.stopPropagation(); viewJobCaptures(${job.id}); return false;" 
@@ -729,6 +735,11 @@ async function showJobDetails(jobId) {
             nextCaptureHtml = `<div><strong>Next Capture:</strong> ${formatDateTime(nextCapture)}</div>`;
         }
         
+        let nextAutoBuildHtml = '';
+        if (job.next_auto_build_at && job.auto_build_enabled) {
+            nextAutoBuildHtml = `<div><strong>Next Auto-Build:</strong> ${formatDateTime(job.next_auto_build_at)}</div>`;
+        }
+        
         content.innerHTML = `
             <div style="padding: 1.5rem;">
                 ${latestImageHtml}
@@ -752,6 +763,7 @@ async function showJobDetails(jobId) {
                     <div><strong>Status:</strong> <span class="job-status ${statusClass}">${statusLabel}</span></div>
                     <div><strong>Start:</strong> ${formatDateTimeNoSeconds(job.start_datetime)}</div>
                     ${nextCaptureHtml}
+                    ${nextAutoBuildHtml}
                     ${lastCaptureHtml}
                 </div>
                 
