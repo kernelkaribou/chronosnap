@@ -296,6 +296,11 @@ async def update_job(job_id: int, job_update: JobUpdate):
         if job_update.auto_build_enabled is not None:
             updates.append("auto_build_enabled = ?")
             values.append(1 if job_update.auto_build_enabled else 0)
+            # When enabling auto-build, seed last_auto_build_at to now so the
+            # first build covers only future captures instead of the entire history
+            if job_update.auto_build_enabled and not current_job.get('auto_build_enabled'):
+                updates.append("last_auto_build_at = ?")
+                values.append(to_iso(get_now()))
         
         if job_update.auto_build_interval_days is not None:
             updates.append("auto_build_interval_days = ?")

@@ -46,10 +46,7 @@ def _is_auto_build_due(job: dict, now: datetime) -> bool:
     """Determine if a job's auto-build is due."""
     last_build = job.get('last_auto_build_at')
     if not last_build:
-        # Never built — check if enough time has passed since job start
-        start = parse_iso(job['start_datetime'])
-        interval = timedelta(days=job.get('auto_build_interval_days', 7))
-        return now >= start + interval
+        return False
 
     last_build_dt = parse_iso(last_build)
     interval = timedelta(days=job.get('auto_build_interval_days', 7))
