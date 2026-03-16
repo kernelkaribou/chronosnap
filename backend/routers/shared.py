@@ -1,6 +1,10 @@
 """
 Shared links — public (no auth) routes for viewing shared timelapses,
 and API routes (auth-protected) for managing shared links.
+
+Toggle model: one active link per video. Toggle ON creates a fresh token,
+toggle OFF deletes the link. No expiry — links are active until disabled
+or the video is deleted (CASCADE).
 """
 import logging
 import os
@@ -8,8 +12,7 @@ import re
 import secrets
 import string
 from datetime import datetime, timezone
-from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Path, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
@@ -68,11 +71,11 @@ class ToggleShareRequest(BaseModel):
 
 @router.get("/")
 async def list_shared_links():
-    """List all active shared links"""
+    """List all active shared links."""
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT sl.*, pv.name as video_name
+            SELECT sl.token, sl.video_id, sl.created_at, pv.name as video_name
             FROM shared_links sl
             LEFT JOIN processed_videos pv ON sl.video_id = pv.id
             ORDER BY sl.created_at DESC
@@ -85,17 +88,15 @@ async def toggle_share(body: ToggleShareRequest):
     """Toggle sharing on/off for a video. Returns the new share token or null."""
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name FROM processed_videos WHERE id = ?", (body.video_id,))
+        cursor.execute("SELECT id FROM processed_videos WHERE id = ?", (body.video_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Video not found")
 
         if body.enabled:
-            # Enforce max active shares limit
             cursor.execute("SELECT COUNT(*) FROM shared_links")
             count = cursor.fetchone()[0]
             if count >= MAX_ACTIVE_SHARES:
                 raise HTTPException(status_code=400, detail=f"Maximum of {MAX_ACTIVE_SHARES} active shares reached")
-            # Remove any existing link first, then create fresh
             cursor.execute("DELETE FROM shared_links WHERE video_id = ?", (body.video_id,))
             token = generate_token()
             now = datetime.now(timezone.utc).isoformat()
@@ -109,17 +110,6 @@ async def toggle_share(body: ToggleShareRequest):
             return {"enabled": False, "token": None}
 
 
-@router.delete("/{link_id}")
-async def revoke_shared_link(link_id: int):
-    """Revoke (delete) a shared link"""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM shared_links WHERE id = ?", (link_id,))
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Not found")
-        return {"status": "revoked"}
-
-
 # ── Public routes (no auth) ───────────────────────────────────────────────
 
 public_router = APIRouter()
@@ -129,7 +119,7 @@ def _resolve_shared_link(cursor, token: str):
     """Look up a shared link by token; raises 404 on failure with generic message."""
     _validate_token_format(token)
     cursor.execute(
-        "SELECT sl.*, pv.file_path FROM shared_links sl "
+        "SELECT sl.video_id, pv.file_path FROM shared_links sl "
         "LEFT JOIN processed_videos pv ON sl.video_id = pv.id "
         "WHERE sl.token = ?",
         (token,)
@@ -137,11 +127,6 @@ def _resolve_shared_link(cursor, token: str):
     row = cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
-
-    if row["expires_at"]:
-        expires = datetime.fromisoformat(row["expires_at"])
-        if datetime.now(timezone.utc) > expires:
-            raise HTTPException(status_code=404, detail="Not found")
 
     if not row["file_path"]:
         raise HTTPException(status_code=404, detail="Not found")
@@ -151,7 +136,7 @@ def _resolve_shared_link(cursor, token: str):
 
 @public_router.get("/{token}")
 async def shared_page(request: Request, token: str):
-    """Serve the standalone shared video page (no auth)"""
+    """Serve the standalone shared video page (no auth)."""
     with get_db() as conn:
         cursor = conn.cursor()
         row = _resolve_shared_link(cursor, token)
@@ -164,7 +149,7 @@ async def shared_page(request: Request, token: str):
 
 @public_router.get("/{token}/video")
 async def shared_video_stream(request: Request, token: str):
-    """Stream the shared video file (no auth)"""
+    """Stream the shared video file (no auth)."""
     with get_db() as conn:
         cursor = conn.cursor()
         row = _resolve_shared_link(cursor, token)
@@ -180,7 +165,7 @@ async def shared_video_stream(request: Request, token: str):
 
 @public_router.get("/{token}/download")
 async def shared_video_download(request: Request, token: str):
-    """Download the shared video file (no auth)"""
+    """Download the shared video file (no auth)."""
     with get_db() as conn:
         cursor = conn.cursor()
         row = _resolve_shared_link(cursor, token)

@@ -26,21 +26,10 @@ def fetch_share_tokens(cursor, video_ids):
         return {}
     placeholders = ','.join('?' * len(video_ids))
     cursor.execute(
-        f"SELECT video_id, token, expires_at FROM shared_links WHERE video_id IN ({placeholders})",
+        f"SELECT video_id, token FROM shared_links WHERE video_id IN ({placeholders})",
         video_ids
     )
-    from datetime import datetime, timezone
-    result = {}
-    for row in cursor.fetchall():
-        # Skip expired links
-        if row['expires_at']:
-            try:
-                if datetime.fromisoformat(row['expires_at']) < datetime.now(timezone.utc):
-                    continue
-            except (ValueError, TypeError):
-                pass
-        result[row['video_id']] = row['token']
-    return result
+    return {row['video_id']: row['token'] for row in cursor.fetchall()}
 
 
 @router.post("/", response_model=VideoResponse, status_code=201)
