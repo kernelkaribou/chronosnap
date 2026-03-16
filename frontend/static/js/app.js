@@ -257,6 +257,8 @@ function setButtonState(btnOrId, disabled) {
 // SelectionManager — reusable bulk selection for card grids
 // =============================================================================
 
+const compareMode = { active: false };
+
 class SelectionManager {
     constructor({ name, cardSelector, dataAttr, controlsId, countId, toggleBtnId, deleteEndpoint, deleteBodyKey, favoriteEndpoint, itemLabel, onReload }) {
         this.name = name;
@@ -278,7 +280,7 @@ class SelectionManager {
 
     handleCardClick(id, event, openFn) {
         if (event.target.type === 'checkbox') return;
-        if (this.selected.size > 0) {
+        if (compareMode.active || this.selected.size > 0) {
             this.toggle(id, event);
         } else {
             openFn(id);
@@ -290,6 +292,8 @@ class SelectionManager {
         if (this.selected.has(id)) {
             this.selected.delete(id);
         } else {
+            // In compare mode, limit to 2 selections
+            if (compareMode.active && this.name === 'videos' && this.selected.size >= 2) return;
             this.selected.add(id);
         }
         const card = document.querySelector(`${this.cardSelector}[${this.dataAttr}="${id}"]`);
@@ -324,16 +328,21 @@ class SelectionManager {
     updateControls() {
         const count = this.selected.size;
         const controls = document.getElementById(this.controlsId);
+
+        // In compare mode, hide the regular selection toolbar
+        if (this.name === 'videos' && compareMode.active) {
+            controls.style.display = 'none';
+            updateCompareModeText(count);
+            if (count === 2) openComparison();
+            return;
+        }
+
         controls.style.display = count > 0 ? 'flex' : 'none';
         document.getElementById(this.countId).textContent = `${count} selected`;
 
         const cards = document.querySelectorAll(`${this.cardSelector}[${this.dataAttr}]`);
         const allSelected = cards.length > 0 && [...cards].every(c => this.selected.has(parseInt(c.getAttribute(this.dataAttr))));
         document.getElementById(this.toggleBtnId).textContent = allSelected ? 'Clear Selection' : 'Select Visible';
-
-        // Show compare button when exactly 2 videos selected
-        const compareBtn = document.getElementById('video-compare-btn');
-        if (compareBtn) compareBtn.style.display = (this.name === 'videos' && count === 2) ? '' : 'none';
     }
 
     clear() {
@@ -1869,6 +1878,34 @@ async function disableShareFromSettings(videoId) {
 
 let comparisonState = { playing: false, playerA: null, playerB: null, animFrame: null };
 
+function toggleCompareMode() {
+    compareMode.active = !compareMode.active;
+    const btn = document.getElementById('compare-mode-btn');
+    const banner = document.getElementById('compare-mode-banner');
+    const gallery = document.getElementById('videos-view');
+
+    if (compareMode.active) {
+        videoSelection.clear();
+        btn.classList.add('active');
+        banner.style.display = 'flex';
+        gallery.classList.add('compare-mode');
+        updateCompareModeText(0);
+    } else {
+        videoSelection.clear();
+        btn.classList.remove('active');
+        banner.style.display = 'none';
+        gallery.classList.remove('compare-mode');
+    }
+}
+
+function updateCompareModeText(count) {
+    const text = document.getElementById('compare-mode-text');
+    if (!text) return;
+    if (count === 0) text.textContent = 'Select 2 timelapses to compare';
+    else if (count === 1) text.textContent = 'Select 1 more timelapse';
+    else text.textContent = 'Loading comparison...';
+}
+
 async function openComparison() {
     const ids = [...videoSelection.selected];
     if (ids.length !== 2) return;
@@ -1930,6 +1967,7 @@ function closeComparison() {
     comparisonState.playing = false;
     comparisonState.animFrame = null;
     modal.classList.remove('active');
+    if (compareMode.active) toggleCompareMode();
 }
 
 function toggleComparisonPlay() {

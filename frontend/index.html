@@ -67,7 +67,13 @@
             <div id="videos-view" class="view">
                 <div class="view-header">
                     <h2>Timelapses</h2>
-                    <button class="btn btn-purple" onclick="showProcessVideoModal()">+ Build Timelapse</button>
+                    <div style="display:flex;gap:0.5rem;">
+                        <button class="btn btn-secondary" id="compare-mode-btn" onclick="toggleCompareMode()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="8" height="18" rx="1"/><rect x="14" y="3" width="8" height="18" rx="1"/></svg>
+                            Compare
+                        </button>
+                        <button class="btn btn-purple" onclick="showProcessVideoModal()">+ Build Timelapse</button>
+                    </div>
                 </div>
                 <div class="gallery-filters">
                     <input type="text" class="gallery-search" id="video-search" placeholder="Search..." oninput="filterVideos()">
@@ -84,11 +90,15 @@
                     <button class="btn btn-secondary btn-sm" id="video-filter-reset" onclick="resetVideoFilters()" style="display:none;" title="Clear all filters">Reset</button>
                     <span class="gallery-count" id="video-count"></span>
                 </div>
+                <div class="compare-mode-banner" id="compare-mode-banner" style="display:none;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="8" height="18" rx="1"/><rect x="14" y="3" width="8" height="18" rx="1"/></svg>
+                    <span id="compare-mode-text">Select 2 timelapses to compare</span>
+                    <button class="btn btn-secondary btn-sm" onclick="toggleCompareMode()">Cancel</button>
+                </div>
                 <div class="captures-selection-controls" id="video-selection-controls" style="display: none;">
                     <span class="selection-clear" onclick="videoSelection.clear()" title="Clear selection">&times;</span>
                     <span id="video-selected-count">0 selected</span>
                     <button class="btn btn-secondary btn-sm" id="video-toggle-selection-btn" onclick="videoSelection.toggleAll()">Select Visible</button>
-                    <button class="btn btn-purple btn-sm" id="video-compare-btn" onclick="openComparison()" style="display:none;">Compare</button>
                     <button class="btn btn-sm btn-fav-bulk" onclick="videoSelection.favoriteSelected(true)" title="Favorite selected"><span class="fav-heart">♥</span> Favorite</button>
                     <button class="btn btn-sm btn-unfav-bulk" onclick="videoSelection.favoriteSelected(false)" title="Unfavorite selected"><span class="fav-heart">♥</span> Unfavorite</button>
                     <button class="btn btn-danger btn-sm" onclick="videoSelection.deleteSelected()">Delete Selected</button>
