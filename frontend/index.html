@@ -88,6 +88,7 @@
                     <span class="selection-clear" onclick="videoSelection.clear()" title="Clear selection">&times;</span>
                     <span id="video-selected-count">0 selected</span>
                     <button class="btn btn-secondary btn-sm" id="video-toggle-selection-btn" onclick="videoSelection.toggleAll()">Select Visible</button>
+                    <button class="btn btn-purple btn-sm" id="video-compare-btn" onclick="openComparison()" style="display:none;">Compare</button>
                     <button class="btn btn-sm btn-fav-bulk" onclick="videoSelection.favoriteSelected(true)" title="Favorite selected"><span class="fav-heart">♥</span> Favorite</button>
                     <button class="btn btn-sm btn-unfav-bulk" onclick="videoSelection.favoriteSelected(false)" title="Unfavorite selected"><span class="fav-heart">♥</span> Unfavorite</button>
                     <button class="btn btn-danger btn-sm" onclick="videoSelection.deleteSelected()">Delete Selected</button>
@@ -665,6 +666,39 @@
                     <div id="video-detail-tags"></div>
                     <div class="video-detail-actions" id="video-detail-actions"></div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Comparison Modal -->
+    <div id="comparison-modal" class="modal">
+        <div class="modal-content comparison-modal-content">
+            <div class="modal-header">
+                <h3>Compare Timelapses</h3>
+                <span class="close" onclick="closeComparison()">&times;</span>
+            </div>
+            <div class="comparison-players">
+                <div class="comparison-side">
+                    <video id="compare-player-a" preload="metadata">
+                        <source id="compare-source-a" type="video/mp4">
+                    </video>
+                    <div class="comparison-label" id="compare-label-a"></div>
+                </div>
+                <div class="comparison-side">
+                    <video id="compare-player-b" preload="metadata">
+                        <source id="compare-source-b" type="video/mp4">
+                    </video>
+                    <div class="comparison-label" id="compare-label-b"></div>
+                </div>
+            </div>
+            <div class="comparison-controls">
+                <button class="btn btn-secondary btn-sm" id="compare-play-btn" onclick="toggleComparisonPlay()">
+                    <svg id="compare-play-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <svg id="compare-pause-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                </button>
+                <span class="compare-time" id="compare-time-current">0:00</span>
+                <input type="range" id="compare-scrubber" class="compare-scrubber" min="0" max="1000" value="0" oninput="scrubComparison(this.value)">
+                <span class="compare-time" id="compare-time-duration">0:00</span>
             </div>
         </div>
     </div>

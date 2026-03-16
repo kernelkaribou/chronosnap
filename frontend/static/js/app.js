@@ -330,6 +330,10 @@ class SelectionManager {
         const cards = document.querySelectorAll(`${this.cardSelector}[${this.dataAttr}]`);
         const allSelected = cards.length > 0 && [...cards].every(c => this.selected.has(parseInt(c.getAttribute(this.dataAttr))));
         document.getElementById(this.toggleBtnId).textContent = allSelected ? 'Clear Selection' : 'Select Visible';
+
+        // Show compare button when exactly 2 videos selected
+        const compareBtn = document.getElementById('video-compare-btn');
+        if (compareBtn) compareBtn.style.display = (this.name === 'videos' && count === 2) ? '' : 'none';
     }
 
     clear() {
@@ -1859,6 +1863,147 @@ async function disableShareFromSettings(videoId) {
     } catch (error) {
         showNotification('Failed to disable sharing', 'error');
     }
+}
+
+// ── Video Comparison ──────────────────────────────────────────────────────
+
+let comparisonState = { playing: false, playerA: null, playerB: null, animFrame: null };
+
+async function openComparison() {
+    const ids = [...videoSelection.selected];
+    if (ids.length !== 2) return;
+
+    try {
+        const [videoA, videoB] = await Promise.all([
+            apiRequest(`/videos/${ids[0]}`),
+            apiRequest(`/videos/${ids[1]}`)
+        ]);
+
+        const modal = document.getElementById('comparison-modal');
+        const playerA = document.getElementById('compare-player-a');
+        const playerB = document.getElementById('compare-player-b');
+
+        document.getElementById('compare-source-a').src = `${API_BASE}/videos/${videoA.id}/download`;
+        document.getElementById('compare-source-b').src = `${API_BASE}/videos/${videoB.id}/download`;
+        playerA.load();
+        playerB.load();
+
+        const metaA = `${videoA.resolution} · ${videoA.framerate}fps · ${formatDuration(videoA.duration_seconds)}`;
+        const metaB = `${videoB.resolution} · ${videoB.framerate}fps · ${formatDuration(videoB.duration_seconds)}`;
+        document.getElementById('compare-label-a').innerHTML = `<strong>${escapeHtml(videoA.name)}</strong><span>${metaA}</span>`;
+        document.getElementById('compare-label-b').innerHTML = `<strong>${escapeHtml(videoB.name)}</strong><span>${metaB}</span>`;
+
+        comparisonState.playerA = playerA;
+        comparisonState.playerB = playerB;
+        comparisonState.playing = false;
+
+        document.getElementById('compare-play-icon').style.display = '';
+        document.getElementById('compare-pause-icon').style.display = 'none';
+        document.getElementById('compare-scrubber').value = 0;
+        document.getElementById('compare-time-current').textContent = '0:00';
+        document.getElementById('compare-time-duration').textContent = '0:00';
+
+        // Update duration once metadata loaded
+        let loaded = 0;
+        const onMeta = () => {
+            loaded++;
+            if (loaded >= 2) {
+                const maxDur = Math.max(playerA.duration || 0, playerB.duration || 0);
+                document.getElementById('compare-time-duration').textContent = formatDuration(maxDur);
+            }
+        };
+        playerA.addEventListener('loadedmetadata', onMeta, { once: true });
+        playerB.addEventListener('loadedmetadata', onMeta, { once: true });
+
+        modal.classList.add('active');
+    } catch (error) {
+        showNotification('Failed to load videos for comparison', 'error');
+    }
+}
+
+function closeComparison() {
+    const modal = document.getElementById('comparison-modal');
+    const { playerA, playerB, animFrame } = comparisonState;
+    if (playerA) { playerA.pause(); playerA.currentTime = 0; }
+    if (playerB) { playerB.pause(); playerB.currentTime = 0; }
+    if (animFrame) cancelAnimationFrame(animFrame);
+    comparisonState.playing = false;
+    comparisonState.animFrame = null;
+    modal.classList.remove('active');
+}
+
+function toggleComparisonPlay() {
+    const { playerA, playerB } = comparisonState;
+    if (!playerA || !playerB) return;
+
+    if (comparisonState.playing) {
+        playerA.pause();
+        playerB.pause();
+        comparisonState.playing = false;
+        if (comparisonState.animFrame) cancelAnimationFrame(comparisonState.animFrame);
+        document.getElementById('compare-play-icon').style.display = '';
+        document.getElementById('compare-pause-icon').style.display = 'none';
+    } else {
+        // If both ended, restart from beginning
+        if (playerA.ended && playerB.ended) {
+            playerA.currentTime = 0;
+            playerB.currentTime = 0;
+        }
+        playerA.play();
+        playerB.play();
+        comparisonState.playing = true;
+        document.getElementById('compare-play-icon').style.display = 'none';
+        document.getElementById('compare-pause-icon').style.display = '';
+        syncComparisonLoop();
+    }
+}
+
+function syncComparisonLoop() {
+    if (!comparisonState.playing) return;
+    const { playerA, playerB } = comparisonState;
+    const durA = playerA.duration || 1;
+    const durB = playerB.duration || 1;
+
+    // Use the longer video as the reference for progress
+    const maxDur = Math.max(durA, durB);
+    const progressA = playerA.currentTime / durA;
+    const progressB = playerB.currentTime / durB;
+    const avgProgress = (progressA + progressB) / 2;
+
+    // Sync: if drift > 2% of duration, correct the lagging player
+    if (Math.abs(progressA - progressB) > 0.02) {
+        const target = Math.max(progressA, progressB);
+        if (progressA < target) playerA.currentTime = target * durA;
+        if (progressB < target) playerB.currentTime = target * durB;
+    }
+
+    // Update scrubber and time display
+    const scrubber = document.getElementById('compare-scrubber');
+    scrubber.value = Math.round(avgProgress * 1000);
+    const currentSec = avgProgress * maxDur;
+    document.getElementById('compare-time-current').textContent = formatDuration(currentSec);
+
+    // Stop when both ended
+    if (playerA.ended && playerB.ended) {
+        comparisonState.playing = false;
+        if (comparisonState.animFrame) cancelAnimationFrame(comparisonState.animFrame);
+        document.getElementById('compare-play-icon').style.display = '';
+        document.getElementById('compare-pause-icon').style.display = 'none';
+        return;
+    }
+
+    comparisonState.animFrame = requestAnimationFrame(syncComparisonLoop);
+}
+
+function scrubComparison(value) {
+    const { playerA, playerB } = comparisonState;
+    if (!playerA || !playerB) return;
+    const position = value / 1000;
+    playerA.currentTime = position * (playerA.duration || 0);
+    playerB.currentTime = position * (playerB.duration || 0);
+
+    const maxDur = Math.max(playerA.duration || 0, playerB.duration || 0);
+    document.getElementById('compare-time-current').textContent = formatDuration(position * maxDur);
 }
 
 async function showProcessVideoModal(jobId, jobName) {
