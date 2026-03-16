@@ -3667,15 +3667,28 @@ function markWebhookDirty() {
     webhookDirty = true;
     const btn = document.getElementById('webhook-save-btn');
     if (btn) btn.disabled = false;
+    updateWebhookToggleState();
+}
+
+function updateWebhookToggleState() {
+    const url = document.getElementById('webhook-url').value.trim();
+    const toggle = document.getElementById('webhook-enabled');
+    if (!url) {
+        toggle.disabled = true;
+        toggle.checked = false;
+    } else {
+        toggle.disabled = false;
+    }
 }
 
 async function loadWebhookSettings() {
     try {
         const data = await apiRequest('/settings/webhook');
-        document.getElementById('webhook-enabled').checked = data.webhook_enabled;
         document.getElementById('webhook-url').value = data.webhook_url || '';
+        document.getElementById('webhook-enabled').checked = data.webhook_enabled;
         document.getElementById('webhook-threshold').value = data.webhook_failure_threshold || 3;
         document.getElementById('webhook-template').value = data.webhook_payload_template || '{"title": "{title}", "message": "{message}"}';
+        updateWebhookToggleState();
         webhookDirty = false;
         const btn = document.getElementById('webhook-save-btn');
         if (btn) btn.disabled = true;
@@ -3690,7 +3703,7 @@ async function saveWebhookSettings() {
     const defaultTemplate = '{"title": "{title}", "message": "{message}"}';
 
     const settings = {
-        webhook_enabled: document.getElementById('webhook-enabled').checked,
+        webhook_enabled: document.getElementById('webhook-enabled').checked && !!url,
         webhook_url: url,
         webhook_failure_threshold: parseInt(document.getElementById('webhook-threshold').value) || 3,
         webhook_payload_template: template || defaultTemplate,
