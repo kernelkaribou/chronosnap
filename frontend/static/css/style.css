@@ -2611,17 +2611,12 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    Shared Links
    ============================================================================= */
 
-.share-toggle-row {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0.5rem 0.75rem;
-    background: var(--input-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    margin-top: 0.75rem;
-}
-.share-toggle-label {
+.share-toggle-inline {
     display: flex; align-items: center; gap: 0.4rem;
-    font-size: 0.85rem; font-weight: 500; color: var(--text-primary);
+    color: var(--text-secondary); font-weight: 500;
+}
+.actions-separator {
+    width: 1px; height: 20px; background: var(--border-color);
 }
 .toggle-switch {
     position: relative; display: inline-block; width: 40px; height: 22px;
