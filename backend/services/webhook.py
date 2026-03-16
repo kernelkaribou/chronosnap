@@ -79,6 +79,9 @@ def _send_webhook_event_sync(event: str, job_name: str, job_id: int,
     elif event == 'recovered':
         title = f"Job Recovered: {job_name}"
         message = f"{job_name} has recovered after previous capture failures."
+    elif event == 'auto_build_complete':
+        title = f"Auto-Build Complete: {job_name}"
+        message = f"{job_name} has finished building an automatic timelapse video."
     else:
         title = f"TimeLapse-Manager: {job_name}"
         message = f"Event '{event}' for {job_name}."

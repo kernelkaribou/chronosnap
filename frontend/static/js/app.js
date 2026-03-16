@@ -667,6 +667,49 @@ async function showJobDetails(jobId) {
                 </div>
 
                 <div class="duration-estimate" id="edit-duration-estimate"></div>
+
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
+                        <input type="checkbox" id="edit_auto_build_enabled" ${job.auto_build_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditAutoBuildFields()">
+                        <span><strong>Enable Auto-Build</strong></span>
+                    </label>
+                    <small style="color: var(--text-secondary); display: block; margin-left: 1.5rem;">Automatically build timelapse videos on a recurring schedule</small>
+                </div>
+
+                <div id="edit-auto-build-fields" style="display: ${job.auto_build_enabled ? 'block' : 'none'}; margin-bottom: 1rem; margin-left: 1.5rem;">
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label>Build Every (days)</label>
+                            <input type="number" id="edit_auto_build_interval_days" class="form-control" min="1" max="365" value="${job.auto_build_interval_days || 7}">
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>FPS</label>
+                            <input type="number" id="edit_auto_build_fps" class="form-control" min="1" max="120" value="${job.auto_build_fps || 30}">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label>Quality</label>
+                            <select id="edit_auto_build_quality" class="form-control">
+                                <option value="low" ${job.auto_build_quality === 'low' ? 'selected' : ''}>Low</option>
+                                <option value="medium" ${(!job.auto_build_quality || job.auto_build_quality === 'medium') ? 'selected' : ''}>Medium</option>
+                                <option value="high" ${job.auto_build_quality === 'high' ? 'selected' : ''}>High</option>
+                                <option value="lossless" ${job.auto_build_quality === 'lossless' ? 'selected' : ''}>Lossless</option>
+                            </select>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>Resolution</label>
+                            <select id="edit_auto_build_resolution" class="form-control">
+                                <option value="3840x2160" ${job.auto_build_resolution === '3840x2160' ? 'selected' : ''}>4K (3840x2160)</option>
+                                <option value="1920x1080" ${(!job.auto_build_resolution || job.auto_build_resolution === '1920x1080') ? 'selected' : ''}>Full HD (1920x1080)</option>
+                                <option value="1280x720" ${job.auto_build_resolution === '1280x720' ? 'selected' : ''}>HD (1280x720)</option>
+                                <option value="640x480" ${job.auto_build_resolution === '640x480' ? 'selected' : ''}>SD (640x480)</option>
+                            </select>
+                        </div>
+                    </div>
+                    ${job.last_auto_build_at ? `<small style="color: var(--text-secondary);">Last auto-build: ${formatDateTime(job.last_auto_build_at)}</small>` : ''}
+                </div>
+
                 <input type="hidden" id="edit_start_datetime" value="${job.start_datetime}">
                 
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: space-between; align-items: center; padding-top: 1rem; border-top: 2px solid var(--border-color);">
@@ -733,7 +776,12 @@ async function createJob(event) {
         naming_pattern: {},
         time_window_enabled: { parse: 'bool' },
         time_window_start: {},
-        time_window_end: {}
+        time_window_end: {},
+        auto_build_enabled: { parse: 'bool' },
+        auto_build_interval_days: { parse: 'int' },
+        auto_build_fps: { parse: 'int' },
+        auto_build_quality: {},
+        auto_build_resolution: {}
     });
     
     // Validate framerate
@@ -782,7 +830,12 @@ async function createJob(event) {
         warning_threshold: values.warning_threshold || 3,
         time_window_enabled: values.time_window_enabled,
         time_window_start: values.time_window_enabled ? values.time_window_start : null,
-        time_window_end: values.time_window_enabled ? values.time_window_end : null
+        time_window_end: values.time_window_enabled ? values.time_window_end : null,
+        auto_build_enabled: values.auto_build_enabled,
+        auto_build_interval_days: values.auto_build_interval_days || 7,
+        auto_build_fps: values.auto_build_fps || 30,
+        auto_build_quality: values.auto_build_quality || 'medium',
+        auto_build_resolution: values.auto_build_resolution || '1920x1080'
     };
     
     try {
@@ -1047,6 +1100,16 @@ function toggleEditTimeWindow() {
     }
 }
 
+function toggleAutoBuildFields() {
+    const enabled = document.getElementById('auto_build_enabled').checked;
+    document.getElementById('auto-build-fields').style.display = enabled ? 'block' : 'none';
+}
+
+function toggleEditAutoBuildFields() {
+    const enabled = document.getElementById('edit_auto_build_enabled').checked;
+    document.getElementById('edit-auto-build-fields').style.display = enabled ? 'block' : 'none';
+}
+
 async function saveJobChanges(jobId) {
     // Collect all form values
     const interval = parseInt(document.getElementById('edit_interval_seconds').value);
@@ -1056,6 +1119,11 @@ async function saveJobChanges(jobId) {
     const timeWindowStart = document.getElementById('edit_time_window_start').value;
     const timeWindowEnd = document.getElementById('edit_time_window_end').value;
     const warningThreshold = parseInt(document.getElementById('edit_warning_threshold').value) || 3;
+    const autoBuildEnabled = document.getElementById('edit_auto_build_enabled').checked;
+    const autoBuildIntervalDays = parseInt(document.getElementById('edit_auto_build_interval_days').value) || 7;
+    const autoBuildFps = parseInt(document.getElementById('edit_auto_build_fps').value) || 30;
+    const autoBuildQuality = document.getElementById('edit_auto_build_quality').value;
+    const autoBuildResolution = document.getElementById('edit_auto_build_resolution').value;
     
     // Validate required fields
     if (!url) {
@@ -1104,7 +1172,12 @@ async function saveJobChanges(jobId) {
         time_window_enabled: timeWindowEnabled,
         time_window_start: timeWindowEnabled ? timeWindowStart : null,
         time_window_end: timeWindowEnabled ? timeWindowEnd : null,
-        warning_threshold: warningThreshold
+        warning_threshold: warningThreshold,
+        auto_build_enabled: autoBuildEnabled,
+        auto_build_interval_days: autoBuildIntervalDays,
+        auto_build_fps: autoBuildFps,
+        auto_build_quality: autoBuildQuality,
+        auto_build_resolution: autoBuildResolution
     };
     
     try {
@@ -1393,7 +1466,7 @@ function renderVideos(videos, isEmpty) {
             ` : ''}
             <div class="video-gallery-info">
                 <div class="video-gallery-name">${escapeHtml(video.name)}</div>
-                <div class="video-gallery-job">${video.job_name ? escapeHtml(video.job_name) : 'No job'}</div>
+                <div class="video-gallery-job">${video.job_name ? escapeHtml(video.job_name) : 'No job'}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}</div>
             </div>
         </div>`;
     }).join('');
@@ -2168,6 +2241,10 @@ function showCreateJobModal() {
     document.getElementById('time_window_enabled').checked = false;
     document.getElementById('time-window-fields').style.display = 'none';
     
+    // Reset auto-build
+    document.getElementById('auto_build_enabled').checked = false;
+    document.getElementById('auto-build-fields').style.display = 'none';
+    
     showModal('create-job-modal');
     
     // Trigger initial duration estimate with default values
@@ -2229,6 +2306,21 @@ async function duplicateJob(jobId) {
         } else {
             twEnabled.checked = false;
             twFields.style.display = 'none';
+        }
+        
+        // Copy auto-build settings
+        const abEnabled = document.getElementById('auto_build_enabled');
+        const abFields = document.getElementById('auto-build-fields');
+        if (job.auto_build_enabled) {
+            abEnabled.checked = true;
+            abFields.style.display = 'block';
+            document.getElementById('auto_build_interval_days').value = job.auto_build_interval_days || 7;
+            document.getElementById('auto_build_fps').value = job.auto_build_fps || 30;
+            document.getElementById('auto_build_quality').value = job.auto_build_quality || 'medium';
+            document.getElementById('auto_build_resolution').value = job.auto_build_resolution || '1920x1080';
+        } else {
+            abEnabled.checked = false;
+            abFields.style.display = 'none';
         }
         
         updateEndDateMin();
