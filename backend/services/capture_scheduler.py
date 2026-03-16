@@ -235,6 +235,7 @@ class CaptureScheduler:
         """Execute a single capture and update the schedule"""
         job_id = job['id']
         threshold = job.get('warning_threshold', 3) or 3
+        was_in_warning = False
         
         try:
             logger.debug(f"Attempting capture for job {job_id}: {job['name']}")
@@ -244,9 +245,7 @@ class CaptureScheduler:
                 prev_failures = self.failure_counts.get(job_id, 0)
                 self.failure_counts[job_id] = 0
                 logger.debug(f"Successfully captured image for job {job_id}: {job['name']}")
-                # Send recovered event if previously in warning state
-                if prev_failures >= threshold:
-                    send_webhook_event('recovered', job['name'], job_id)
+                was_in_warning = prev_failures >= threshold
             else:
                 self.failure_counts[job_id] = self.failure_counts.get(job_id, 0) + 1
                 consecutive_failures = self.failure_counts[job_id]
@@ -309,6 +308,13 @@ class CaptureScheduler:
                         "UPDATE jobs SET status = ?, next_scheduled_capture_at = ?, updated_at = ? WHERE id = ?",
                         (new_status, to_iso(next_capture) if next_capture else None, to_iso(capture_time), job_id)
                     )
+                    
+                    # Send deferred webhook events now that we know the final status
+                    if new_status == 'completed' and job.get('status') != 'completed':
+                        send_webhook_event('completed', job['name'], job_id)
+                        self.failure_counts.pop(job_id, None)
+                    elif was_in_warning:
+                        send_webhook_event('recovered', job['name'], job_id)
                     
                     # Update in-memory queue
                     if new_status == 'active' and next_capture:
