@@ -1719,16 +1719,19 @@ async function openVideoDetail(videoId) {
         
         meta.innerHTML = metaHtml;
         
-        // Build tags section
+        // Build editable tags section for video
         const tagsContainer = document.getElementById('video-detail-tags');
         if (tagsContainer) {
-            if (video.tags && video.tags.length) {
-                tagsContainer.innerHTML = `<div class="card-tags" style="margin-bottom: 0.5rem;">${video.tags.map(t => tagChipHTML(t)).join('')}</div>`;
-                tagsContainer.style.display = 'block';
-            } else {
-                tagsContainer.innerHTML = '';
-                tagsContainer.style.display = 'none';
-            }
+            const currentTagIds = (video.tags || []).map(t => t.id);
+            tagsContainer.innerHTML = `
+                <div style="margin: 0.5rem 0;">
+                    <label style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Tags</label>
+                    <div class="tag-picker" id="video-detail-tag-picker"></div>
+                    <button class="btn btn-purple btn-sm" style="margin-top:0.4rem;font-size:0.75rem;" onclick="saveVideoTags(${video.id})">Save Tags</button>
+                </div>
+            `;
+            tagsContainer.style.display = 'block';
+            renderTagPicker('video-detail-tag-picker', currentTagIds);
         }
         
         // Build actions
@@ -1767,6 +1770,17 @@ async function deleteVideoFromDetail(videoId, videoName) {
             }
         }
     );
+}
+
+async function saveVideoTags(videoId) {
+    const tagIds = getSelectedTagIds('video-detail-tag-picker');
+    try {
+        await apiRequest(`/videos/${videoId}/tags`, { method: 'PUT', body: { tag_ids: tagIds } });
+        showNotification('Video tags updated');
+        loadVideos();
+    } catch (error) {
+        showNotification(error.message || 'Failed to update tags', 'error');
+    }
 }
 
 async function showProcessVideoModal(jobId, jobName) {
@@ -4439,12 +4453,7 @@ function renderTagPicker(containerId, selectedTagIds = []) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    if (allTags.length === 0) {
-        container.innerHTML = '<span style="color:var(--text-secondary);font-size:0.8rem;">No tags available</span>';
-        return;
-    }
-
-    container.innerHTML = allTags.map(tag => {
+    let html = allTags.map(tag => {
         const isSelected = selectedTagIds.includes(tag.id);
         return `<span class="tag-chip ${isSelected ? 'selected' : ''}" data-tag-id="${tag.id}"
             style="background:${tag.color}22;color:${tag.color};border:1px solid ${tag.color}44;cursor:pointer;opacity:${isSelected ? '1' : '0.4'};"
@@ -4452,6 +4461,60 @@ function renderTagPicker(containerId, selectedTagIds = []) {
             <span style="width:6px;height:6px;border-radius:50%;background:${tag.color};display:inline-block;"></span>
             ${escapeHtml(tag.name)}</span>`;
     }).join('');
+
+    // Inline create button
+    html += `<span class="tag-chip tag-inline-create" onclick="showInlineTagCreate('${containerId}')" title="Create new tag"
+        style="cursor:pointer;opacity:0.5;border:1px dashed var(--border-color);color:var(--text-secondary);background:transparent;">＋ New</span>`;
+
+    container.innerHTML = html;
+}
+
+function showInlineTagCreate(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container || container.querySelector('.tag-inline-form')) return;
+
+    // Remove the "+ New" button
+    const createBtn = container.querySelector('.tag-inline-create');
+    if (createBtn) createBtn.remove();
+
+    const form = document.createElement('div');
+    form.className = 'tag-inline-form';
+    form.innerHTML = `
+        <input type="text" class="form-control" placeholder="Tag name..." maxlength="50" style="width:100px;font-size:0.75rem;padding:0.2rem 0.4rem;">
+        <div class="color-swatch-row" style="gap:2px;">${TAG_COLORS.slice(0, 10).map(c =>
+            `<span class="color-swatch${c === '#6366f1' ? ' selected' : ''}" style="background:${c};width:16px;height:16px;" data-color="${c}" onclick="selectSwatch(this)"></span>`
+        ).join('')}</div>
+        <button class="btn btn-purple btn-sm" style="font-size:0.7rem;padding:0.15rem 0.5rem;" onclick="submitInlineTag('${containerId}')">Add</button>
+        <button class="btn btn-secondary btn-sm" style="font-size:0.7rem;padding:0.15rem 0.4rem;" onclick="renderTagPicker('${containerId}', getSelectedTagIds('${containerId}'))">✕</button>
+    `;
+    container.appendChild(form);
+    form.querySelector('input').focus();
+    form.querySelector('input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') submitInlineTag(containerId);
+        if (e.key === 'Escape') renderTagPicker(containerId, getSelectedTagIds(containerId));
+    });
+}
+
+async function submitInlineTag(containerId) {
+    const container = document.getElementById(containerId);
+    const form = container?.querySelector('.tag-inline-form');
+    if (!form) return;
+    const name = form.querySelector('input').value.trim();
+    const swatchRow = form.querySelector('.color-swatch-row');
+    const selected = swatchRow?.querySelector('.color-swatch.selected');
+    const color = selected ? selected.dataset.color : '#6366f1';
+    if (!name) { showNotification('Enter a tag name', 'error'); return; }
+    try {
+        const newTag = await apiRequest('/tags/', { method: 'POST', body: { name, color } });
+        allTags.push(newTag);
+        // Re-render picker with the new tag selected
+        const currentIds = getSelectedTagIds(containerId);
+        currentIds.push(newTag.id);
+        renderTagPicker(containerId, currentIds);
+        showNotification(`Tag "${name}" created`);
+    } catch (error) {
+        showNotification(error.message || 'Failed to create tag', 'error');
+    }
 }
 
 function toggleTagInPicker(el, tagId) {

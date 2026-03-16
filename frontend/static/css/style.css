@@ -2520,6 +2520,14 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 }
 .tag-picker .tag-chip.selected { opacity: 1; }
 .tag-picker .tag-chip:hover { opacity: 0.8; }
+.tag-inline-form {
+    display: flex; align-items: center; gap: 0.3rem;
+    padding: 0.25rem 0.4rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    flex-basis: 100%;
+}
 
 .tag-picker-inline {
     display: flex; align-items: center; gap: 0.35rem;

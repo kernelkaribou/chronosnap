@@ -375,6 +375,13 @@ async def update_video_tags(video_id: int, request: VideoTagsRequest):
         cursor.execute("SELECT id FROM processed_videos WHERE id = ?", (video_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Video not found")
+        if request.tag_ids:
+            placeholders = ','.join('?' * len(request.tag_ids))
+            cursor.execute(f"SELECT id FROM tags WHERE id IN ({placeholders})", request.tag_ids)
+            valid_ids = {row[0] for row in cursor.fetchall()}
+            invalid = [tid for tid in request.tag_ids if tid not in valid_ids]
+            if invalid:
+                raise HTTPException(status_code=400, detail=f"Invalid tag IDs: {invalid}")
         set_video_tags(cursor, video_id, request.tag_ids)
         tags = fetch_tags_for_videos(cursor, [video_id]).get(video_id, [])
         return {"tags": tags}
