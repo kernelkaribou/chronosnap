@@ -2147,12 +2147,12 @@ body {
     cursor: ew-resize;
     user-select: none;
     -webkit-user-select: none;
+    max-height: 65vh;
 }
 
 .compare-slider-img {
     width: 100%;
-    max-height: 65vh;
-    object-fit: contain;
+    height: auto;
     display: block;
     background: #000;
 }
