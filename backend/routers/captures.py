@@ -510,6 +510,41 @@ async def get_capture_time_range(
         }
 
 
+@router.get("/job/{job_id}/nearest")
+async def get_nearest_capture(
+    job_id: int,
+    timestamp: str = Query(..., description="ISO 8601 timestamp to find nearest capture to")
+):
+    """Find the capture closest to a given timestamp for a job"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # Find closest capture before/at and after the timestamp, pick the nearer one
+        cursor.execute("""
+            SELECT *, ABS(julianday(captured_at) - julianday(?)) as time_diff
+            FROM captures
+            WHERE job_id = ?
+            ORDER BY time_diff ASC
+            LIMIT 1
+        """, (timestamp, job_id))
+        
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="No captures found for this job")
+        
+        capture = dict_from_row(row)
+        capture.pop('time_diff', None)
+        
+        # Add job name
+        cursor.execute("SELECT name FROM jobs WHERE id = ?", (job_id,))
+        job_row = cursor.fetchone()
+        capture['job_name'] = job_row[0] if job_row else None
+        capture['has_thumbnail'] = has_thumbnail(capture['file_path'])
+        capture['thumbnail_path'] = get_thumbnail_path(capture['file_path']) if capture['has_thumbnail'] else None
+        
+        return capture
+
+
 @router.get("/{capture_id}/image")
 async def get_capture_image(capture_id: int):
     """Serve the actual capture image file"""

@@ -580,6 +580,12 @@ async function showJobDetails(jobId) {
                                 <circle cx="12" cy="13" r="4"></circle>
                             </svg>
                         </button>
+                        <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); openCompareModal(${job.id})" title="Compare Captures" style="padding: 0.25rem;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="3" width="8" height="18" rx="1"></rect>
+                                <rect x="14" y="3" width="8" height="18" rx="1"></rect>
+                            </svg>
+                        </button>
                         <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); performMaintenanceScan(${job.id}, '${escapeHtml(job.name)}')" title="Sync" style="padding: 0.25rem;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="23 4 23 10 17 10"></polyline>
@@ -4507,3 +4513,258 @@ async function viewJobCaptures(jobId) {
 }
 
 
+
+// ===== Capture Comparison =====
+let compareState = {
+    jobId: null,
+    captureA: null,
+    captureB: null,
+    mode: 'side',
+    firstTime: null,
+    lastTime: null
+};
+
+async function openCompareModal(preselectedJobId) {
+    compareState = { jobId: null, captureA: null, captureB: null, mode: 'side', firstTime: null, lastTime: null };
+    document.getElementById('compare-controls').style.display = 'none';
+    document.getElementById('compare-display').style.display = 'none';
+    document.getElementById('compare-empty').style.display = '';
+    document.getElementById('compare-empty').textContent = 'Select a job to begin comparing captures';
+    setCompareMode('side');
+
+    const select = document.getElementById('compare-job-select');
+    select.innerHTML = '<option value="">Choose a job...</option>';
+    try {
+        const jobs = await apiRequest('/jobs/');
+        const jobsWithCaptures = jobs.filter(j => j.capture_count >= 2);
+        jobsWithCaptures.forEach(job => {
+            const opt = document.createElement('option');
+            opt.value = job.id;
+            opt.textContent = `${job.name} (${job.capture_count} captures)`;
+            select.appendChild(opt);
+        });
+    } catch (e) {
+        console.error('Failed to load jobs for comparison:', e);
+    }
+
+    const activeFilter = preselectedJobId || capturesState.jobFilter;
+    if (activeFilter) {
+        select.value = activeFilter;
+    }
+
+    showModal('compare-modal');
+
+    if (activeFilter && select.value) {
+        await onCompareJobSelected();
+    }
+}
+
+async function onCompareJobSelected() {
+    const jobId = parseInt(document.getElementById('compare-job-select').value);
+    if (!jobId) {
+        document.getElementById('compare-controls').style.display = 'none';
+        document.getElementById('compare-display').style.display = 'none';
+        document.getElementById('compare-empty').style.display = '';
+        document.getElementById('compare-empty').textContent = 'Select a job to begin comparing captures';
+        return;
+    }
+
+    compareState.jobId = jobId;
+    document.getElementById('compare-empty').textContent = 'Loading captures...';
+
+    try {
+        const range = await apiRequest(`/captures/job/${jobId}/time-range`);
+        if (range.count < 2) {
+            document.getElementById('compare-empty').textContent = 'This job needs at least 2 captures to compare.';
+            document.getElementById('compare-controls').style.display = 'none';
+            document.getElementById('compare-display').style.display = 'none';
+            return;
+        }
+
+        compareState.firstTime = range.first_capture_time;
+        compareState.lastTime = range.last_capture_time;
+
+        const firstLocal = isoToLocalDatetime(range.first_capture_time);
+        const lastLocal = isoToLocalDatetime(range.last_capture_time);
+
+        const dateA = document.getElementById('compare-date-a');
+        const dateB = document.getElementById('compare-date-b');
+        dateA.min = firstLocal;
+        dateA.max = lastLocal;
+        dateB.min = firstLocal;
+        dateB.max = lastLocal;
+
+        document.getElementById('compare-controls').style.display = '';
+        document.getElementById('compare-empty').style.display = 'none';
+
+        await compareFirstLast();
+    } catch (e) {
+        console.error('Failed to load capture range:', e);
+        document.getElementById('compare-empty').textContent = 'Failed to load capture data.';
+    }
+}
+
+function isoToLocalDatetime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function compareFirstLast() {
+    if (!compareState.jobId || !compareState.firstTime || !compareState.lastTime) return;
+
+    document.getElementById('compare-date-a').value = isoToLocalDatetime(compareState.firstTime);
+    document.getElementById('compare-date-b').value = isoToLocalDatetime(compareState.lastTime);
+
+    await loadCompareCaptures(compareState.firstTime, compareState.lastTime);
+}
+
+async function onCompareDateChanged(which) {
+    const dateA = document.getElementById('compare-date-a').value;
+    const dateB = document.getElementById('compare-date-b').value;
+
+    if (!dateA || !dateB) return;
+
+    const tsA = new Date(dateA).toISOString();
+    const tsB = new Date(dateB).toISOString();
+
+    if (tsB <= tsA) {
+        showNotification('Capture B must be after Capture A', 'error');
+        return;
+    }
+
+    await loadCompareCaptures(tsA, tsB);
+}
+
+async function loadCompareCaptures(timestampA, timestampB) {
+    try {
+        const [capA, capB] = await Promise.all([
+            apiRequest(`/captures/job/${compareState.jobId}/nearest`, { query: { timestamp: timestampA } }),
+            apiRequest(`/captures/job/${compareState.jobId}/nearest`, { query: { timestamp: timestampB } })
+        ]);
+
+        if (capA.id === capB.id) {
+            document.getElementById('compare-display').style.display = 'none';
+            document.getElementById('compare-empty').style.display = '';
+            document.getElementById('compare-empty').textContent = 'Both dates resolve to the same capture. Try a wider range.';
+            return;
+        }
+
+        compareState.captureA = capA;
+        compareState.captureB = capB;
+
+        const imgUrlA = `${API_BASE}/captures/${capA.id}/image`;
+        const imgUrlB = `${API_BASE}/captures/${capB.id}/image`;
+        const labelA = formatDateTime(capA.captured_at);
+        const labelB = formatDateTime(capB.captured_at);
+
+        // Side by side
+        document.getElementById('compare-img-a').src = imgUrlA;
+        document.getElementById('compare-img-b').src = imgUrlB;
+        document.getElementById('compare-label-a').textContent = labelA;
+        document.getElementById('compare-label-b').textContent = labelB;
+
+        // Slider
+        document.getElementById('compare-slider-img-a').src = imgUrlA;
+        document.getElementById('compare-slider-img-b').src = imgUrlB;
+        document.getElementById('compare-slider-label-a').textContent = labelA;
+        document.getElementById('compare-slider-label-b').textContent = labelB;
+
+        document.getElementById('compare-display').style.display = '';
+        document.getElementById('compare-empty').style.display = 'none';
+
+        updateSliderPosition(0.5);
+    } catch (e) {
+        console.error('Failed to load comparison captures:', e);
+        showNotification('Failed to load captures for comparison', 'error');
+    }
+}
+
+function setCompareMode(mode) {
+    compareState.mode = mode;
+
+    document.getElementById('compare-mode-side').classList.toggle('active', mode === 'side');
+    document.getElementById('compare-mode-slider').classList.toggle('active', mode === 'slider');
+
+    document.getElementById('compare-side-by-side').style.display = mode === 'side' ? '' : 'none';
+    document.getElementById('compare-slider').style.display = mode === 'slider' ? '' : 'none';
+
+    if (mode === 'slider') {
+        const imgB = document.getElementById('compare-slider-img-b');
+        if (imgB.complete && imgB.naturalWidth) {
+            initSliderWidth();
+        } else {
+            imgB.onload = initSliderWidth;
+        }
+    }
+}
+
+function initSliderWidth() {
+    const container = document.getElementById('compare-slider-container');
+    if (container) {
+        container.style.setProperty('--slider-full-width', container.offsetWidth + 'px');
+        updateSliderPosition(0.5);
+    }
+}
+
+function updateSliderPosition(ratio) {
+    const overlay = document.getElementById('compare-slider-overlay');
+    const handle = document.getElementById('compare-slider-handle');
+    if (overlay && handle) {
+        const pct = (ratio * 100).toFixed(2) + '%';
+        overlay.style.width = pct;
+        handle.style.left = pct;
+    }
+}
+
+// Slider drag interaction
+(function() {
+    let isDragging = false;
+
+    function getSliderRatio(e, container) {
+        const rect = container.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    }
+
+    document.addEventListener('mousedown', function(e) {
+        const container = document.getElementById('compare-slider-container');
+        if (container && container.contains(e.target)) {
+            isDragging = true;
+            updateSliderPosition(getSliderRatio(e, container));
+            e.preventDefault();
+        }
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        const container = document.getElementById('compare-slider-container');
+        if (container) updateSliderPosition(getSliderRatio(e, container));
+    });
+
+    document.addEventListener('mouseup', function() {
+        isDragging = false;
+    });
+
+    document.addEventListener('touchstart', function(e) {
+        const container = document.getElementById('compare-slider-container');
+        if (container && container.contains(e.target)) {
+            isDragging = true;
+            updateSliderPosition(getSliderRatio(e, container));
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function(e) {
+        if (!isDragging) return;
+        const container = document.getElementById('compare-slider-container');
+        if (container) {
+            updateSliderPosition(getSliderRatio(e, container));
+            e.preventDefault();
+        }
+    }, { passive: false });
+
+    document.addEventListener('touchend', function() {
+        isDragging = false;
+    });
+})();
