@@ -235,6 +235,9 @@ def init_db():
         if 'build_source' not in video_columns:
             cursor.execute("ALTER TABLE processed_videos ADD COLUMN build_source TEXT DEFAULT 'manual'")
             logger.info("Migration complete: added build_source column to processed_videos")
+        if 'error_message' not in video_columns:
+            cursor.execute("ALTER TABLE processed_videos ADD COLUMN error_message TEXT")
+            logger.info("Migration complete: added error_message column to processed_videos")
         
         # Initialize API key if not exists
         cursor.execute("SELECT value FROM settings WHERE key = 'api_key'")

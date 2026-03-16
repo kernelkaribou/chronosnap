@@ -164,16 +164,10 @@ def _run_auto_build(job: dict, now: datetime):
     except Exception as e:
         logger.error(f"Auto-build error for job {job_id} ({job_name}): {e}", exc_info=True)
     finally:
-        # Always clear in_progress flag; only advance timer on success
+        # Always clear in_progress flag and advance timer to prevent rapid retries
         with get_db() as conn:
             cursor = conn.cursor()
-            if success:
-                cursor.execute(
-                    "UPDATE jobs SET auto_build_in_progress = 0, last_auto_build_at = ? WHERE id = ?",
-                    (to_iso(now), job_id)
-                )
-            else:
-                cursor.execute(
-                    "UPDATE jobs SET auto_build_in_progress = 0 WHERE id = ?",
-                    (job_id,)
-                )
+            cursor.execute(
+                "UPDATE jobs SET auto_build_in_progress = 0, last_auto_build_at = ? WHERE id = ?",
+                (to_iso(now), job_id)
+            )
