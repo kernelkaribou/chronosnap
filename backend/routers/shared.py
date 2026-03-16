@@ -2,17 +2,20 @@
 Shared links — public (no auth) routes for viewing shared timelapses,
 and API routes (auth-protected) for managing shared links.
 """
+import logging
 import os
 import re
 import secrets
 import string
 from datetime import datetime, timezone
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Path
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException, Path, Request
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
 from ..database import get_db, dict_from_row
+
+logger = logging.getLogger(__name__)
 
 # ── Auth-protected API routes ──────────────────────────────────────────────
 
@@ -21,12 +24,21 @@ router = APIRouter()
 TOKEN_LENGTH = 24
 TOKEN_ALPHABET = string.ascii_letters + string.digits
 TOKEN_PATTERN = re.compile(r'^[A-Za-z0-9]{24}$')
+MAX_ACTIVE_SHARES = 50
 
 # Allowed base directories for served video files
 ALLOWED_VIDEO_DIRS = [
     os.path.realpath('/timelapses'),
     os.path.realpath('/app/data/timelapses'),
 ]
+
+SECURITY_HEADERS = {
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": "default-src 'self' 'unsafe-inline'; media-src 'self'",
+    "Cache-Control": "no-store",
+}
 
 
 def generate_token() -> str:
@@ -78,6 +90,11 @@ async def toggle_share(body: ToggleShareRequest):
             raise HTTPException(status_code=404, detail="Video not found")
 
         if body.enabled:
+            # Enforce max active shares limit
+            cursor.execute("SELECT COUNT(*) FROM shared_links")
+            count = cursor.fetchone()[0]
+            if count >= MAX_ACTIVE_SHARES:
+                raise HTTPException(status_code=400, detail=f"Maximum of {MAX_ACTIVE_SHARES} active shares reached")
             # Remove any existing link first, then create fresh
             cursor.execute("DELETE FROM shared_links WHERE video_id = ?", (body.video_id,))
             token = generate_token()
@@ -133,39 +150,49 @@ def _resolve_shared_link(cursor, token: str):
 
 
 @public_router.get("/{token}")
-async def shared_page(token: str):
+async def shared_page(request: Request, token: str):
     """Serve the standalone shared video page (no auth)"""
-    # Validate the token exists and isn't expired before serving the page
     with get_db() as conn:
         cursor = conn.cursor()
-        _resolve_shared_link(cursor, token)
-    return FileResponse("frontend/shared.html")
+        row = _resolve_shared_link(cursor, token)
+        logger.info("Shared page accessed: video_id=%s ip=%s", row["video_id"], request.client.host if request.client else "unknown")
+
+    with open("frontend/shared.html", "r") as f:
+        html = f.read()
+    return HTMLResponse(content=html, headers=SECURITY_HEADERS)
 
 
 @public_router.get("/{token}/video")
-async def shared_video_stream(token: str):
+async def shared_video_stream(request: Request, token: str):
     """Stream the shared video file (no auth)"""
     with get_db() as conn:
         cursor = conn.cursor()
         row = _resolve_shared_link(cursor, token)
         safe_path = _safe_file_path(row["file_path"])
+        logger.info("Shared video streamed: video_id=%s ip=%s", row["video_id"], request.client.host if request.client else "unknown")
         return FileResponse(
             safe_path,
             media_type="video/mp4",
-            filename="timelapse.mp4"
+            filename="timelapse.mp4",
+            headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
         )
 
 
 @public_router.get("/{token}/download")
-async def shared_video_download(token: str):
+async def shared_video_download(request: Request, token: str):
     """Download the shared video file (no auth)"""
     with get_db() as conn:
         cursor = conn.cursor()
         row = _resolve_shared_link(cursor, token)
         safe_path = _safe_file_path(row["file_path"])
+        logger.info("Shared video downloaded: video_id=%s ip=%s", row["video_id"], request.client.host if request.client else "unknown")
         return FileResponse(
             safe_path,
             media_type="video/mp4",
             filename="timelapse.mp4",
-            headers={"Content-Disposition": "attachment; filename=timelapse.mp4"}
+            headers={
+                "Content-Disposition": "attachment; filename=timelapse.mp4",
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+            }
         )
