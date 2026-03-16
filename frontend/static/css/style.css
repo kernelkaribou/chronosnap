@@ -2002,6 +2002,26 @@ body {
     background: linear-gradient(135deg, #7c3aed, #d03368);
 }
 
+.share-filter-btn {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    font-size: 1rem;
+    padding: 0.35rem 0.55rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    line-height: 1;
+    color: var(--primary-color);
+}
+.share-filter-btn:hover {
+    border-color: var(--primary-color);
+}
+.share-filter-btn.active {
+    background: var(--primary-color);
+    border-color: transparent;
+    color: var(--primary-text-on);
+}
+
 /* Bulk favorite buttons in selection bar */
 .btn-fav-bulk {
     background: linear-gradient(135deg, #a78bfa, #e8457e);

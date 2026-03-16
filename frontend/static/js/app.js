@@ -1601,6 +1601,9 @@ function resetVideoFilters() {
     videoFavoritesOnly = false;
     const favBtn = document.getElementById('video-fav-filter');
     if (favBtn) favBtn.classList.remove('active');
+    videoSharedOnly = false;
+    const shareBtn = document.getElementById('video-share-filter');
+    if (shareBtn) shareBtn.classList.remove('active');
     filterVideos();
 }
 
@@ -1633,12 +1636,16 @@ function filterVideos(opts = {}) {
         filtered = filtered.filter(v => v.is_favorite);
     }
     
+    if (videoSharedOnly) {
+        filtered = filtered.filter(v => !!v.share_token);
+    }
+    
     if (selectedTags.length > 0) {
         filtered = filtered.filter(v => v.tags && selectedTags.every(tid => v.tags.some(t => t.id === tid)));
     }
     
     // Show/hide reset button
-    const hasFilters = search || yearFilter || monthFilter !== '' || videoFavoritesOnly || selectedTags.length > 0;
+    const hasFilters = search || yearFilter || monthFilter !== '' || videoFavoritesOnly || videoSharedOnly || selectedTags.length > 0;
     document.getElementById('video-filter-reset').style.display = hasFilters ? '' : 'none';
     
     const countEl = document.getElementById('video-count');
@@ -5600,11 +5607,21 @@ function toggleCaptureFavoritesFilter() {
 }
 
 let videoFavoritesOnly = false;
+let videoSharedOnly = false;
 
 function toggleVideoFavoritesFilter() {
     videoFavoritesOnly = !videoFavoritesOnly;
     document.getElementById('video-fav-filter').classList.toggle('active', videoFavoritesOnly);
     if (videoFavoritesOnly) {
+        document.getElementById('video-filter-reset').style.display = '';
+    }
+    loadVideos();
+}
+
+function toggleVideoSharedFilter() {
+    videoSharedOnly = !videoSharedOnly;
+    document.getElementById('video-share-filter').classList.toggle('active', videoSharedOnly);
+    if (videoSharedOnly) {
         document.getElementById('video-filter-reset').style.display = '';
     }
     loadVideos();
