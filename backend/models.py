@@ -189,7 +189,7 @@ class TextOverlayConfig(BaseModel):
     enabled: bool = False
     text: str = ""
     font: str = "DejaVu Sans"
-    font_size: float = Field(default=5.0, ge=1.0, le=20.0, description="Font size as percentage of image height")
+    font_size: int = Field(default=5, ge=1, le=20, description="Font size as percentage of image height")
     bold: bool = False
     color: str = Field(default="#FFFFFF", pattern=r"^#[0-9a-fA-F]{6}$")
     position: str = Field(default="bottom-left", pattern=r"^(top-left|top-center|top-right|middle-left|middle-center|middle-right|bottom-left|bottom-center|bottom-right)$")

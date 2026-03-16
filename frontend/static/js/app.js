@@ -2549,7 +2549,7 @@ function generateOverlayHTML(prefix, opts = {}) {
                         </div>
                         <div class="form-group" style="width: 65px;">
                             <label>Size %</label>
-                            <input type="number" id="${prefix}-overlay-size" class="form-control" value="5" min="1" max="20" step="0.5"${inputEvent}>
+                            <input type="number" id="${prefix}-overlay-size" class="form-control" value="5" min="1" max="20" step="1"${inputEvent}>
                         </div>
                         <div class="form-group" style="width: 45px;">
                             <label>Bold</label>
@@ -2661,7 +2661,7 @@ function readOverlayConfig(prefix) {
         enabled: true,
         text,
         font: document.getElementById(`${prefix}-overlay-font`)?.value || 'DejaVu Sans',
-        font_size: parseFloat(document.getElementById(`${prefix}-overlay-size`)?.value) || 5,
+        font_size: parseInt(document.getElementById(`${prefix}-overlay-size`)?.value) || 5,
         bold: document.getElementById(`${prefix}-overlay-bold`)?.checked || false,
         color: document.getElementById(`${prefix}-overlay-color`)?.value || '#FFFFFF',
         position: activeBtn?.dataset.pos || 'bottom-left',

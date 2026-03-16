@@ -188,8 +188,8 @@ def render_overlay(
     overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 
-    text_w, text_h, text_x_off, text_y_off = _get_text_bbox(draw, text, font)
-    bg_pad = int(font_size_px * 0.25)
+    text_w, text_h, _, _ = _get_text_bbox(draw, text, font)
+    bg_pad = max(int(font_size_px * 0.2), 2)
     box_w = text_w + bg_pad * 2
     box_h = text_h + bg_pad * 2
 
@@ -203,10 +203,12 @@ def render_overlay(
             fill=bg_rgba,
         )
 
-    # Draw text on the overlay, compensating for font's internal offset
-    text_x = x + bg_pad - text_x_off
-    text_y = y + bg_pad - text_y_off
-    draw.multiline_text((text_x, text_y), text, font=font, fill=color_rgba)
+    # Draw text centered in the background box using anchor
+    center_x = x + box_w / 2
+    center_y = y + box_h / 2
+    draw.multiline_text(
+        (center_x, center_y), text, font=font, fill=color_rgba, anchor='mm',
+    )
 
     # Composite overlay onto image
     result = Image.alpha_composite(image, overlay)
