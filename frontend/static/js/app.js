@@ -2055,60 +2055,59 @@ function generateOverlayHTML(prefix, opts = {}) {
                 <input type="text" id="${prefix}-overlay-text" class="form-control" value="{job_name}" placeholder="{job_name} - {date} {time}"${inputEvent}>
                 <small style="color: var(--text-secondary);">Variables: <code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code> <code>{total_frames}</code></small>
             </div>
-            <div class="form-row">
+            <div class="form-row" style="gap:0.5rem;">
                 <div class="form-group flex-1">
                     <label>Font</label>
                     <select id="${prefix}-overlay-font" class="form-control"${inputEvent}>${fontOpts}</select>
                 </div>
-                <div class="form-group" style="width: 80px;">
+                <div class="form-group" style="width: 65px;">
                     <label>Size</label>
                     <input type="number" id="${prefix}-overlay-size" class="form-control" value="48" min="8" max="200"${inputEvent}>
                 </div>
-                <div class="form-group" style="width: 60px;">
+                <div class="form-group" style="width: 45px;">
                     <label>Bold</label>
-                    <div style="display:flex;align-items:center;height:38px;">
+                    <div style="display:flex;align-items:center;height:32px;">
                         <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr}>
                     </div>
                 </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group" style="width: 80px;">
+                <div class="form-group" style="width: 50px;">
                     <label>Color</label>
-                    <input type="color" id="${prefix}-overlay-color" value="#FFFFFF" class="form-control" style="padding:2px;height:38px;"${inputEvent}>
+                    <input type="color" id="${prefix}-overlay-color" value="#FFFFFF" class="form-control" style="padding:2px;height:32px;"${inputEvent}>
                 </div>
-                <div class="form-group flex-1">
+                <div class="form-group">
                     <label>Position</label>
                     <div class="overlay-position-grid" id="${prefix}-overlay-grid">${gridBtns}</div>
                 </div>
             </div>
-            <div class="form-row" style="align-items: center;">
+            <div class="form-row" style="align-items: center; gap: 0.5rem;">
                 <div class="form-group" style="width: auto;">
-                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <div style="display:flex;align-items:center;gap:0.35rem;">
                         <input type="checkbox" id="${prefix}-overlay-bg" checked${onchangeAttr}>
-                        <span>Background</span>
+                        <span style="font-size:0.8rem;">BG</span>
                     </div>
                 </div>
-                <div class="form-group" style="width: 60px;">
-                    <input type="color" id="${prefix}-overlay-bg-color" value="#000000" class="form-control" style="padding:2px;height:32px;"${inputEvent}>
+                <div class="form-group" style="width: 40px;">
+                    <input type="color" id="${prefix}-overlay-bg-color" value="#000000" class="form-control" style="padding:2px;height:28px;"${inputEvent}>
                 </div>
                 <div class="form-group flex-1">
-                    <div style="display:flex;align-items:center;gap:0.5rem;">
-                        <input type="range" id="${prefix}-overlay-bg-opacity" min="0" max="100" value="50" style="flex:1;"${inputEvent}>
-                        <span id="${prefix}-overlay-opacity-label" style="width:35px;text-align:right;font-size:0.85rem;color:var(--text-secondary);">50%</span>
+                    <div style="display:flex;align-items:center;gap:0.35rem;">
+                        <input type="range" id="${prefix}-overlay-bg-opacity" min="0" max="100" value="50" style="flex:1; height:18px;"${inputEvent}>
+                        <span id="${prefix}-overlay-opacity-label" style="width:30px;text-align:right;font-size:0.75rem;color:var(--text-secondary);">50%</span>
                     </div>
                 </div>
             </div>`;
 
     const previewHtml = showPreview ? `
             <div class="overlay-preview-panel" id="${prefix}-overlay-preview-panel">
-                <img id="${prefix}-overlay-preview-img" alt="Overlay preview" style="width:100%; border-radius: var(--radius-lg); border: 1px solid var(--border-color); display: none;">
+                <img id="${prefix}-overlay-preview-img" alt="Overlay preview" onclick="openOverlayLightbox(this)" style="border-radius: var(--radius-lg); border: 1px solid var(--border-color); display: none;" title="Click to enlarge">
                 <div id="${prefix}-overlay-preview-placeholder" style="width:100%; aspect-ratio:16/9; background:var(--surface-color); border:1px dashed var(--border-color); border-radius:var(--radius-lg); display:flex; align-items:center; justify-content:center; color:var(--text-secondary); font-size:0.8rem;">
                     Loading preview…
                 </div>
             </div>` : '';
 
+    // Preview on top, controls below
     const fieldsInner = showPreview
-        ? `<div class="overlay-layout">\n<div class="overlay-controls">${controlsHtml}</div>\n${previewHtml}\n</div>`
+        ? `<div class="overlay-layout">\n${previewHtml}\n<div class="overlay-controls">${controlsHtml}</div>\n</div>`
         : controlsHtml;
 
     return `
@@ -2121,6 +2120,18 @@ function generateOverlayHTML(prefix, opts = {}) {
         <div id="${prefix}-overlay-fields" style="display: none;">
             ${fieldsInner}
         </div>`;
+}
+
+function openOverlayLightbox(imgEl) {
+    if (!imgEl || !imgEl.src) return;
+    const lb = document.createElement('div');
+    lb.className = 'overlay-lightbox';
+    lb.innerHTML = `<img src="${imgEl.src}" alt="Overlay preview">`;
+    lb.addEventListener('click', () => lb.remove());
+    document.addEventListener('keydown', function esc(e) {
+        if (e.key === 'Escape') { lb.remove(); document.removeEventListener('keydown', esc); }
+    });
+    document.body.appendChild(lb);
 }
 
 /**

@@ -934,32 +934,67 @@ body {
     width: 120px;
 }
 
-/* Overlay two-column layout */
+/* Overlay two-column layout → stacked: preview on top, compact controls below */
 .overlay-layout {
     display: flex;
-    gap: 1.25rem;
+    flex-direction: column;
+    gap: 0.75rem;
 }
 
 .overlay-controls {
-    flex: 1;
     min-width: 0;
 }
 
-.overlay-preview-panel {
-    width: 220px;
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    padding-top: 0.25rem;
+.overlay-controls .form-group {
+    margin-bottom: 0.4rem;
 }
 
-@media (max-width: 768px) {
-    .overlay-layout {
-        flex-direction: column;
-    }
-    .overlay-preview-panel {
-        width: 100%;
-    }
+.overlay-controls label {
+    font-size: 0.8rem;
+    margin-bottom: 0.15rem;
+}
+
+.overlay-controls .form-control {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+}
+
+.overlay-controls small {
+    font-size: 0.7rem;
+}
+
+.overlay-preview-panel {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.overlay-preview-panel img {
+    width: 100%;
+    cursor: pointer;
+    transition: opacity var(--transition-fast);
+}
+
+.overlay-preview-panel img:hover {
+    opacity: 0.85;
+}
+
+/* Fullscreen overlay preview lightbox */
+.overlay-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.overlay-lightbox img {
+    max-width: 95vw;
+    max-height: 95vh;
+    border-radius: var(--radius-lg);
 }
 
 .overlay-position-grid .pos-btn {
