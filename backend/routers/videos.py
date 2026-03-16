@@ -107,6 +107,7 @@ async def create_video(video: VideoCreate, background_tasks: BackgroundTasks):
 async def list_videos(
     job_id: Optional[int] = Query(None, description="Filter by job ID"),
     status: Optional[str] = Query(None, description="Filter by status"),
+    favorites_only: bool = Query(False, description="Show only favorites"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0)
 ):
@@ -130,11 +131,19 @@ async def list_videos(
             query += " AND v.status = ?"
             params.append(status)
         
+        if favorites_only:
+            query += " AND v.is_favorite = 1"
+        
         query += " ORDER BY v.created_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         
         cursor.execute(query, params)
-        return [dict_from_row(row) for row in cursor.fetchall()]
+        videos = []
+        for row in cursor.fetchall():
+            video_dict = dict_from_row(row)
+            video_dict['is_favorite'] = bool(video_dict.get('is_favorite', 0))
+            videos.append(video_dict)
+        return videos
 
 
 @router.get("/{video_id}", response_model=VideoResponse)
@@ -153,7 +162,9 @@ async def get_video(video_id: int):
         if not row:
             raise HTTPException(status_code=404, detail="Video not found")
         
-        return dict_from_row(row)
+        video_dict = dict_from_row(row)
+        video_dict['is_favorite'] = bool(video_dict.get('is_favorite', 0))
+        return video_dict
 
 
 @router.get("/{video_id}/check")
@@ -288,6 +299,31 @@ async def delete_multiple_videos(request: BulkDeleteRequest):
             logger.info(f"Deleted video '{name}' (ID: {video_id})")
     
     return {"deleted": deleted, "requested": len(request.video_ids)}
+
+
+class BulkFavoriteRequest(BaseModel):
+    ids: List[int]
+    is_favorite: bool = True
+
+
+@router.post("/favorite")
+async def set_video_favorites(request: BulkFavoriteRequest):
+    """Set or unset favorite status on multiple videos"""
+    if not request.ids:
+        raise HTTPException(status_code=400, detail="No video IDs provided")
+    
+    value = 1 if request.is_favorite else 0
+    placeholders = ','.join('?' * len(request.ids))
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"UPDATE processed_videos SET is_favorite = ? WHERE id IN ({placeholders})",
+            [value] + request.ids
+        )
+        updated = cursor.rowcount
+    
+    return {"updated": updated, "requested": len(request.ids)}
 
 
 def _cleanup_empty_folder(file_path: str):

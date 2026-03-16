@@ -68,6 +68,9 @@
                     <select class="gallery-filter-select" id="video-month-filter" onchange="filterVideos()" disabled>
                         <option value="">All Months</option>
                     </select>
+                    <button class="btn btn-sm fav-filter-btn" id="video-fav-filter" onclick="toggleVideoFavoritesFilter()" title="Show favorites only">
+                        <span class="fav-heart">♥</span>
+                    </button>
                     <button class="btn btn-secondary btn-sm" id="video-filter-reset" onclick="resetVideoFilters()" style="display:none;" title="Clear all filters">Reset</button>
                     <span class="gallery-count" id="video-count"></span>
                 </div>
@@ -75,6 +78,8 @@
                     <span class="selection-clear" onclick="clearVideoSelection()" title="Clear selection">&times;</span>
                     <span id="video-selected-count">0 selected</span>
                     <button class="btn btn-secondary btn-sm" id="video-toggle-selection-btn" onclick="toggleSelectAllVisibleVideos()">Select Visible</button>
+                    <button class="btn btn-sm btn-fav-bulk" onclick="favoriteSelectedVideos(true)" title="Favorite selected"><span class="fav-heart">♥</span> Favorite</button>
+                    <button class="btn btn-sm btn-unfav-bulk" onclick="favoriteSelectedVideos(false)" title="Unfavorite selected"><span class="fav-heart">♥</span> Unfavorite</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteSelectedVideos()">Delete Selected</button>
                 </div>
                 <div id="videos-list" class="videos-grid"></div>
@@ -111,6 +116,9 @@
                     </select>
                     <input type="datetime-local" class="gallery-filter-input" id="captures-start-time" onchange="applyCaptureSortAndFilter()" title="From">
                     <input type="datetime-local" class="gallery-filter-input" id="captures-end-time" onchange="applyCaptureSortAndFilter()" title="To">
+                    <button class="btn btn-sm fav-filter-btn" id="captures-fav-filter" onclick="toggleCaptureFavoritesFilter()" title="Show favorites only">
+                        <span class="fav-heart">♥</span>
+                    </button>
                     <select class="gallery-filter-select" id="captures-sort-order" onchange="applyCaptureSortAndFilter()">
                         <option value="desc">Newest</option>
                         <option value="asc">Oldest</option>
@@ -129,6 +137,8 @@
                     <span class="selection-clear" onclick="clearCaptureSelection()" title="Clear selection">&times;</span>
                     <span id="captures-selected-count">0 selected</span>
                     <button class="btn btn-secondary btn-sm" id="toggle-selection-btn" onclick="toggleSelectAllVisible()">Select Visible</button>
+                    <button class="btn btn-sm btn-fav-bulk" onclick="favoriteSelectedCaptures(true)" title="Favorite selected"><span class="fav-heart">♥</span> Favorite</button>
+                    <button class="btn btn-sm btn-unfav-bulk" onclick="favoriteSelectedCaptures(false)" title="Unfavorite selected"><span class="fav-heart">♥</span> Unfavorite</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteSelectedCaptures()">Delete Selected</button>
                 </div>
 
