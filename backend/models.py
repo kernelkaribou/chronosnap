@@ -237,6 +237,7 @@ class VideoResponse(BaseModel):
     is_favorite: bool = False
     text_overlay: Optional[str] = None
     tags: List[TagBrief] = []
+    share_token: Optional[str] = None
 
 
 class TestUrlResponse(BaseModel):
