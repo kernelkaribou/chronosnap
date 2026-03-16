@@ -2689,7 +2689,19 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .compare-mode-banner .btn:hover {
     background: rgba(255,255,255,0.15);
 }
-#compare-mode-btn.active {
+.compare-btn {
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid var(--border-color);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+.compare-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--text-secondary);
+}
+.compare-btn.active {
     background: var(--primary-color);
     color: #fff;
     border-color: var(--primary-color);

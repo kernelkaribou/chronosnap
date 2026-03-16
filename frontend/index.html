@@ -67,13 +67,7 @@
             <div id="videos-view" class="view">
                 <div class="view-header">
                     <h2>Timelapses</h2>
-                    <div style="display:flex;gap:0.5rem;">
-                        <button class="btn btn-secondary" id="compare-mode-btn" onclick="toggleCompareMode()">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="8" height="18" rx="1"/><rect x="14" y="3" width="8" height="18" rx="1"/></svg>
-                            Compare
-                        </button>
-                        <button class="btn btn-purple" onclick="showProcessVideoModal()">+ Build Timelapse</button>
-                    </div>
+                    <button class="btn btn-purple" onclick="showProcessVideoModal()">+ Build Timelapse</button>
                 </div>
                 <div class="gallery-filters">
                     <input type="text" class="gallery-search" id="video-search" placeholder="Search..." oninput="filterVideos()">
@@ -88,6 +82,10 @@
                     </button>
                     <div class="tag-filter-wrap" id="video-tag-filter-wrap"></div>
                     <button class="btn btn-secondary btn-sm" id="video-filter-reset" onclick="resetVideoFilters()" style="display:none;" title="Clear all filters">Reset</button>
+                    <button class="btn btn-sm compare-btn" id="compare-mode-btn" onclick="toggleCompareMode()" title="Compare two timelapses">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="8" height="18" rx="1"/><rect x="14" y="3" width="8" height="18" rx="1"/></svg>
+                        Compare
+                    </button>
                     <span class="gallery-count" id="video-count"></span>
                 </div>
                 <div class="compare-mode-banner" id="compare-mode-banner" style="display:none;">

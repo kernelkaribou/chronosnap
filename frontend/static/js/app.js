@@ -1982,11 +1982,17 @@ function toggleComparisonPlay() {
         document.getElementById('compare-play-icon').style.display = '';
         document.getElementById('compare-pause-icon').style.display = 'none';
     } else {
-        // If both ended, restart from beginning
         if (playerA.ended && playerB.ended) {
             playerA.currentTime = 0;
             playerB.currentTime = 0;
         }
+        // Adjust playback rates so both finish at the same time
+        const durA = playerA.duration || 1;
+        const durB = playerB.duration || 1;
+        const maxDur = Math.max(durA, durB);
+        playerA.playbackRate = durA / maxDur;
+        playerB.playbackRate = durB / maxDur;
+
         playerA.play();
         playerB.play();
         comparisonState.playing = true;
@@ -2001,25 +2007,16 @@ function syncComparisonLoop() {
     const { playerA, playerB } = comparisonState;
     const durA = playerA.duration || 1;
     const durB = playerB.duration || 1;
-
-    // Use the longer video as the reference for progress
     const maxDur = Math.max(durA, durB);
+
     const progressA = playerA.currentTime / durA;
     const progressB = playerB.currentTime / durB;
     const avgProgress = (progressA + progressB) / 2;
 
-    // Sync: if drift > 2% of duration, correct the lagging player
-    if (Math.abs(progressA - progressB) > 0.02) {
-        const target = Math.max(progressA, progressB);
-        if (progressA < target) playerA.currentTime = target * durA;
-        if (progressB < target) playerB.currentTime = target * durB;
-    }
-
     // Update scrubber and time display
     const scrubber = document.getElementById('compare-scrubber');
     scrubber.value = Math.round(avgProgress * 1000);
-    const currentSec = avgProgress * maxDur;
-    document.getElementById('compare-time-current').textContent = formatDuration(currentSec);
+    document.getElementById('compare-time-current').textContent = formatDuration(avgProgress * maxDur);
 
     // Stop when both ended
     if (playerA.ended && playerB.ended) {
