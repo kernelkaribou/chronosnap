@@ -39,6 +39,7 @@ class JobCreate(BaseModel):
     time_window_enabled: bool = Field(default=False, description="Enable daily time window for captures")
     time_window_start: Optional[str] = Field(None, description="Start time in HH:MM format (e.g., '08:00')")
     time_window_end: Optional[str] = Field(None, description="End time in HH:MM format (e.g., '20:00')")
+    warning_threshold: int = Field(default=3, ge=1, le=50, description="Consecutive failures before warning state")
     
     @field_validator('url')
     @classmethod
@@ -93,6 +94,7 @@ class JobUpdate(BaseModel):
     time_window_enabled: Optional[bool] = None
     time_window_start: Optional[str] = None
     time_window_end: Optional[str] = None
+    warning_threshold: Optional[int] = Field(None, ge=1, le=50)
     
     @field_validator('url')
     @classmethod
@@ -120,6 +122,7 @@ class JobResponse(BaseModel):
     time_window_enabled: int = 0  # SQLite returns as int
     time_window_start: Optional[str] = None
     time_window_end: Optional[str] = None
+    warning_threshold: int = 3
     next_scheduled_capture_at: Optional[str] = None  # New: scheduled capture time from DB
     next_capture_at: Optional[str] = None  # Calculated field from enrich function
     latest_capture: Optional[Dict[str, Any]] = None  # Latest capture info

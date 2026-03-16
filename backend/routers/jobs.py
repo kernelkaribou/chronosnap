@@ -72,8 +72,9 @@ async def create_job(job: JobCreate):
                 name, url, stream_type, start_datetime, end_datetime,
                 interval_seconds, framerate, capture_path, naming_pattern,
                 time_window_enabled, time_window_start, time_window_end,
+                warning_threshold,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             job.name, job.url, job.stream_type.value,
             to_iso(job.start_datetime),
@@ -83,6 +84,7 @@ async def create_job(job: JobCreate):
             1 if job.time_window_enabled else 0,
             job.time_window_start if job.time_window_enabled else None,
             job.time_window_end if job.time_window_enabled else None,
+            job.warning_threshold,
             now_str, now_str
         ))
         
@@ -279,6 +281,10 @@ async def update_job(job_id: int, job_update: JobUpdate):
         if job_update.framerate is not None:
             updates.append("framerate = ?")
             values.append(job_update.framerate)
+        
+        if job_update.warning_threshold is not None:
+            updates.append("warning_threshold = ?")
+            values.append(job_update.warning_threshold)
         
         # Track manual status changes
         manual_status_change = False

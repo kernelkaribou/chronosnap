@@ -643,10 +643,17 @@ async function showJobDetails(jobId) {
                     <small style="color: var(--text-secondary);">Minimum 10 seconds</small>
                 </div>
 
-                <div class="form-group" style="margin-bottom: 1.5rem;">
-                    <label>Timelapse FPS</label>
-                    <input type="number" id="edit_framerate" class="form-control" value="30" min="1" max="120" required>
-                    <small style="color: var(--text-secondary);">Frames per second for generated timelapse videos, for estimation purposes only</small>
+                <div class="form-row" style="margin-bottom: 1.5rem;">
+                    <div class="form-group flex-1">
+                        <label>Timelapse FPS</label>
+                        <input type="number" id="edit_framerate" class="form-control" value="30" min="1" max="120" required>
+                        <small style="color: var(--text-secondary);">Frames per second for generated timelapse videos</small>
+                    </div>
+                    <div class="form-group" style="flex: 0 0 120px;">
+                        <label>Warning After</label>
+                        <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50">
+                        <small>consecutive failures</small>
+                    </div>
                 </div>
 
                 <div class="duration-estimate" id="edit-duration-estimate"></div>
@@ -711,6 +718,7 @@ async function createJob(event) {
         end_datetime: {},
         interval_seconds: { parse: 'int' },
         framerate: { parse: 'int' },
+        warning_threshold: { parse: 'int' },
         capture_path: {},
         naming_pattern: {},
         time_window_enabled: { parse: 'bool' },
@@ -761,6 +769,7 @@ async function createJob(event) {
         framerate: values.framerate,
         capture_path: values.capture_path,
         naming_pattern: values.naming_pattern,
+        warning_threshold: values.warning_threshold || 3,
         time_window_enabled: values.time_window_enabled,
         time_window_start: values.time_window_enabled ? values.time_window_start : null,
         time_window_end: values.time_window_enabled ? values.time_window_end : null
@@ -1036,6 +1045,7 @@ async function saveJobChanges(jobId) {
     const timeWindowEnabled = document.getElementById('edit_time_window_enabled').checked;
     const timeWindowStart = document.getElementById('edit_time_window_start').value;
     const timeWindowEnd = document.getElementById('edit_time_window_end').value;
+    const warningThreshold = parseInt(document.getElementById('edit_warning_threshold').value) || 3;
     
     // Validate required fields
     if (!url) {
@@ -1083,7 +1093,8 @@ async function saveJobChanges(jobId) {
         end_datetime: endDatetime,
         time_window_enabled: timeWindowEnabled,
         time_window_start: timeWindowEnabled ? timeWindowStart : null,
-        time_window_end: timeWindowEnabled ? timeWindowEnd : null
+        time_window_end: timeWindowEnabled ? timeWindowEnd : null,
+        warning_threshold: warningThreshold
     };
     
     try {
@@ -2170,6 +2181,7 @@ async function duplicateJob(jobId) {
         document.getElementById('job_url').value = job.url;
         document.getElementById('interval_seconds').value = job.interval_seconds;
         document.getElementById('framerate').value = job.framerate || 30;
+        document.getElementById('warning_threshold').value = job.warning_threshold || 3;
         document.getElementById('capture_path').value = '/captures';
         document.getElementById('naming_pattern').value = job.naming_pattern || '{job_name}_{num:06d}_{timestamp}';
         
@@ -3686,7 +3698,6 @@ async function loadWebhookSettings() {
         const data = await apiRequest('/settings/webhook');
         document.getElementById('webhook-url').value = data.webhook_url || '';
         document.getElementById('webhook-enabled').checked = data.webhook_enabled;
-        document.getElementById('webhook-threshold').value = data.webhook_failure_threshold || 3;
         document.getElementById('webhook-template').value = data.webhook_payload_template || '{"title": "{title}", "message": "{message}"}';
         updateWebhookToggleState();
         webhookDirty = false;
@@ -3705,7 +3716,6 @@ async function saveWebhookSettings() {
     const settings = {
         webhook_enabled: document.getElementById('webhook-enabled').checked && !!url,
         webhook_url: url,
-        webhook_failure_threshold: parseInt(document.getElementById('webhook-threshold').value) || 3,
         webhook_payload_template: template || defaultTemplate,
     };
 
