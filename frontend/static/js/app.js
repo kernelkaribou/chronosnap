@@ -916,16 +916,26 @@ async function createJob(event) {
 function setupJobEditChangeTracking(originalJob) {
     const saveBtn = document.getElementById('save-job-btn');
     if (!saveBtn) return;
-    
+
     // Initially disabled
     setButtonState(saveBtn, true);
-    
-    const enableSaveButton = () => {
-        setButtonState(saveBtn, false);
+
+    // Snapshot initial form values to compare against
+    const getFormSnapshot = () => {
+        const vals = {};
+        trackedFields.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            vals[id] = el.type === 'checkbox' ? el.checked : el.value;
+        });
+        // Include overlay position
+        const grid = document.getElementById('edit-ab-overlay-grid');
+        const activeBtn = grid?.querySelector('.pos-btn.active');
+        vals['_overlay_pos'] = activeBtn?.dataset.pos || '';
+        return vals;
     };
-    
-    // Track changes on all editable fields
-    const fields = [
+
+    const trackedFields = [
         'edit_interval_seconds',
         'edit_end_datetime',
         'edit_time_window_enabled',
@@ -949,12 +959,25 @@ function setupJobEditChangeTracking(originalJob) {
         'edit-ab-overlay-bg-color',
         'edit-ab-overlay-bg-opacity'
     ];
-    
-    fields.forEach(fieldId => {
+
+    // Take snapshot after a tick so DOM values are fully populated
+    let initialSnapshot = null;
+    setTimeout(() => { initialSnapshot = getFormSnapshot(); }, 50);
+
+    const checkForChanges = () => {
+        if (!initialSnapshot) { setButtonState(saveBtn, true); return; }
+        const current = getFormSnapshot();
+        const hasChanges = Object.keys(initialSnapshot).some(k =>
+            String(initialSnapshot[k]) !== String(current[k])
+        );
+        setButtonState(saveBtn, !hasChanges);
+    };
+
+    trackedFields.forEach(fieldId => {
         const field = document.getElementById(fieldId);
         if (field) {
-            field.addEventListener('change', enableSaveButton);
-            field.addEventListener('input', enableSaveButton);
+            field.addEventListener('change', checkForChanges);
+            field.addEventListener('input', checkForChanges);
         }
     });
 
@@ -976,7 +999,7 @@ function setupJobEditChangeTracking(originalJob) {
     const overlayGrid = document.getElementById('edit-ab-overlay-grid');
     if (overlayGrid) {
         overlayGrid.querySelectorAll('.pos-btn').forEach(btn => {
-            btn.addEventListener('click', enableSaveButton);
+            btn.addEventListener('click', () => setTimeout(checkForChanges, 10));
         });
     }
 }
