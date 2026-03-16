@@ -2608,6 +2608,7 @@ function generateOverlayHTML(prefix, opts = {}) {
                 <input type="checkbox" id="${prefix}-overlay-enabled"${onchangeAttr}>
                 <span>${label}</span>
             </div>
+            <small style="color: var(--text-secondary); display: block; margin-left: 1.5rem;">Burn text into each frame during timelapse rendering</small>
         </div>
         <div id="${prefix}-overlay-fields" class="toggle-fields disabled">
             ${fieldsInner}
