@@ -1666,10 +1666,6 @@ async function openVideoDetail(videoId) {
     try {
         const video = await apiRequest(`/videos/${videoId}`);
         
-        // Clean up any stale share URL row from previous video
-        const oldUrlRow = document.getElementById('share-url-row');
-        if (oldUrlRow) oldUrlRow.remove();
-        
         const modal = document.getElementById('video-detail-modal');
         const title = document.getElementById('video-detail-title');
         const meta = document.getElementById('video-detail-meta');
@@ -1734,28 +1730,13 @@ async function openVideoDetail(videoId) {
         // Build actions
         let actionsHtml = '';
         if (video.status === 'completed') {
-            actionsHtml += shareToggleHTML(video.id, video.share_token || null);
-            actionsHtml += `<div class="actions-separator"></div>`;
             actionsHtml += `<a href="${API_BASE}/videos/${video.id}/download" class="btn btn-primary btn-sm">Download</a>`;
         }
         actionsHtml += `<button class="btn btn-danger btn-sm" onclick="deleteVideoFromDetail(${video.id}, '${escapeHtml(video.name)}')">Delete</button>`;
-        actions.innerHTML = actionsHtml;
-        
-        // Show share URL row if sharing is enabled
-        if (video.status === 'completed' && video.share_token) {
-            const urlRow = document.createElement('div');
-            urlRow.id = 'share-url-row';
-            urlRow.className = 'share-link-url';
-            urlRow.style.marginTop = '0.4rem';
-            const url = `${window.location.origin}/shared/${video.share_token}`;
-            urlRow.innerHTML = `
-                <input type="text" value="${url}" readonly onclick="this.select()">
-                <button class="btn btn-secondary btn-sm" onclick="copyShareLink(this, '${url}')" title="Copy">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                </button>
-            `;
-            actions.after(urlRow);
+        if (video.status === 'completed') {
+            actionsHtml += shareToggleHTML(video.id, video.share_token || null);
         }
+        actions.innerHTML = actionsHtml;
         
         modal.classList.add('active');
     } catch (error) {
@@ -1791,14 +1772,22 @@ async function deleteVideoFromDetail(videoId, videoName) {
 
 function shareToggleHTML(videoId, shareToken) {
     const isShared = !!shareToken;
+    const url = shareToken ? `${window.location.origin}/shared/${shareToken}` : '';
     return `
-        <div class="share-toggle-inline">
+        <div class="share-toggle-inline" id="share-toggle-wrap">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
             <span style="font-size:0.8rem;">Share</span>
             <label class="toggle-switch">
                 <input type="checkbox" ${isShared ? 'checked' : ''} onchange="toggleShare(${videoId}, this.checked)">
                 <span class="toggle-slider"></span>
             </label>
+            ${isShared ? `
+            <div class="share-link-url">
+                <input type="text" value="${url}" readonly onclick="this.select()">
+                <button class="btn btn-secondary btn-sm" onclick="copyShareLink(this, '${url}')" title="Copy">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+            </div>` : ''}
         </div>
     `;
 }
@@ -1809,26 +1798,9 @@ async function toggleShare(videoId, enabled) {
             method: 'POST',
             body: { video_id: videoId, enabled }
         });
-        // Remove existing share URL row
-        const oldUrlRow = document.getElementById('share-url-row');
-        if (oldUrlRow) oldUrlRow.remove();
-        
-        if (enabled && result.token) {
-            const actions = document.getElementById('video-detail-actions');
-            if (actions) {
-                const urlRow = document.createElement('div');
-                urlRow.id = 'share-url-row';
-                urlRow.className = 'share-link-url';
-                urlRow.style.marginTop = '0.4rem';
-                const url = `${window.location.origin}/shared/${result.token}`;
-                urlRow.innerHTML = `
-                    <input type="text" value="${url}" readonly onclick="this.select()">
-                    <button class="btn btn-secondary btn-sm" onclick="copyShareLink(this, '${url}')" title="Copy">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                    </button>
-                `;
-                actions.after(urlRow);
-            }
+        const wrap = document.getElementById('share-toggle-wrap');
+        if (wrap) {
+            wrap.outerHTML = shareToggleHTML(videoId, result.token).trim();
         }
         loadVideos();
         showNotification(enabled ? 'Sharing enabled' : 'Sharing disabled');

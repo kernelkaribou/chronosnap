@@ -2613,10 +2613,11 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 
 .share-toggle-inline {
     display: flex; align-items: center; gap: 0.4rem;
+    margin-left: auto;
     color: var(--text-secondary); font-weight: 500;
 }
-.actions-separator {
-    width: 1px; height: 20px; background: var(--border-color);
+.share-toggle-inline .share-link-url {
+    margin-left: 0.5rem;
 }
 .toggle-switch {
     position: relative; display: inline-block; width: 40px; height: 22px;
