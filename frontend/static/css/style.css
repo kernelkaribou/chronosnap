@@ -2611,7 +2611,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .share-toggle-inline .share-link-url {
     margin-left: 0.5rem;
     flex: 1;
-    min-width: 200px;
+    min-width: 500px;
 }
 .toggle-switch {
     position: relative; display: inline-block; width: 40px; height: 22px;
@@ -2686,19 +2686,34 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .compare-btn {
     color: var(--text-secondary);
     background: transparent;
-    border: 1px solid var(--border-color);
+    border: none;
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
+    position: relative;
+    padding: 0.4rem 0.75rem;
+    border-radius: var(--radius-sm);
+    z-index: 0;
+}
+.compare-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-sm);
+    padding: 1.5px;
+    background: linear-gradient(135deg, #56b8d6, #a78bfa, #e8457e);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    z-index: -1;
 }
 .compare-btn:hover {
     color: var(--text-primary);
-    border-color: var(--text-secondary);
+    background: rgba(167, 139, 250, 0.08);
 }
 .compare-btn.active {
-    background: var(--primary-color);
+    background: linear-gradient(135deg, rgba(86,184,214,0.15), rgba(167,139,250,0.15), rgba(232,69,126,0.15));
     color: #fff;
-    border-color: var(--primary-color);
 }
 .compare-mode .video-gallery-card {
     cursor: pointer;
