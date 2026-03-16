@@ -72,16 +72,16 @@ def _send_webhook_event_sync(event: str, job_name: str, job_id: int,
     # Generate title and message based on event type
     if event == 'warning':
         title = f"Capture Alert: {job_name}"
-        message = f"Job \"{job_name}\" (ID: {job_id}) has failed {failure_count} consecutive captures. Last error: {error_message}"
+        message = f"{job_name} has failed {failure_count} consecutive captures. Last error: {error_message}"
     elif event == 'completed':
         title = f"Job Completed: {job_name}"
-        message = f"Job \"{job_name}\" (ID: {job_id}) has completed its scheduled capture period."
+        message = f"{job_name} has completed its scheduled capture period."
     elif event == 'recovered':
         title = f"Job Recovered: {job_name}"
-        message = f"Job \"{job_name}\" (ID: {job_id}) has recovered after previous capture failures."
+        message = f"{job_name} has recovered after previous capture failures."
     else:
         title = f"TimeLapse-Manager: {job_name}"
-        message = f"Event '{event}' for job \"{job_name}\" (ID: {job_id})."
+        message = f"Event '{event}' for {job_name}."
 
     template = settings['webhook_payload_template'] or DEFAULT_PAYLOAD_TEMPLATE
 
