@@ -610,6 +610,17 @@ body {
     letter-spacing: 0.02em;
 }
 
+.video-gallery-shared {
+    position: absolute;
+    bottom: 6px;
+    left: 6px;
+    background: rgba(0, 0, 0, 0.75);
+    color: var(--primary-color);
+    padding: 3px 5px;
+    border-radius: 4px;
+    line-height: 0;
+}
+
 .video-gallery-status {
     position: absolute;
     top: 50%;
