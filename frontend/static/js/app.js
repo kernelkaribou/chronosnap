@@ -1439,7 +1439,7 @@ async function loadVideos() {
         }
         
         populateVideoFilters(videos);
-        filterVideos();
+        filterVideos({ preserveSelection: true });
     } catch (error) {
         console.error('Failed to load videos:', error);
     }
@@ -1493,7 +1493,7 @@ function resetVideoFilters() {
     filterVideos();
 }
 
-function filterVideos() {
+function filterVideos(opts = {}) {
     const search = (document.getElementById('video-search').value || '').toLowerCase();
     const yearFilter = document.getElementById('video-year-filter').value;
     const monthFilter = document.getElementById('video-month-filter').value;
@@ -1534,7 +1534,7 @@ function filterVideos() {
     
     currentFilteredVideos = filtered;
     videosDisplayed = 0;
-    videoSelection.clear();
+    if (!opts.preserveSelection) videoSelection.clear();
     document.getElementById('videos-list').innerHTML = '';
     showMoreVideos();
 }
@@ -4504,7 +4504,7 @@ async function loadCapturesPage() {
         
         renderCaptures(data.captures);
         renderPagination(data);
-        updateSelectionControls();
+        captureSelection.updateControls();
     } catch (error) {
         console.error('Failed to load captures page:', error);
         showNotification('Failed to load captures', 'error');
