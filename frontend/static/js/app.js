@@ -356,8 +356,9 @@ class SelectionManager {
                     } else {
                         showNotification(`Deleted ${result.deleted} ${this.itemLabel}${result.deleted > 1 ? 's' : ''}`);
                     }
-                    this.clear();
+                    this.selected.clear();
                     this.onReload();
+                    this.updateControls();
                 } catch (error) {
                     showNotification(`Failed to delete ${this.itemLabel}s`, 'error');
                 }
@@ -375,7 +376,6 @@ class SelectionManager {
                     body: { ids: [...this.selected], is_favorite: isFavorite }
                 });
                 showNotification(`${count} ${this.itemLabel}${count > 1 ? 's' : ''} ${isFavorite ? 'favorited' : 'unfavorited'}`);
-                this.clear();
                 this.onReload();
             } catch (error) {
                 showNotification('Failed to update favorites', 'error');
