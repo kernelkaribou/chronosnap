@@ -1022,12 +1022,6 @@ body {
 
 .overlay-preview-panel img {
     width: 100%;
-    cursor: pointer;
-    transition: opacity var(--transition-fast);
-}
-
-.overlay-preview-panel img:hover {
-    opacity: 0.85;
 }
 
 /* Fullscreen overlay preview lightbox */

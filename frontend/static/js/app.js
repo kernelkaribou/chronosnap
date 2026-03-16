@@ -2618,11 +2618,16 @@ function openOverlayLightbox(imgEl) {
     if (!imgEl || !imgEl.src) return;
     const lb = document.createElement('div');
     lb.className = 'overlay-lightbox';
-    lb.innerHTML = `<img src="${imgEl.src}" alt="Overlay preview">`;
+    lb.innerHTML = `<img src="${imgEl.src}" alt="Preview">`;
     lb.addEventListener('click', () => lb.remove());
     document.addEventListener('keydown', function esc(e) {
-        if (e.key === 'Escape') { lb.remove(); document.removeEventListener('keydown', esc); }
-    });
+        if (e.key === 'Escape') {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+            lb.remove();
+            document.removeEventListener('keydown', esc);
+        }
+    }, true);
     document.body.appendChild(lb);
 }
 
