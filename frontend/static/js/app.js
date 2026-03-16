@@ -205,6 +205,54 @@ function closeConfirmModal(confirmed) {
     }
 }
 
+/**
+ * Show a confirmation dialog and execute an action if confirmed.
+ * Replaces the repeated showConfirm + if(confirmed) pattern.
+ * @param {string} message - Confirmation message
+ * @param {Function} actionFn - Async function to run if confirmed
+ * @param {Object} opts - Options: { closeModalId: string to close before action }
+ */
+function confirmAction(message, actionFn, opts = {}) {
+    showConfirm(message, async (confirmed) => {
+        if (confirmed) {
+            if (opts.closeModalId) closeModal(opts.closeModalId);
+            await actionFn();
+        }
+    });
+}
+
+/**
+ * Toggle visibility of a field group and optionally set required attributes.
+ * @param {string} checkboxId - ID of the controlling checkbox
+ * @param {string} containerId - ID of the container to show/hide
+ * @param {Object} opts - { requiredIds: string[], display: string, onToggle: fn }
+ */
+function toggleFieldGroup(checkboxId, containerId, opts = {}) {
+    const enabled = document.getElementById(checkboxId).checked;
+    const container = document.getElementById(containerId);
+    container.style.display = enabled ? (opts.display || 'block') : 'none';
+    if (opts.requiredIds) {
+        opts.requiredIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.required = enabled;
+        });
+    }
+    if (opts.onToggle) opts.onToggle(enabled);
+}
+
+/**
+ * Set a button's disabled state with consistent styling.
+ * @param {string|Element} btnOrId - Button element or ID
+ * @param {boolean} disabled - Whether to disable
+ */
+function setButtonState(btnOrId, disabled) {
+    const btn = typeof btnOrId === 'string' ? document.getElementById(btnOrId) : btnOrId;
+    if (!btn) return;
+    btn.disabled = disabled;
+    btn.style.opacity = disabled ? '0.5' : '1';
+    btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+}
+
 // Prevent Enter key from submitting forms
 function preventEnterSubmit(event) {
     if (event.key === 'Enter' && event.target.tagName !== 'TEXTAREA') {
@@ -215,27 +263,16 @@ function preventEnterSubmit(event) {
 
 // Toggle time window fields visibility
 function toggleTimeWindow() {
-    const enabled = document.getElementById('time_window_enabled').checked;
-    const fieldsDiv = document.getElementById('time-window-fields');
-    const startInput = document.getElementById('time_window_start');
-    const endInput = document.getElementById('time_window_end');
-    
-    if (enabled) {
-        fieldsDiv.style.display = 'block';
-        startInput.required = true;
-        endInput.required = true;
-        
-        // Add event listeners for duration estimate updates
-        startInput.addEventListener('change', updateDurationEstimate);
-        endInput.addEventListener('change', updateDurationEstimate);
-    } else {
-        fieldsDiv.style.display = 'none';
-        startInput.required = false;
-        endInput.required = false;
-    }
-    
-    // Update duration estimate
-    updateDurationEstimate();
+    toggleFieldGroup('time_window_enabled', 'time-window-fields', {
+        requiredIds: ['time_window_start', 'time_window_end'],
+        onToggle: (enabled) => {
+            if (enabled) {
+                document.getElementById('time_window_start').addEventListener('change', updateDurationEstimate);
+                document.getElementById('time_window_end').addEventListener('change', updateDurationEstimate);
+            }
+            updateDurationEstimate();
+        }
+    });
 }
 
 // Initialize app
@@ -879,14 +916,10 @@ function setupJobEditChangeTracking(originalJob) {
     if (!saveBtn) return;
     
     // Initially disabled
-    saveBtn.disabled = true;
-    saveBtn.style.opacity = '0.5';
-    saveBtn.style.cursor = 'not-allowed';
+    setButtonState(saveBtn, true);
     
     const enableSaveButton = () => {
-        saveBtn.disabled = false;
-        saveBtn.style.opacity = '1';
-        saveBtn.style.cursor = 'pointer';
+        setButtonState(saveBtn, false);
     };
     
     // Track changes on all editable fields
@@ -930,61 +963,37 @@ function setupJobEditChangeTracking(originalJob) {
 }
 
 function confirmDisableJob(jobId, jobName) {
-    showConfirm(
+    confirmAction(
         `Are you sure you want to disable the job "${jobName}"? The job will stop capturing images until re-enabled.`,
-        async (confirmed) => {
-            if (confirmed) {
-                closeModal('job-details-modal');
-                await updateJobStatus(jobId, 'disabled', jobName);
-            }
-        }
+        () => updateJobStatus(jobId, 'disabled', jobName),
+        { closeModalId: 'job-details-modal' }
     );
 }
 
 function confirmEnableJob(jobId, jobName) {
-    showConfirm(
+    confirmAction(
         `Are you sure you want to enable the job "${jobName}"? The job will start capturing images according to its schedule.`,
-        async (confirmed) => {
-            if (confirmed) {
-                closeModal('job-details-modal');
-                await updateJobStatus(jobId, 'active', jobName);
-            }
-        }
+        () => updateJobStatus(jobId, 'active', jobName),
+        { closeModalId: 'job-details-modal' }
     );
 }
 
 function confirmCompleteJob(jobId, jobName) {
-    showConfirm(
+    confirmAction(
         `Are you sure you want to complete the job "${jobName}"? This will set the job's end time to now and mark it as completed.`,
-        async (confirmed) => {
-            if (confirmed) {
-                closeModal('job-details-modal');
-                await completeJob(jobId, jobName);
-            }
-        }
+        () => completeJob(jobId, jobName),
+        { closeModalId: 'job-details-modal' }
     );
 }
 
 async function completeJob(jobId, jobName) {
     try {
-        const now = new Date();
-        const endDatetime = now.toISOString();
-        
-        const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
+        await apiRequest(`/jobs/${jobId}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                status: 'completed',
-                end_datetime: endDatetime
-            })
+            body: { status: 'completed', end_datetime: new Date().toISOString() }
         });
-        
-        if (response.ok) {
-            loadJobs();
-            showNotification(`Job "${jobName}" completed successfully`);
-        } else {
-            showNotification('Failed to complete job', 'error');
-        }
+        loadJobs();
+        showNotification(`Job "${jobName}" completed successfully`);
     } catch (error) {
         console.error('Failed to complete job:', error);
         showNotification('Failed to complete job', 'error');
@@ -993,19 +1002,10 @@ async function completeJob(jobId, jobName) {
 
 async function updateJobStatus(jobId, status, jobName) {
     try {
-        const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status })
-        });
-        
-        if (response.ok) {
-            loadJobs();
-            const action = status === 'active' ? 'enabled' : 'disabled';
-            showNotification(`Job "${jobName}" ${action} successfully`);
-        } else {
-            showNotification('Failed to update job status', 'error');
-        }
+        await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { status } });
+        loadJobs();
+        const action = status === 'active' ? 'enabled' : 'disabled';
+        showNotification(`Job "${jobName}" ${action} successfully`);
     } catch (error) {
         console.error('Failed to update job:', error);
         showNotification('Failed to update job', 'error');
@@ -1017,74 +1017,47 @@ async function updateJobEndTime(jobId) {
     const rawValue = endDatetimeInput.value || null;
     const endDatetime = rawValue ? datetimeLocalToISO(rawValue) : null;
     
-    // Validate end time if provided
     if (endDatetime) {
         const endTime = new Date(endDatetime);
-        const now = new Date();
-        
-        if (endTime <= now) {
+        if (endTime <= new Date()) {
             showNotification('End time must be in the future', 'error');
             return;
         }
     }
     
     try {
-        const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ end_datetime: endDatetime })
-        });
-        
-        if (response.ok) {
-            closeModal('job-details-modal');
-            loadJobs();
-            showNotification('End time updated successfully');
-        } else {
-            const error = await response.json();
-            showNotification(error.detail || 'Failed to update end time', 'error');
-        }
+        await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { end_datetime: endDatetime } });
+        closeModal('job-details-modal');
+        loadJobs();
+        showNotification('End time updated successfully');
     } catch (error) {
         console.error('Failed to update end time:', error);
-        showNotification('Failed to update end time', 'error');
+        showNotification(error.message || 'Failed to update end time', 'error');
     }
 }
 
 async function updateJobUrl(jobId) {
-    const urlInput = document.getElementById('edit_url');
-    const url = urlInput.value.trim();
+    const url = document.getElementById('edit_url').value.trim();
     
     if (!url) {
         showNotification('URL cannot be empty', 'error');
         return;
     }
     
-    // Auto-detect stream type from URL
     const stream_type = url.toLowerCase().startsWith('rtsp://') ? 'rtsp' : 'http';
     
     try {
-        const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, stream_type })
-        });
-        
-        if (response.ok) {
-            showNotification('Stream URL updated successfully');
-            // Refresh the modal to show updated info
-            showJobDetails(jobId);
-        } else {
-            const error = await response.json();
-            showNotification(error.detail || 'Failed to update URL', 'error');
-        }
+        await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { url, stream_type } });
+        showNotification('Stream URL updated successfully');
+        showJobDetails(jobId);
     } catch (error) {
         console.error('Failed to update URL:', error);
-        showNotification('Failed to update URL', 'error');
+        showNotification(error.message || 'Failed to update URL', 'error');
     }
 }
 
 async function updateJobInterval(jobId) {
-    const intervalInput = document.getElementById('edit_interval_seconds');
-    const interval = parseInt(intervalInput.value);
+    const interval = parseInt(document.getElementById('edit_interval_seconds').value);
     
     if (!interval || interval < 10) {
         showNotification('Interval must be at least 10 seconds', 'error');
@@ -1092,51 +1065,27 @@ async function updateJobInterval(jobId) {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ interval_seconds: interval })
-        });
-        
-        if (response.ok) {
-            showNotification('Capture interval updated successfully');
-            // Refresh the modal to show updated info
-            showJobDetails(jobId);
-        } else {
-            const error = await response.json();
-            showNotification(error.detail || 'Failed to update interval', 'error');
-        }
+        await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { interval_seconds: interval } });
+        showNotification('Capture interval updated successfully');
+        showJobDetails(jobId);
     } catch (error) {
         console.error('Failed to update interval:', error);
-        showNotification('Failed to update interval', 'error');
+        showNotification(error.message || 'Failed to update interval', 'error');
     }
 }
 
 function toggleEditTimeWindow() {
-    const enabled = document.getElementById('edit_time_window_enabled').checked;
-    const fieldsDiv = document.getElementById('edit-time-window-fields');
-    const startInput = document.getElementById('edit_time_window_start');
-    const endInput = document.getElementById('edit_time_window_end');
-    
-    if (enabled) {
-        fieldsDiv.style.display = 'block';
-        startInput.required = true;
-        endInput.required = true;
-    } else {
-        fieldsDiv.style.display = 'none';
-        startInput.required = false;
-        endInput.required = false;
-    }
+    toggleFieldGroup('edit_time_window_enabled', 'edit-time-window-fields', {
+        requiredIds: ['edit_time_window_start', 'edit_time_window_end']
+    });
 }
 
 function toggleAutoBuildFields() {
-    const enabled = document.getElementById('auto_build_enabled').checked;
-    document.getElementById('auto-build-fields').style.display = enabled ? 'block' : 'none';
+    toggleFieldGroup('auto_build_enabled', 'auto-build-fields');
 }
 
 function toggleEditAutoBuildFields() {
-    const enabled = document.getElementById('edit_auto_build_enabled').checked;
-    document.getElementById('edit-auto-build-fields').style.display = enabled ? 'block' : 'none';
+    toggleFieldGroup('edit_auto_build_enabled', 'edit-auto-build-fields');
 }
 
 function setAutoBuildInterval(inputId, hours) {
@@ -1218,44 +1167,24 @@ async function saveJobChanges(jobId) {
     };
     
     try {
-        const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updateData)
-        });
-        
-        if (response.ok) {
-            // Reload jobs BEFORE closing modal to prevent showing stale data
-            await loadJobs();
-            closeModal('job-details-modal');
-            showNotification('Job settings updated successfully');
-        } else {
-            const error = await response.json();
-            showNotification(error.detail || 'Failed to update job', 'error');
-        }
+        await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: updateData });
+        await loadJobs();
+        closeModal('job-details-modal');
+        showNotification('Job settings updated successfully');
     } catch (error) {
         console.error('Failed to update job:', error);
-        showNotification('Failed to update job', 'error');
+        showNotification(error.message || 'Failed to update job', 'error');
     }
 }
 
 async function deleteJob(jobId, jobName) {
-    showConfirm(
+    confirmAction(
         `Are you sure you want to delete the job "${jobName}"? This will permanently remove the job and all its captures. Timelapse videos will be preserved.`,
-        async (confirmed) => {
-            if (!confirmed) return;
-            
+        async () => {
             try {
-                const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
-                    method: 'DELETE'
-                });
-                
-                if (response.ok) {
-                    loadJobs();
-                    showNotification(`Job "${jobName}" and all captures deleted successfully`);
-                } else {
-                    showNotification(`Failed to delete job "${jobName}"`, 'error');
-                }
+                await apiRequest(`/jobs/${jobId}`, { method: 'DELETE' });
+                loadJobs();
+                showNotification(`Job "${jobName}" and all captures deleted successfully`);
             } catch (error) {
                 console.error('Failed to delete job:', error);
                 showNotification(`Failed to delete job "${jobName}"`, 'error');
@@ -1281,10 +1210,7 @@ async function previewStream(urlInputId, resultDivId) {
     resultDiv.className = 'test-result';
     
     try {
-        const response = await fetch(`${API_BASE}/jobs/test-url?url=${encodeURIComponent(url)}`, {
-            method: 'POST'
-        });
-        const result = await response.json();
+        const result = await apiRequest('/jobs/test-url', { method: 'POST', query: { url } });
         
         if (result.success) {
             resultDiv.className = 'test-result';
@@ -1311,8 +1237,7 @@ let selectedVideos = new Set();
 
 async function loadVideos() {
     try {
-        const response = await fetch(`${API_BASE}/videos/`);
-        const videos = await response.json();
+        const videos = await apiRequest('/videos/');
         allVideos = videos;
         
         // Check if any videos are processing
@@ -1525,9 +1450,7 @@ function renderVideos(videos, isEmpty) {
 
 async function openVideoDetail(videoId) {
     try {
-        const response = await fetch(`${API_BASE}/videos/${videoId}`);
-        if (!response.ok) return;
-        const video = await response.json();
+        const video = await apiRequest(`/videos/${videoId}`);
         
         const modal = document.getElementById('video-detail-modal');
         const title = document.getElementById('video-detail-title');
@@ -1595,19 +1518,14 @@ function closeVideoDetail() {
 }
 
 async function deleteVideoFromDetail(videoId, videoName) {
-    showConfirm(
+    confirmAction(
         `Are you sure you want to delete "${videoName}"?`,
-        async (confirmed) => {
-            if (!confirmed) return;
+        async () => {
             try {
-                const response = await fetch(`${API_BASE}/videos/${videoId}`, { method: 'DELETE' });
-                if (response.ok) {
-                    closeVideoDetail();
-                    loadVideos();
-                    showNotification(`Video "${videoName}" deleted successfully`);
-                } else {
-                    showNotification(`Failed to delete video "${videoName}"`, 'error');
-                }
+                await apiRequest(`/videos/${videoId}`, { method: 'DELETE' });
+                closeVideoDetail();
+                loadVideos();
+                showNotification(`Video "${videoName}" deleted successfully`);
             } catch (error) {
                 showNotification(`Failed to delete video "${videoName}"`, 'error');
             }
@@ -1686,17 +1604,14 @@ async function deleteSelectedVideos() {
     const count = selectedVideos.size;
     if (count === 0) return;
     
-    showConfirm(
+    confirmAction(
         `Are you sure you want to delete ${count} timelapse${count > 1 ? 's' : ''}?`,
-        async (confirmed) => {
-            if (!confirmed) return;
+        async () => {
             try {
-                const response = await fetch(`${API_BASE}/videos/delete-multiple`, {
+                const result = await apiRequest('/videos/delete-multiple', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ video_ids: [...selectedVideos] })
+                    body: { video_ids: [...selectedVideos] }
                 });
-                const result = await response.json();
                 selectedVideos.clear();
                 loadVideos();
                 showNotification(`Deleted ${result.deleted} timelapse${result.deleted > 1 ? 's' : ''}`);
@@ -1749,9 +1664,7 @@ async function showProcessVideoModal(jobId, jobName) {
             // Disable create button until a job is selected
             const createBtn = document.getElementById('create-video-btn');
             if (createBtn) {
-                createBtn.disabled = true;
-                createBtn.style.opacity = '0.5';
-                createBtn.style.cursor = 'not-allowed';
+                setButtonState(createBtn, true);
             }
         }
         
@@ -1767,8 +1680,7 @@ async function populateJobSelector() {
     jobSelect.innerHTML = '<option value="">Select a job...</option>';
     
     try {
-        const response = await fetch(`${API_BASE}/jobs/`);
-        const jobs = await response.json();
+        const jobs = await apiRequest('/jobs/');
         
         // Only show jobs that have captures
         const jobsWithCaptures = jobs.filter(j => j.capture_count > 0);
@@ -1808,9 +1720,7 @@ async function onJobSelectChange() {
         document.getElementById('available-range-info').style.display = 'none';
         const createBtn = document.getElementById('create-video-btn');
         if (createBtn) {
-            createBtn.disabled = true;
-            createBtn.style.opacity = '0.5';
-            createBtn.style.cursor = 'not-allowed';
+            setButtonState(createBtn, true);
         }
         return;
     }
@@ -1990,9 +1900,7 @@ function displayDurationEstimate(captureCount, framerate) {
                     formatDateTime(window.lastCaptureTime.toISOString()) + '</p>';
                 
                 if (createBtn) {
-                    createBtn.disabled = true;
-                    createBtn.style.opacity = '0.5';
-                    createBtn.style.cursor = 'not-allowed';
+                    setButtonState(createBtn, true);
                 }
                 return;
             }
@@ -2007,18 +1915,14 @@ function displayDurationEstimate(captureCount, framerate) {
         
         // Disable create button when no captures
         if (createBtn) {
-            createBtn.disabled = true;
-            createBtn.style.opacity = '0.5';
-            createBtn.style.cursor = 'not-allowed';
+            setButtonState(createBtn, true);
         }
         return;
     }
     
     // Enable create button when captures exist
     if (createBtn) {
-        createBtn.disabled = false;
-        createBtn.style.opacity = '1';
-        createBtn.style.cursor = 'pointer';
+        setButtonState(createBtn, false);
     }
     
     const durationSeconds = captureCount / framerate;
@@ -2371,24 +2275,14 @@ async function processVideo(event) {
     };
     
     try {
-        const response = await fetch(`${API_BASE}/videos/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formData)
-        });
-        
-        if (response.ok) {
-            closeModal('process-video-modal');
-            document.getElementById('process-video-form').reset();
-            switchView('videos');
-            showNotification('Video processing started');
-        } else {
-            const error = await response.json();
-            showNotification(`Failed to start processing: ${error.detail || 'Unknown error'}`, 'error');
-        }
+        await apiRequest('/videos/', { method: 'POST', body: formData });
+        closeModal('process-video-modal');
+        document.getElementById('process-video-form').reset();
+        switchView('videos');
+        showNotification('Video processing started');
     } catch (error) {
         console.error('Failed to process video:', error);
-        showNotification('Failed to start video processing', 'error');
+        showNotification(`Failed to start processing: ${error.message || 'Unknown error'}`, 'error');
     }
 }
 
@@ -2974,22 +2868,13 @@ window.addEventListener('beforeunload', () => {
 let maintenanceData = null;
 
 async function manualCapture(jobId, jobName) {
-    showConfirm(
+    confirmAction(
         `Take a manual snapshot for "${jobName}"? This will not affect the scheduled capture timing.`,
-        async (confirmed) => {
-            if (!confirmed) return;
-            
+        async () => {
             showNotification('Capturing snapshot...', 'info');
             
             try {
-                const response = await fetch(`${API_BASE}/jobs/${jobId}/capture`, {
-                    method: 'POST'
-                });
-                
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.detail || 'Capture failed');
-                }
+                await apiRequest(`/jobs/${jobId}/capture`, { method: 'POST' });
                 
                 showNotification('Snapshot captured successfully!', 'success');
                 
@@ -3024,15 +2909,7 @@ async function performMaintenanceScan(jobId, jobName) {
     modal.classList.add('active');
     
     try {
-        const response = await fetch(`${API_BASE}/jobs/${jobId}/maintenance/scan`, {
-            method: 'POST'
-        });
-        
-        if (!response.ok) {
-            throw new Error('Scan failed');
-        }
-        
-        maintenanceData = await response.json();
+        maintenanceData = await apiRequest(`/jobs/${jobId}/maintenance/scan`, { method: 'POST' });
         displayMaintenanceResults(jobId, jobName);
         
     } catch (error) {
@@ -3179,13 +3056,9 @@ function confirmMaintenanceSubmit(jobId, jobName) {
     if (data.orphaned_count > 0) parts.push(`import ${data.orphaned_count} file(s) with no database record`);
     const summary = parts.join(' and ');
     
-    showConfirm(
+    confirmAction(
         `This will ${summary}. This cannot be undone.`,
-        async (confirmed) => {
-            if (confirmed) {
-                await performMaintenanceActions(jobId, jobName);
-            }
-        }
+        () => performMaintenanceActions(jobId, jobName)
     );
 }
 
@@ -3206,30 +3079,18 @@ async function performMaintenanceActions(jobId, jobName) {
         // Perform cleanup if there are missing files
         if (data.missing_count > 0) {
             const captureIds = data.missing_files.map(f => f.id);
-            const response = await fetch(`${API_BASE}/jobs/${jobId}/maintenance/cleanup`, {
+            cleanupResult = await apiRequest(`/jobs/${jobId}/maintenance/cleanup`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ capture_ids: captureIds })
+                body: { capture_ids: captureIds }
             });
-            
-            if (!response.ok) {
-                throw new Error('Cleanup failed');
-            }
-            cleanupResult = await response.json();
         }
         
         // Perform import if there are orphaned files
         if (data.orphaned_count > 0) {
-            const response = await fetch(`${API_BASE}/jobs/${jobId}/maintenance/import`, {
+            importResult = await apiRequest(`/jobs/${jobId}/maintenance/import`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orphaned_files: data.orphaned_files })
+                body: { orphaned_files: data.orphaned_files }
             });
-            
-            if (!response.ok) {
-                throw new Error('Import failed');
-            }
-            importResult = await response.json();
         }
         
         // Show success with combined results
@@ -3294,31 +3155,22 @@ async function performMaintenanceActions(jobId, jobName) {
 }
 
 function confirmMaintenanceCleanup(jobId, jobName) {
-    showConfirm(
+    confirmAction(
         `Are you absolutely sure you want to remove ${maintenanceData.missing_count} database record(s) for missing files? This action cannot be undone.`,
-        async (confirmed) => {
-            if (confirmed) {
-                await performMaintenanceCleanup(jobId, jobName);
-            }
-        }
+        () => performMaintenanceCleanup(jobId, jobName)
     );
 }
 
 function confirmMaintenanceImport(jobId, jobName) {
-    showConfirm(
+    confirmAction(
         `Import ${maintenanceData.orphaned_count} orphaned file(s) into the database? Timestamps will be extracted from the files.`,
-        async (confirmed) => {
-            if (confirmed) {
-                await performMaintenanceImport(jobId, jobName);
-            }
-        }
+        () => performMaintenanceImport(jobId, jobName)
     );
 }
 
 async function performMaintenanceImport(jobId, jobName) {
     const content = document.getElementById('maintenance-content');
     
-    // Show importing message
     content.innerHTML = `
         <div style="text-align: center; padding: 2rem;">
             <div style="font-size: 2rem; margin-bottom: 1rem;">📥</div>
@@ -3327,21 +3179,10 @@ async function performMaintenanceImport(jobId, jobName) {
     `;
     
     try {
-        const response = await fetch(`${API_BASE}/jobs/${jobId}/maintenance/import`, {
+        const result = await apiRequest(`/jobs/${jobId}/maintenance/import`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                orphaned_files: maintenanceData.orphaned_files
-            })
+            body: { orphaned_files: maintenanceData.orphaned_files }
         });
-        
-        if (!response.ok) {
-            throw new Error('Import failed');
-        }
-        
-        const result = await response.json();
         
         // Show success
         content.innerHTML = `
@@ -3397,21 +3238,10 @@ async function performMaintenanceCleanup(jobId, jobName) {
     try {
         const captureIds = maintenanceData.missing_files.map(f => f.id);
         
-        const response = await fetch(`${API_BASE}/jobs/${jobId}/maintenance/cleanup`, {
+        const result = await apiRequest(`/jobs/${jobId}/maintenance/cleanup`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                capture_ids: captureIds
-            })
+            body: { capture_ids: captureIds }
         });
-        
-        if (!response.ok) {
-            throw new Error('Cleanup failed');
-        }
-        
-        const result = await response.json();
         
         // Show success
         content.innerHTML = `
@@ -3917,11 +3747,7 @@ async function loadSettings() {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/settings/api-key`);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
+        const data = await apiRequest('/settings/api-key');
         apiKeyInput.value = data.api_key;
     } catch (error) {
         console.error('Failed to load settings:', error);
@@ -3968,26 +3794,19 @@ async function copyApiKey() {
 }
 
 async function regenerateApiKey() {
-    showConfirm('Are you sure you want to regenerate the API key? This will invalidate the current key and any external integrations using it will need to be updated.', async (confirmed) => {
-        if (!confirmed) return;
-        
-        try {
-            const response = await fetch(`${API_BASE}/settings/api-key/regenerate`, {
-                method: 'POST'
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to regenerate API key');
+    confirmAction(
+        'Are you sure you want to regenerate the API key? This will invalidate the current key and any external integrations using it will need to be updated.',
+        async () => {
+            try {
+                const data = await apiRequest('/settings/api-key/regenerate', { method: 'POST' });
+                document.getElementById('api-key-display').value = data.api_key;
+                showNotification('API key regenerated successfully', 'success');
+            } catch (error) {
+                console.error('Failed to regenerate API key:', error);
+                showNotification('Failed to regenerate API key', 'error');
             }
-            
-            const data = await response.json();
-            document.getElementById('api-key-display').value = data.api_key;
-            showNotification('API key regenerated successfully', 'success');
-        } catch (error) {
-            console.error('Failed to regenerate API key:', error);
-            showNotification('Failed to regenerate API key', 'error');
         }
-    });
+    );
 }
 
 // Webhook Settings Functions
@@ -4270,11 +4089,9 @@ function displayOrphanedResults(data) {
 }
 
 async function deleteOrphanedGroup(type, folderPath, jobId, jobName) {
-    showConfirm(
+    confirmAction(
         `Delete all orphaned captures from "${jobName}"? This will permanently remove ${type === 'database' ? 'database records' : type === 'both' ? 'files and database records' : 'files from disk'}.`,
-        async (confirmed) => {
-            if (!confirmed) return;
-            
+        async () => {
             try {
                 const body = {};
                 if (folderPath) body.folders = [folderPath];
@@ -4303,11 +4120,9 @@ async function deleteOrphanedGroup(type, folderPath, jobId, jobName) {
 }
 
 async function deleteAllOrphanedCaptures() {
-    showConfirm(
+    confirmAction(
         'Delete ALL orphaned captures? This will permanently remove all orphaned files and database records.',
-        async (confirmed) => {
-            if (!confirmed) return;
-            
+        async () => {
             try {
                 const response = await apiRequest('/captures/orphaned/cleanup', {
                     method: 'POST',
@@ -4623,9 +4438,7 @@ function closeCapturePreview() {
 function deleteSingleCapture() {
     if (!capturesState.currentCaptureId) return;
     
-    showConfirm('Are you sure you want to delete this capture? This action cannot be undone.', async (confirmed) => {
-        if (!confirmed) return;
-        
+    confirmAction('Are you sure you want to delete this capture? This action cannot be undone.', async () => {
         try {
             await apiRequest(`/captures/${capturesState.currentCaptureId}`, { method: 'DELETE' });
             showNotification('Capture deleted successfully', 'success');
@@ -4642,11 +4455,7 @@ function deleteSelectedCaptures() {
     const count = capturesState.selectedCaptures.size;
     if (count === 0) return;
     
-    const message = `Are you sure you want to delete ${count} capture${count > 1 ? 's' : ''}? This action cannot be undone.`;
-    
-    showConfirm(message, async (confirmed) => {
-        if (!confirmed) return;
-        
+    confirmAction(`Are you sure you want to delete ${count} capture${count > 1 ? 's' : ''}? This action cannot be undone.`, async () => {
         try {
             const captureIds = Array.from(capturesState.selectedCaptures);
             const result = await apiRequest('/captures/delete-multiple', {
