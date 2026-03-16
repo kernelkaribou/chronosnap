@@ -45,6 +45,8 @@ def _migrate_font_size_to_percent(cursor):
     for row in cursor.fetchall():
         try:
             cfg = json.loads(row[1])
+            if not isinstance(cfg, dict):
+                continue
             fs = cfg.get('font_size')
             if isinstance(fs, (int, float)) and fs > 20:
                 cfg['font_size'] = round(max(1, min(20, fs / 1080 * 100)), 1)
@@ -58,6 +60,8 @@ def _migrate_font_size_to_percent(cursor):
     for row in cursor.fetchall():
         try:
             cfg = json.loads(row[1])
+            if not isinstance(cfg, dict):
+                continue
             fs = cfg.get('font_size')
             if isinstance(fs, (int, float)) and fs > 20:
                 cfg['font_size'] = round(max(1, min(20, fs / 1080 * 100)), 1)
