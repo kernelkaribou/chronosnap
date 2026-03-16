@@ -2427,36 +2427,50 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     gap: 0.5rem;
     align-items: center;
     margin-bottom: 1rem;
+    flex-wrap: wrap;
 }
 .tag-create-row .form-control { flex: 1; max-width: 250px; }
 
 .tag-color-picker {
-    width: 36px; height: 36px;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    padding: 2px;
-    cursor: pointer;
-    background: var(--card-bg);
+    display: none;
 }
 
-.tag-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.color-swatch-row {
+    display: flex; gap: 4px; align-items: center;
+}
+.color-swatch {
+    width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+    border: 2px solid transparent; transition: border-color 0.15s, transform 0.15s;
+    flex-shrink: 0;
+}
+.color-swatch:hover { transform: scale(1.15); }
+.color-swatch.selected { border-color: var(--text-primary); transform: scale(1.15); }
+
+.tag-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
 
 .tag-list-item {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 0.75rem;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
     background: var(--card-bg);
     border: 1px solid var(--border-color);
     border-radius: 8px;
+    min-width: 0;
 }
+.tag-list-item .tag-chip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tag-list-item .tag-usage {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: var(--text-secondary);
     margin-left: auto;
+    white-space: nowrap;
 }
 .tag-list-item .tag-actions {
     display: flex; gap: 0.25rem;
+}
+.tag-list-item:has(> .color-swatch-row) {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
 }
 .tag-action-btn {
     background: none; border: none; cursor: pointer;

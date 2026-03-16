@@ -4291,10 +4291,40 @@ async function testWebhook() {
 
 let allTags = [];
 
+const TAG_COLORS = [
+    '#ef4444', '#f97316', '#f59e0b', '#eab308',
+    '#22c55e', '#10b981', '#14b8a6', '#06b6d4',
+    '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7',
+    '#ec4899', '#f43f5e', '#78716c', '#64748b'
+];
+
+function colorSwatchHTML(containerId, selectedColor) {
+    return `<div class="color-swatch-row" id="${containerId}">${TAG_COLORS.map(c =>
+        `<span class="color-swatch${c === selectedColor ? ' selected' : ''}" style="background:${c};" data-color="${c}" onclick="selectSwatch(this)"></span>`
+    ).join('')}</div>`;
+}
+
+function selectSwatch(el) {
+    el.parentElement.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+    el.classList.add('selected');
+}
+
+function getSwatchColor(containerId, fallback = '#6366f1') {
+    const selected = document.querySelector(`#${containerId} .color-swatch.selected`);
+    return selected ? selected.dataset.color : fallback;
+}
+
 async function loadTagManager() {
     try {
         allTags = await apiRequest('/tags/');
         renderTagList();
+        // Render create swatches if not already populated
+        const swatchContainer = document.getElementById('tag-create-swatches');
+        if (swatchContainer && !swatchContainer.children.length) {
+            swatchContainer.innerHTML = TAG_COLORS.map(c =>
+                `<span class="color-swatch${c === '#6366f1' ? ' selected' : ''}" style="background:${c};" data-color="${c}" onclick="selectSwatch(this)"></span>`
+            ).join('');
+        }
     } catch (error) {
         console.error('Failed to load tags:', error);
     }
@@ -4330,7 +4360,7 @@ function renderTagList() {
 
 async function createTag() {
     const nameInput = document.getElementById('tag-create-name');
-    const colorInput = document.getElementById('tag-create-color');
+    const color = getSwatchColor('tag-create-swatches');
     const name = nameInput.value.trim();
     if (!name) {
         showNotification('Enter a tag name', 'error');
@@ -4339,10 +4369,9 @@ async function createTag() {
     try {
         await apiRequest('/tags/', {
             method: 'POST',
-            body: { name, color: colorInput.value }
+            body: { name, color }
         });
         nameInput.value = '';
-        colorInput.value = '#6366f1';
         await loadTagManager();
         showNotification(`Tag "${name}" created`);
     } catch (error) {
@@ -4358,8 +4387,8 @@ function editTagInline(tagId) {
     if (!item) return;
 
     item.innerHTML = `
-        <input type="text" class="form-control" value="${escapeHtml(tag.name)}" id="tag-edit-name-${tagId}" style="flex:1;max-width:200px;font-size:0.85rem;padding:0.25rem 0.5rem;">
-        <input type="color" value="${tag.color}" id="tag-edit-color-${tagId}" class="tag-color-picker" style="width:30px;height:30px;">
+        <input type="text" class="form-control" value="${escapeHtml(tag.name)}" id="tag-edit-name-${tagId}" style="flex:1;max-width:150px;font-size:0.85rem;padding:0.25rem 0.5rem;">
+        ${colorSwatchHTML(`tag-edit-swatches-${tagId}`, tag.color)}
         <button class="btn btn-sm btn-purple" onclick="saveTagEdit(${tagId})">Save</button>
         <button class="btn btn-sm btn-secondary" onclick="renderTagList()">Cancel</button>
     `;
@@ -4368,7 +4397,7 @@ function editTagInline(tagId) {
 
 async function saveTagEdit(tagId) {
     const name = document.getElementById(`tag-edit-name-${tagId}`).value.trim();
-    const color = document.getElementById(`tag-edit-color-${tagId}`).value;
+    const color = getSwatchColor(`tag-edit-swatches-${tagId}`);
     if (!name) {
         showNotification('Tag name cannot be empty', 'error');
         return;
