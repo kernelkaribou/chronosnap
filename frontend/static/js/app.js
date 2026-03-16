@@ -945,8 +945,6 @@ async function showJobDetails(jobId) {
                             <label>FPS</label>
                             <input type="number" id="edit_auto_build_fps" class="form-control" min="1" max="120" value="${job.auto_build_fps || 30}">
                         </div>
-                    </div>
-                    <div class="form-row">
                         <div class="form-group flex-1">
                             <label>Quality</label>
                             <select id="edit_auto_build_quality" class="form-control">
