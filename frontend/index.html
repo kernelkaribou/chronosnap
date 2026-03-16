@@ -84,12 +84,24 @@
             <div id="captures-view" class="view">
                 <div class="view-header">
                     <h2>Captures</h2>
-                    <button class="btn btn-secondary" onclick="scanOrphanedCaptures()">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 0.25rem;">
-                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
-                        </svg>
-                        Cleanup
-                    </button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-purple" onclick="openCompareModal()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 0.25rem;">
+                                <rect x="2" y="2" width="20" height="20" rx="2"/>
+                                <path d="M12 2v20"/>
+                                <circle cx="7.5" cy="7.5" r="1.5"/>
+                                <path d="M6 18l3-4 2 2 4-5 3 4"/>
+                                <rect x="12" y="2" width="10" height="20" rx="2" fill="currentColor" opacity="0.15" stroke="none"/>
+                            </svg>
+                            Compare
+                        </button>
+                        <button class="btn btn-secondary" onclick="scanOrphanedCaptures()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 0.25rem;">
+                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+                            </svg>
+                            Cleanup
+                        </button>
+                    </div>
                 </div>
                 
                 <!-- Filters -->
@@ -318,19 +330,11 @@
                 <div class="form-row">
                     <div class="form-group flex-1">
                         <label>Start Date & Time *</label>
-                        <div class="datetime-picker-container">
-                            <input type="date" id="start_date" class="form-control" required>
-                            <input type="time" id="start_time" class="form-control" required>
-                        </div>
-                        <input type="hidden" id="start_datetime">
+                        <input type="datetime-local" id="start_datetime" class="form-control" required>
                     </div>
                     <div class="form-group flex-1">
                         <label>End Date & Time</label>
-                        <div class="datetime-picker-container">
-                            <input type="date" id="end_date" class="form-control">
-                            <input type="time" id="end_time" class="form-control">
-                        </div>
-                        <input type="hidden" id="end_datetime">
+                        <input type="datetime-local" id="end_datetime" class="form-control">
                         <small>Leave empty for ongoing capture</small>
                     </div>
                 </div>
@@ -556,24 +560,12 @@
                 <div id="capture-range" style="display: none;">
                     <div class="form-group">
                         <label>Custom Time Range</label>
-                        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                            <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                <span style="color: var(--text-secondary); font-size: 0.9rem;">From:</span>
-                                <div class="datetime-picker-container">
-                                    <input type="date" id="video_start_date" class="form-control">
-                                    <input type="time" id="video_start_time" class="form-control">
-                                </div>
-                            </div>
-                            <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                <span style="color: var(--text-secondary); font-size: 0.9rem;">To:</span>
-                                <div class="datetime-picker-container">
-                                    <input type="date" id="video_end_date" class="form-control">
-                                    <input type="time" id="video_end_time" class="form-control">
-                                </div>
-                            </div>
+                        <div style="display: flex; gap: 0.75rem; align-items: center;">
+                            <span style="color: var(--text-secondary); font-size: 0.85rem; white-space: nowrap;">Start</span>
+                            <input type="datetime-local" id="video_start_datetime" class="form-control" style="flex: 1; min-width: 0;">
+                            <span style="color: var(--text-secondary); font-size: 0.85rem; white-space: nowrap;">End</span>
+                            <input type="datetime-local" id="video_end_datetime" class="form-control" style="flex: 1; min-width: 0;">
                         </div>
-                        <input type="hidden" id="video_start_datetime">
-                        <input type="hidden" id="video_end_datetime">
                     </div>
                 </div>
 
@@ -632,6 +624,85 @@
             </div>
             <div id="maintenance-content" style="padding: 1.5rem;">
                 <!-- Content will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Capture Comparison Modal -->
+    <div id="compare-modal" class="modal">
+        <div class="modal-content xlarge">
+            <div class="modal-header">
+                <h3>Compare Captures</h3>
+                <span class="close" onclick="closeModal('compare-modal')">&times;</span>
+            </div>
+            <div style="padding: 1.5rem;">
+                <!-- Job selector -->
+                <div class="form-group" id="compare-job-selector">
+                    <label>Select Job</label>
+                    <select id="compare-job-select" class="form-control" onchange="onCompareJobSelected()">
+                        <option value="">Choose a job...</option>
+                    </select>
+                </div>
+
+                <!-- Controls (hidden until job selected) -->
+                <div id="compare-controls" style="display: none;">
+                    <div class="compare-toolbar">
+                        <button class="btn btn-secondary btn-sm" onclick="compareFirstLast()">First vs Last</button>
+                        <div class="compare-date-inline">
+                            <label>Capture A</label>
+                            <input type="datetime-local" id="compare-date-a" class="form-control form-control-sm" onchange="onCompareDateChanged('a')">
+                        </div>
+                        <div class="compare-date-inline">
+                            <label>Capture B</label>
+                            <input type="datetime-local" id="compare-date-b" class="form-control form-control-sm" onchange="onCompareDateChanged('b')">
+                        </div>
+                        <div style="margin-left: auto; display: flex; gap: 0.25rem;">
+                            <button class="btn btn-sm compare-mode-btn active" id="compare-mode-side" onclick="setCompareMode('side')">Side by Side</button>
+                            <button class="btn btn-sm compare-mode-btn" id="compare-mode-slider" onclick="setCompareMode('slider')">Slider</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comparison display -->
+                <div id="compare-display" style="display: none;">
+                    <!-- Side by side mode -->
+                    <div id="compare-side-by-side" class="compare-side-by-side">
+                        <div class="compare-panel">
+                            <img id="compare-img-a" alt="Capture A">
+                            <div class="compare-label" id="compare-label-a"></div>
+                        </div>
+                        <div class="compare-panel">
+                            <img id="compare-img-b" alt="Capture B">
+                            <div class="compare-label" id="compare-label-b"></div>
+                        </div>
+                    </div>
+
+                    <!-- Slider mode -->
+                    <div id="compare-slider" class="compare-slider" style="display: none;">
+                        <div class="compare-slider-container" id="compare-slider-container">
+                            <img id="compare-slider-img-b" class="compare-slider-img" alt="Capture B">
+                            <div class="compare-slider-overlay" id="compare-slider-overlay">
+                                <img id="compare-slider-img-a" class="compare-slider-img" alt="Capture A">
+                            </div>
+                            <div class="compare-slider-handle" id="compare-slider-handle">
+                                <div class="compare-slider-line"></div>
+                                <div class="compare-slider-grip">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8L22 12L18 16"/><path d="M6 8L2 12L6 16"/></svg>
+                                </div>
+                                <div class="compare-slider-line"></div>
+                            </div>
+                        </div>
+                        <div class="compare-slider-labels">
+                            <div class="compare-label" id="compare-slider-label-a"></div>
+                            <div class="compare-label" id="compare-slider-label-b"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty state -->
+                <div id="compare-empty" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                    Select a job to begin comparing captures
+                </div>
             </div>
         </div>
     </div>
