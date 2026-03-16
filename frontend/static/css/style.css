@@ -926,6 +926,42 @@ body {
     }
 }
 
+/* Text overlay position grid */
+.overlay-position-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
+    width: 120px;
+}
+
+.overlay-position-grid .pos-btn {
+    width: 100%;
+    aspect-ratio: 1.5;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+    padding: 0;
+}
+
+.overlay-position-grid .pos-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--accent-color);
+}
+
+.overlay-position-grid .pos-btn.active {
+    background: var(--accent-color);
+    color: #fff;
+    border-color: var(--accent-color);
+}
+
 .form-control {
     width: 100%;
     padding: 0.625rem 0.875rem;

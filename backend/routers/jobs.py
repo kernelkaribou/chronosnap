@@ -74,9 +74,10 @@ async def create_job(job: JobCreate):
                 time_window_enabled, time_window_start, time_window_end,
                 warning_threshold,
                 auto_build_enabled, auto_build_interval_hours, auto_build_fps,
-                auto_build_quality, auto_build_resolution, last_auto_build_at,
+                auto_build_quality, auto_build_resolution, auto_build_text_overlay,
+                last_auto_build_at,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             job.name, job.url, job.stream_type.value,
             to_iso(job.start_datetime),
@@ -92,6 +93,7 @@ async def create_job(job: JobCreate):
             job.auto_build_fps,
             job.auto_build_quality,
             job.auto_build_resolution,
+            job.auto_build_text_overlay,
             now_str if job.auto_build_enabled else None,
             now_str, now_str
         ))
@@ -318,6 +320,10 @@ async def update_job(job_id: int, job_update: JobUpdate):
         if job_update.auto_build_resolution is not None:
             updates.append("auto_build_resolution = ?")
             values.append(job_update.auto_build_resolution)
+        
+        if job_update.auto_build_text_overlay is not None:
+            updates.append("auto_build_text_overlay = ?")
+            values.append(job_update.auto_build_text_overlay)
         
         # Track manual status changes
         manual_status_change = False

@@ -7,7 +7,9 @@ RUN apt-get update && \
     tzdata \
     gosu \
     curl \
-    ca-certificates && \
+    ca-certificates \
+    fonts-dejavu-core \
+    fonts-liberation && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

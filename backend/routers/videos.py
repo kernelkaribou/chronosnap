@@ -2,10 +2,11 @@
 Processed videos API endpoints
 """
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from typing import List, Optional
 import os
+import json
 import logging
 
 from ..models import VideoCreate, VideoResponse
@@ -72,12 +73,15 @@ async def create_video(video: VideoCreate, background_tasks: BackgroundTasks):
             INSERT INTO processed_videos (
                 job_id, job_name, name, file_path, file_size, resolution,
                 framerate, quality, start_capture_id, end_capture_id,
-                start_time, end_time, total_frames, duration_seconds, status, created_at
-            ) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'processing', ?)
+                start_time, end_time, total_frames, duration_seconds, status,
+                text_overlay, created_at
+            ) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'processing', ?, ?)
         """, (
             video.job_id, job_dict['name'], video.name, output_path, video.resolution,
             video.framerate, video.quality, video.start_capture_id,
-            video.end_capture_id, video.start_time, video.end_time, now
+            video.end_capture_id, video.start_time, video.end_time,
+            video.text_overlay.model_dump_json() if video.text_overlay else None,
+            now
         ))
         
         video_id = cursor.lastrowid
@@ -85,6 +89,7 @@ async def create_video(video: VideoCreate, background_tasks: BackgroundTasks):
         logger.info(f"Started video processing for job '{job_dict['name']}' (ID: {video.job_id}) - Video: {video.name}, Resolution: {video.resolution}, FPS: {video.framerate}")
         
         # Start video processing in background
+        text_overlay_dict = video.text_overlay.model_dump() if video.text_overlay else None
         background_tasks.add_task(
             process_video,
             video_id=video_id,
@@ -96,11 +101,56 @@ async def create_video(video: VideoCreate, background_tasks: BackgroundTasks):
             end_capture_id=video.end_capture_id,
             start_time=video.start_time,
             end_time=video.end_time,
-            output_path=output_path
+            output_path=output_path,
+            text_overlay=text_overlay_dict
         )
         
         cursor.execute("SELECT * FROM processed_videos WHERE id = ?", (video_id,))
         return dict_from_row(cursor.fetchone())
+
+
+@router.get("/fonts")
+async def list_fonts():
+    """List available fonts for text overlay"""
+    from ..services.text_overlay import get_available_fonts
+    return get_available_fonts()
+
+
+class TextOverlayPreviewRequest(BaseModel):
+    image_path: str
+    config: dict
+
+
+@router.post("/text-overlay-preview")
+async def text_overlay_preview(request: TextOverlayPreviewRequest):
+    """Generate a preview image with text overlay applied"""
+    from ..services.text_overlay import render_preview_bytes
+
+    if not os.path.isfile(request.image_path):
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    # Build sample variables for preview
+    from ..utils import get_now
+    now = get_now()
+    variables = {
+        'job_name': 'Sample Job',
+        'date': now.strftime('%Y-%m-%d'),
+        'time': now.strftime('%H:%M:%S'),
+        'datetime': now.strftime('%Y-%m-%d %H:%M:%S'),
+        'frame': '1',
+        'total_frames': '100',
+    }
+
+    try:
+        preview_bytes = render_preview_bytes(
+            image_path=request.image_path,
+            config=request.config,
+            variables=variables,
+        )
+        return Response(content=preview_bytes, media_type="image/jpeg")
+    except Exception as e:
+        logger.error(f"Text overlay preview error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Preview generation failed: {str(e)}")
 
 
 @router.get("/", response_model=List[VideoResponse])

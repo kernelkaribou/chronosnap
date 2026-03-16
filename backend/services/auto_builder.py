@@ -3,6 +3,7 @@ Auto-build service — automatically generates timelapse videos on a schedule
 """
 import os
 import re
+import json
 import logging
 import threading
 from datetime import datetime, timedelta
@@ -145,7 +146,8 @@ def _run_auto_build(job: dict, now: datetime):
             end_capture_id=None,
             start_time=start_time,
             end_time=now_str,
-            output_path=output_path
+            output_path=output_path,
+            text_overlay=json.loads(job['auto_build_text_overlay']) if job.get('auto_build_text_overlay') else None
         )
 
         with get_db() as conn:

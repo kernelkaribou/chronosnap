@@ -249,6 +249,20 @@ def init_db():
             cursor.execute("ALTER TABLE captures ADD COLUMN is_favorite BOOLEAN DEFAULT 0")
             logger.info("Migration complete: added is_favorite column to captures")
         
+        # Add text_overlay column to processed_videos
+        cursor.execute("PRAGMA table_info(processed_videos)")
+        video_columns = {row[1] for row in cursor.fetchall()}
+        if 'text_overlay' not in video_columns:
+            cursor.execute("ALTER TABLE processed_videos ADD COLUMN text_overlay TEXT")
+            logger.info("Migration complete: added text_overlay column to processed_videos")
+        
+        # Add auto_build_text_overlay column to jobs
+        cursor.execute("PRAGMA table_info(jobs)")
+        job_columns2 = {row[1] for row in cursor.fetchall()}
+        if 'auto_build_text_overlay' not in job_columns2:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_text_overlay TEXT")
+            logger.info("Migration complete: added auto_build_text_overlay column to jobs")
+        
         # Initialize API key if not exists
         cursor.execute("SELECT value FROM settings WHERE key = 'api_key'")
         if not cursor.fetchone():

@@ -313,6 +313,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Trigger initial duration estimate
     updateDurationEstimate();
     
+    // Mount create-job auto-build overlay widget
+    initCreateJobOverlay();
+    
     // Prevent Enter key from submitting forms
     document.querySelectorAll('form').forEach(form => {
         form.addEventListener('keydown', preventEnterSubmit);
@@ -722,6 +725,7 @@ async function showJobDetails(jobId) {
                             </select>
                         </div>
                     </div>
+                    <div id="edit-ab-overlay-container"></div>
                     ${job.last_auto_build_at ? `<small style="color: var(--text-secondary);">Last auto-build: ${formatDateTime(job.last_auto_build_at)}</small>` : ''}
                 </div>
 
@@ -766,6 +770,9 @@ async function showJobDetails(jobId) {
         
         // Initialize custom time pickers for edit modal
         initializeEditTimePickers(job);
+        
+        // Initialize edit overlay section
+        initEditJobOverlay(job);
         
         // Track changes to enable/disable save button
         setupJobEditChangeTracking(job);
@@ -850,7 +857,8 @@ async function createJob(event) {
         auto_build_interval_hours: values.auto_build_interval_hours || 168,
         auto_build_fps: values.auto_build_fps || 30,
         auto_build_quality: values.auto_build_quality || 'medium',
-        auto_build_resolution: values.auto_build_resolution || '1920x1080'
+        auto_build_resolution: values.auto_build_resolution || '1920x1080',
+        auto_build_text_overlay: values.auto_build_enabled ? JSON.stringify(readOverlayConfig('create-ab')) : null
     };
     
     try {
@@ -1205,7 +1213,8 @@ async function saveJobChanges(jobId) {
         auto_build_interval_hours: autoBuildIntervalHours,
         auto_build_fps: autoBuildFps,
         auto_build_quality: autoBuildQuality,
-        auto_build_resolution: autoBuildResolution
+        auto_build_resolution: autoBuildResolution,
+        auto_build_text_overlay: JSON.stringify(readOverlayConfig('edit-ab'))
     };
     
     try {
@@ -1706,6 +1715,11 @@ async function showProcessVideoModal(jobId, jobName) {
         document.getElementById('capture-range').style.display = 'none';
         document.getElementById('video-duration-estimate').innerHTML = '';
         document.getElementById('available-range-info').style.display = 'none';
+        // Reset text overlay
+        const buildOverlayContainer = document.getElementById('build-overlay-container');
+        if (buildOverlayContainer) buildOverlayContainer.innerHTML = '';
+        window._overlayPreviewPath = null;
+        window._overlayJobName = null;
         const previewImage = document.getElementById('builder-preview-image');
         const previewPlaceholder = document.getElementById('builder-preview-placeholder');
         if (previewImage) previewImage.style.display = 'none';
@@ -1829,6 +1843,11 @@ async function populateVideoFormFromJob(jobId, jobName) {
         document.getElementById('job-preview-label').textContent = `Latest capture: ${formatDateTime(cap.captured_at)}`;
         previewImage.style.display = 'flex';
         if (previewPlaceholder) previewPlaceholder.style.display = 'none';
+        // Store file_path for text overlay preview
+        window._overlayPreviewPath = cap.file_path;
+        window._overlayJobName = jobName;
+        // Mount overlay widget now that we have a preview image
+        initBuildOverlay();
     }
     
     const captureCount = timeRange.count;
@@ -2041,6 +2060,283 @@ function toggleCustomResolution() {
         customHeight.required = false;
     }
 }
+
+// ─── Text Overlay Component ───
+// Reusable overlay widget: generateOverlayHTML(prefix) → readOverlayConfig(prefix)
+// Three instances: "build" (manual build modal), "create-ab" (create-job auto-build),
+// "edit-ab" (edit-job auto-build). All share the same HTML generator and config reader.
+
+let _overlayPreviewTimeout = null;
+let _overlayFontsLoaded = false;
+let _overlayFontsCache = [];
+
+const OVERLAY_POSITIONS = [
+    { pos: 'top-left',      icon: '↖' },
+    { pos: 'top-center',    icon: '↑' },
+    { pos: 'top-right',     icon: '↗' },
+    { pos: 'middle-left',   icon: '←' },
+    { pos: 'middle-center', icon: '●' },
+    { pos: 'middle-right',  icon: '→' },
+    { pos: 'bottom-left',   icon: '↙' },
+    { pos: 'bottom-center', icon: '↓' },
+    { pos: 'bottom-right',  icon: '↘' },
+];
+
+/**
+ * Generate overlay widget HTML for a container.
+ * @param {string} prefix  - Unique prefix for element IDs (e.g., "build", "create-ab", "edit-ab")
+ * @param {object} opts    - { label: string, compact: bool, showBold: bool, onchange: string|null }
+ */
+function generateOverlayHTML(prefix, opts = {}) {
+    const label = opts.label || 'Add text overlay';
+    const compact = opts.compact || false;
+    const showBold = opts.showBold !== false;
+    const onchangeAttr = opts.onchange ? ` onchange="${opts.onchange}"` : '';
+    const inputEvent = opts.onchange ? ` oninput="${opts.onchange}" onchange="${opts.onchange}"` : '';
+
+    const gridBtns = OVERLAY_POSITIONS.map(p =>
+        `<button type="button" class="pos-btn${p.pos === 'bottom-left' ? ' active' : ''}" data-pos="${p.pos}" title="${p.pos}">${p.icon}</button>`
+    ).join('');
+
+    const fontOpts = _overlayFontsCache.length
+        ? _overlayFontsCache.map(f => `<option value="${f.name}">${f.name}</option>`).join('')
+        : '<option value="DejaVu Sans">DejaVu Sans</option>';
+
+    return `
+        <div class="form-group" style="margin-top: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <input type="checkbox" id="${prefix}-overlay-enabled"${onchangeAttr}>
+                <span>${label}</span>
+            </div>
+        </div>
+        <div id="${prefix}-overlay-fields" style="display: none;">
+            <div class="form-group">
+                ${compact ? '' : '<label>Overlay Text</label>'}
+                <input type="text" id="${prefix}-overlay-text" class="form-control" placeholder="{job_name} - {date} {time}"${inputEvent}>
+                <small style="color: var(--text-secondary);">Variables: <code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code> <code>{total_frames}</code></small>
+            </div>
+            <div class="form-row">
+                <div class="form-group flex-1">
+                    ${compact ? '' : '<label>Font</label>'}
+                    <select id="${prefix}-overlay-font" class="form-control"${inputEvent}>${fontOpts}</select>
+                </div>
+                <div class="form-group" style="width: 80px;">
+                    ${compact ? '' : '<label>Size</label>'}
+                    <input type="number" id="${prefix}-overlay-size" class="form-control" value="48" min="8" max="200"${inputEvent}>
+                </div>
+                ${showBold ? `<div class="form-group" style="width: 52px;">
+                    ${compact ? '' : '<label>Bold</label>'}
+                    <div style="display:flex;align-items:center;height:38px;">
+                        <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr}>
+                    </div>
+                </div>` : ''}
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="width: 80px;">
+                    ${compact ? '' : '<label>Color</label>'}
+                    <input type="color" id="${prefix}-overlay-color" value="#FFFFFF" class="form-control" style="padding:2px;height:38px;"${inputEvent}>
+                </div>
+                <div class="form-group flex-1">
+                    ${compact ? '' : '<label>Position</label>'}
+                    <div class="overlay-position-grid" id="${prefix}-overlay-grid">${gridBtns}</div>
+                </div>
+            </div>
+            <div class="form-row" style="align-items: center;">
+                <div class="form-group" style="width: auto;">
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <input type="checkbox" id="${prefix}-overlay-bg" checked${onchangeAttr}>
+                        <span>${compact ? 'BG' : 'Background'}</span>
+                    </div>
+                </div>
+                <div class="form-group" style="width: 60px;">
+                    <input type="color" id="${prefix}-overlay-bg-color" value="#000000" class="form-control" style="padding:2px;height:32px;"${inputEvent}>
+                </div>
+                <div class="form-group flex-1">
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <input type="range" id="${prefix}-overlay-bg-opacity" min="0" max="100" value="50" style="flex:1;"${inputEvent}>
+                        <span id="${prefix}-overlay-opacity-label" style="width:35px;text-align:right;font-size:0.85rem;color:var(--text-secondary);">50%</span>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+}
+
+/**
+ * Initialize an overlay widget after its HTML is in the DOM.
+ * Sets up position grid clicks and toggle behavior.
+ */
+function initOverlayWidget(prefix, opts = {}) {
+    const cb = document.getElementById(`${prefix}-overlay-enabled`);
+    const fields = document.getElementById(`${prefix}-overlay-fields`);
+    if (!cb || !fields) return;
+
+    // Toggle visibility
+    cb.addEventListener('change', () => {
+        fields.style.display = cb.checked ? 'block' : 'none';
+        if (cb.checked && !_overlayFontsLoaded) loadOverlayFonts();
+        if (opts.onToggle) opts.onToggle(cb.checked);
+    });
+
+    // Position grid clicks
+    const grid = document.getElementById(`${prefix}-overlay-grid`);
+    if (grid) {
+        grid.querySelectorAll('.pos-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                grid.querySelectorAll('.pos-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                if (opts.onChange) opts.onChange();
+            });
+        });
+    }
+
+    // Opacity label sync
+    const opSlider = document.getElementById(`${prefix}-overlay-bg-opacity`);
+    const opLabel = document.getElementById(`${prefix}-overlay-opacity-label`);
+    if (opSlider && opLabel) {
+        opSlider.addEventListener('input', () => { opLabel.textContent = opSlider.value + '%'; });
+    }
+}
+
+/** Read overlay config from any widget by prefix. Returns config object or null. */
+function readOverlayConfig(prefix) {
+    const cb = document.getElementById(`${prefix}-overlay-enabled`);
+    if (!cb || !cb.checked) return null;
+    const text = document.getElementById(`${prefix}-overlay-text`)?.value || '';
+    if (!text.trim()) return null;
+    const grid = document.getElementById(`${prefix}-overlay-grid`);
+    const activeBtn = grid?.querySelector('.pos-btn.active');
+    return {
+        enabled: true,
+        text,
+        font: document.getElementById(`${prefix}-overlay-font`)?.value || 'DejaVu Sans',
+        font_size: parseInt(document.getElementById(`${prefix}-overlay-size`)?.value) || 48,
+        bold: document.getElementById(`${prefix}-overlay-bold`)?.checked || false,
+        color: document.getElementById(`${prefix}-overlay-color`)?.value || '#FFFFFF',
+        position: activeBtn?.dataset.pos || 'bottom-left',
+        background: document.getElementById(`${prefix}-overlay-bg`)?.checked !== false,
+        background_color: document.getElementById(`${prefix}-overlay-bg-color`)?.value || '#000000',
+        background_opacity: parseInt(document.getElementById(`${prefix}-overlay-bg-opacity`)?.value || '50') / 100
+    };
+}
+
+/** Write overlay config into any widget by prefix. */
+function writeOverlayConfig(prefix, config) {
+    if (!config) return;
+    const el = id => document.getElementById(`${prefix}-overlay-${id}`);
+    if (el('enabled')) el('enabled').checked = !!config.enabled;
+    const fields = document.getElementById(`${prefix}-overlay-fields`);
+    if (fields) fields.style.display = config.enabled ? 'block' : 'none';
+    if (el('text')) el('text').value = config.text || '';
+    if (el('font')) el('font').value = config.font || 'DejaVu Sans';
+    if (el('size')) el('size').value = config.font_size || 48;
+    if (el('bold')) el('bold').checked = !!config.bold;
+    if (el('color')) el('color').value = config.color || '#FFFFFF';
+    if (el('bg')) el('bg').checked = config.background !== false;
+    if (el('bg-color')) el('bg-color').value = config.background_color || '#000000';
+    if (el('bg-opacity')) el('bg-opacity').value = Math.round((config.background_opacity ?? 0.5) * 100);
+    const opLabel = document.getElementById(`${prefix}-overlay-opacity-label`);
+    if (opLabel) opLabel.textContent = Math.round((config.background_opacity ?? 0.5) * 100) + '%';
+    // Set position
+    const grid = document.getElementById(`${prefix}-overlay-grid`);
+    if (grid && config.position) {
+        grid.querySelectorAll('.pos-btn').forEach(b => b.classList.remove('active'));
+        const match = grid.querySelector(`[data-pos="${config.position}"]`);
+        if (match) match.classList.add('active');
+    }
+}
+
+/** Mount an overlay widget into a container element. */
+function mountOverlayWidget(containerId, prefix, opts = {}) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = generateOverlayHTML(prefix, opts);
+    initOverlayWidget(prefix, opts);
+}
+
+async function loadOverlayFonts() {
+    try {
+        _overlayFontsCache = await apiRequest('/videos/fonts');
+        // Update all font selects currently in the DOM
+        document.querySelectorAll('[id$="-overlay-font"]').forEach(sel => {
+            sel.innerHTML = _overlayFontsCache.map(f =>
+                `<option value="${f.name}">${f.name}</option>`
+            ).join('');
+        });
+        _overlayFontsLoaded = true;
+    } catch (e) {
+        console.error('Failed to load fonts:', e);
+    }
+}
+
+// ─── Build Modal Overlay (with live preview) ───
+
+function initBuildOverlay() {
+    mountOverlayWidget('build-overlay-container', 'build', {
+        label: 'Add text overlay',
+        showBold: true,
+        onchange: 'debouncedOverlayPreview()',
+        onToggle: (enabled) => { if (enabled) debouncedOverlayPreview(); else resetOverlayPreview(); },
+        onChange: () => debouncedOverlayPreview(),
+    });
+}
+
+function debouncedOverlayPreview() {
+    clearTimeout(_overlayPreviewTimeout);
+    _overlayPreviewTimeout = setTimeout(updateOverlayPreview, 400);
+    // Sync opacity label
+    const opSlider = document.getElementById('build-overlay-bg-opacity');
+    const opLabel = document.getElementById('build-overlay-opacity-label');
+    if (opSlider && opLabel) opLabel.textContent = opSlider.value + '%';
+}
+
+async function updateOverlayPreview() {
+    const config = readOverlayConfig('build');
+    const imagePath = window._overlayPreviewPath;
+    if (!config || !imagePath) { resetOverlayPreview(); return; }
+
+    try {
+        const resp = await fetch(`${API_BASE}/videos/text-overlay-preview`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Referer': window.location.href },
+            body: JSON.stringify({ image_path: imagePath, config })
+        });
+        if (!resp.ok) throw new Error('Preview failed');
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const img = document.getElementById('job-preview-img');
+        if (img) {
+            if (img._overlayUrl) URL.revokeObjectURL(img._overlayUrl);
+            img._overlayUrl = url;
+            img.src = url;
+        }
+    } catch (e) { console.error('Overlay preview error:', e); }
+}
+
+function resetOverlayPreview() {
+    const img = document.getElementById('job-preview-img');
+    if (img && img._overlayUrl) {
+        URL.revokeObjectURL(img._overlayUrl);
+        img._overlayUrl = null;
+    }
+}
+
+// ─── Auto-Build Overlay (create-job and edit-job) ───
+
+function initCreateJobOverlay() {
+    mountOverlayWidget('create-ab-overlay-container', 'create-ab', { label: 'Text Overlay', compact: true });
+}
+
+function initEditJobOverlay(job) {
+    mountOverlayWidget('edit-ab-overlay-container', 'edit-ab', { label: 'Text Overlay', compact: true });
+    // Load existing config from job
+    if (job.auto_build_text_overlay) {
+        try {
+            const config = JSON.parse(job.auto_build_text_overlay);
+            if (config) writeOverlayConfig('edit-ab', config);
+        } catch (e) {}
+    }
+}
+
 async function processVideo(event) {
     event.preventDefault();
     
@@ -2070,7 +2366,8 @@ async function processVideo(event) {
         quality: document.getElementById('video_quality').value,
         output_path: document.getElementById('video_output_path').value.trim() || null,
         start_time: useRange ? datetimeLocalToISO(document.getElementById('video_start_datetime').value) : null,
-        end_time: useRange ? datetimeLocalToISO(document.getElementById('video_end_datetime').value) : null
+        end_time: useRange ? datetimeLocalToISO(document.getElementById('video_end_datetime').value) : null,
+        text_overlay: readOverlayConfig('build')
     };
     
     try {
@@ -2272,6 +2569,18 @@ async function duplicateJob(jobId) {
             document.getElementById('auto_build_fps').value = job.auto_build_fps || 30;
             document.getElementById('auto_build_quality').value = job.auto_build_quality || 'medium';
             document.getElementById('auto_build_resolution').value = job.auto_build_resolution || '1920x1080';
+            
+            // Copy text overlay settings
+            if (job.auto_build_text_overlay) {
+                try {
+                    const overlayConfig = JSON.parse(job.auto_build_text_overlay);
+                    // Mount widget first, then populate
+                    initCreateJobOverlay();
+                    writeOverlayConfig('create-ab', overlayConfig);
+                } catch (e) {
+                    console.warn('Failed to parse auto_build_text_overlay for duplicate:', e);
+                }
+            }
         } else {
             abEnabled.checked = false;
             abFields.style.display = 'none';
