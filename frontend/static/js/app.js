@@ -2458,8 +2458,8 @@ function generateOverlayHTML(prefix, opts = {}) {
                             <select id="${prefix}-overlay-font" class="form-control"${inputEvent}>${fontOpts}</select>
                         </div>
                         <div class="form-group" style="width: 65px;">
-                            <label>Size</label>
-                            <input type="number" id="${prefix}-overlay-size" class="form-control" value="48" min="8" max="200"${inputEvent}>
+                            <label>Size %</label>
+                            <input type="number" id="${prefix}-overlay-size" class="form-control" value="5" min="1" max="20" step="0.5"${inputEvent}>
                         </div>
                         <div class="form-group" style="width: 45px;">
                             <label>Bold</label>
@@ -2571,7 +2571,7 @@ function readOverlayConfig(prefix) {
         enabled: true,
         text,
         font: document.getElementById(`${prefix}-overlay-font`)?.value || 'DejaVu Sans',
-        font_size: parseInt(document.getElementById(`${prefix}-overlay-size`)?.value) || 48,
+        font_size: parseFloat(document.getElementById(`${prefix}-overlay-size`)?.value) || 5,
         bold: document.getElementById(`${prefix}-overlay-bold`)?.checked || false,
         color: document.getElementById(`${prefix}-overlay-color`)?.value || '#FFFFFF',
         position: activeBtn?.dataset.pos || 'bottom-left',
@@ -2590,7 +2590,7 @@ function writeOverlayConfig(prefix, config) {
     if (fields) fields.style.display = config.enabled ? 'block' : 'none';
     if (el('text')) el('text').value = config.text || '';
     if (el('font')) el('font').value = config.font || 'DejaVu Sans';
-    if (el('size')) el('size').value = config.font_size || 48;
+    if (el('size')) el('size').value = config.font_size || 5;
     if (el('bold')) el('bold').checked = !!config.bold;
     if (el('color')) el('color').value = config.color || '#FFFFFF';
     if (el('bg')) el('bg').checked = config.background !== false;

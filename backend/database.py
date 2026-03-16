@@ -35,6 +35,41 @@ def generate_api_key(length: int = 16) -> str:
     return ''.join(secrets.choice(alphabet) for _ in range(length))
 
 
+def _migrate_font_size_to_percent(cursor):
+    """Migrate text overlay font_size from pixels (8-200) to percentage (1-20).
+    Uses 1080p as reference: pct = px / 1080 * 100, clamped to 1-20."""
+    import json
+    migrated = 0
+    # Migrate jobs.auto_build_text_overlay
+    cursor.execute("SELECT id, auto_build_text_overlay FROM jobs WHERE auto_build_text_overlay IS NOT NULL")
+    for row in cursor.fetchall():
+        try:
+            cfg = json.loads(row[1])
+            fs = cfg.get('font_size')
+            if isinstance(fs, (int, float)) and fs > 20:
+                cfg['font_size'] = round(max(1, min(20, fs / 1080 * 100)), 1)
+                cursor.execute("UPDATE jobs SET auto_build_text_overlay = ? WHERE id = ?",
+                               (json.dumps(cfg), row[0]))
+                migrated += 1
+        except (json.JSONDecodeError, TypeError):
+            pass
+    # Migrate processed_videos.text_overlay
+    cursor.execute("SELECT id, text_overlay FROM processed_videos WHERE text_overlay IS NOT NULL")
+    for row in cursor.fetchall():
+        try:
+            cfg = json.loads(row[1])
+            fs = cfg.get('font_size')
+            if isinstance(fs, (int, float)) and fs > 20:
+                cfg['font_size'] = round(max(1, min(20, fs / 1080 * 100)), 1)
+                cursor.execute("UPDATE processed_videos SET text_overlay = ? WHERE id = ?",
+                               (json.dumps(cfg), row[0]))
+                migrated += 1
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if migrated:
+        logger.info(f"Migration: converted {migrated} text overlay font_size values from pixels to percentage")
+
+
 def init_db():
     """Initialize the database with required tables"""
     with get_db() as conn:
@@ -264,6 +299,9 @@ def init_db():
         ensure_column(cursor, 'processed_videos', 'error_message', 'TEXT')
         ensure_column(cursor, 'processed_videos', 'is_favorite', 'BOOLEAN DEFAULT 0')
         ensure_column(cursor, 'processed_videos', 'text_overlay', 'TEXT')
+        
+        # Migration: Convert text overlay font_size from pixels to percentage
+        _migrate_font_size_to_percent(cursor)
         
         # Migrations: captures table columns
         ensure_column(cursor, 'captures', 'is_favorite', 'BOOLEAN DEFAULT 0')

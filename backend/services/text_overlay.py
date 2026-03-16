@@ -166,7 +166,7 @@ def render_overlay(
         return image
 
     font_name = config.get('font', 'DejaVu Sans')
-    font_size = config.get('font_size', 48)
+    font_size_pct = config.get('font_size', 5.0)
     bold = config.get('bold', False)
     color = config.get('color', '#FFFFFF')
     position = config.get('position', 'bottom-left')
@@ -174,7 +174,10 @@ def render_overlay(
     bg_color = config.get('background_color', '#000000')
     bg_opacity = config.get('background_opacity', 0.5)
 
-    font = _load_font(font_name, font_size, bold)
+    # Convert percentage to pixels based on image height
+    font_size_px = max(8, int(image.height * font_size_pct / 100))
+
+    font = _load_font(font_name, font_size_px, bold)
     color_rgba = _hex_to_rgba(color)
 
     # Work on RGBA copy for transparency support
@@ -186,7 +189,7 @@ def render_overlay(
     draw = ImageDraw.Draw(overlay)
 
     text_w, text_h, text_x_off, text_y_off = _get_text_bbox(draw, text, font)
-    bg_pad = int(font_size * 0.25)
+    bg_pad = int(font_size_px * 0.25)
     box_w = text_w + bg_pad * 2
     box_h = text_h + bg_pad * 2
 
@@ -196,7 +199,7 @@ def render_overlay(
         bg_rgba = _hex_to_rgba(bg_color, bg_opacity)
         draw.rounded_rectangle(
             [x, y, x + box_w, y + box_h],
-            radius=int(font_size * 0.15),
+            radius=int(font_size_px * 0.15),
             fill=bg_rgba,
         )
 
@@ -242,10 +245,7 @@ def render_preview_bytes(
         ratio = max_width / img.width
         new_h = int(img.height * ratio)
         img = img.resize((max_width, new_h), Image.LANCZOS)
-        # Scale font size proportionally
-        if 'font_size' in config:
-            config = dict(config)
-            config['font_size'] = max(12, int(config['font_size'] * ratio))
+        # font_size is percentage-based, so it scales automatically with image size
 
     result = render_overlay(img, config, variables)
 
