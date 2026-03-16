@@ -440,12 +440,6 @@ function renderJobs(jobs) {
             ${thumbnailHtml}
             <div class="job-card-header">
                 <div class="job-card-title">${escapeHtml(job.name)}</div>
-                <div style="display: flex; gap: 0.35rem; align-items: center;">
-                    ${job.auto_build_enabled ? '<span class="auto-build-badge">Auto-Build</span>' : ''}
-                    <span class="job-status ${statusClass}">
-                        ${statusLabel}
-                    </span>
-                </div>
             </div>
             <div class="job-info">
                 <div><strong>Stream URL:</strong> <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; max-width: 250px; vertical-align: bottom;">${escapeHtml(getStreamHost(job.url))}</span></div>
@@ -463,6 +457,10 @@ function renderJobs(jobs) {
                     </a> · 
                     <span class="stat-inline">${formatBytes(job.storage_size)}</span>
                 </div>
+            </div>
+            <div class="job-card-badges">
+                ${job.auto_build_enabled ? '<span class="auto-build-badge">Auto-Build</span>' : ''}
+                <span class="job-status ${statusClass}">${statusLabel}</span>
             </div>
         </div>
     `;

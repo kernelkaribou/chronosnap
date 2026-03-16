@@ -403,6 +403,8 @@ body {
     transition: all var(--transition-base);
     cursor: pointer;
     box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
 }
 
 .job-card:hover {
@@ -412,10 +414,15 @@ body {
 }
 
 .job-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: start;
     margin-bottom: 1rem;
+}
+
+.job-card-badges {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    margin-top: auto;
+    padding-top: 0.75rem;
 }
 
 .job-card-title {
@@ -651,15 +658,17 @@ body {
 }
 
 .auto-build-badge {
-    display: inline-block;
-    font-size: 0.6rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
     font-weight: 600;
-    padding: 0.1rem 0.35rem;
-    border-radius: 3px;
-    background: var(--primary-color);
-    color: #fff;
-    vertical-align: middle;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.02em;
+    background: rgba(77, 208, 225, 0.15);
+    color: var(--primary-color);
+}
+
+[data-theme="light"] .auto-build-badge {
+    color: #0e7490;
 }
 
 .auto-build-presets {
