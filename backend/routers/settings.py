@@ -3,7 +3,7 @@ Settings API endpoints
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import logging
 
 from ..database import get_db, generate_api_key
@@ -28,6 +28,7 @@ class WebhookSettings(BaseModel):
     webhook_enabled: bool = False
     webhook_url: str = ''
     webhook_payload_template: str = DEFAULT_PAYLOAD_TEMPLATE
+    webhook_events: List[str] = []
 
 
 class WebhookTestRequest(BaseModel):
@@ -96,21 +97,26 @@ async def get_webhook_settings():
         'webhook_enabled': 'false',
         'webhook_url': '',
         'webhook_payload_template': DEFAULT_PAYLOAD_TEMPLATE,
+        'webhook_events': '',
     }
     try:
         with get_db() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT key, value FROM settings WHERE key IN (?, ?, ?)",
+                "SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?)",
                 tuple(defaults.keys())
             )
             for row in cursor.fetchall():
                 defaults[row[0]] = row[1]
 
+        events_str = defaults['webhook_events']
+        events_list = [e.strip() for e in events_str.split(',') if e.strip()] if events_str else []
+
         return WebhookSettings(
             webhook_enabled=defaults['webhook_enabled'] == 'true',
             webhook_url=defaults['webhook_url'],
             webhook_payload_template=defaults['webhook_payload_template'],
+            webhook_events=events_list,
         )
     except Exception as e:
         logger.error(f"Error retrieving webhook settings: {e}")
@@ -126,6 +132,7 @@ async def update_webhook_settings(settings: WebhookSettings):
             'webhook_enabled': 'true' if settings.webhook_enabled else 'false',
             'webhook_url': settings.webhook_url,
             'webhook_payload_template': settings.webhook_payload_template,
+            'webhook_events': ','.join(settings.webhook_events),
         }
         with get_db() as conn:
             cursor = conn.cursor()

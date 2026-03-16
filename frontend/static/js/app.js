@@ -4541,6 +4541,11 @@ async function loadWebhookSettings() {
         document.getElementById('webhook-url').value = data.webhook_url || '';
         document.getElementById('webhook-enabled').checked = data.webhook_enabled;
         document.getElementById('webhook-template').value = data.webhook_payload_template || '{"title": "{title}", "message": "{message}"}';
+        // Load event filters — if empty array, check all (backwards-compatible default)
+        const events = data.webhook_events || [];
+        document.querySelectorAll('.webhook-event-cb').forEach(cb => {
+            cb.checked = events.length === 0 || events.includes(cb.value);
+        });
         updateWebhookToggleState();
         webhookDirty = false;
         const btn = document.getElementById('webhook-save-btn');
@@ -4559,6 +4564,7 @@ async function saveWebhookSettings() {
         webhook_enabled: document.getElementById('webhook-enabled').checked && !!url,
         webhook_url: url,
         webhook_payload_template: template || defaultTemplate,
+        webhook_events: [...document.querySelectorAll('.webhook-event-cb:checked')].map(cb => cb.value),
     };
 
     // If template was empty, update the textarea to show the default

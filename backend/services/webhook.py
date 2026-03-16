@@ -34,12 +34,13 @@ def _get_webhook_settings() -> dict:
         'webhook_enabled': 'false',
         'webhook_url': '',
         'webhook_payload_template': DEFAULT_PAYLOAD_TEMPLATE,
+        'webhook_events': '',
     }
     try:
         with get_db() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT key, value FROM settings WHERE key IN (?, ?, ?)",
+                "SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?)",
                 tuple(defaults.keys())
             )
             rows = cursor.fetchall()
@@ -68,6 +69,13 @@ def _send_webhook_event_sync(event: str, job_name: str, job_id: int,
 
     if settings['webhook_enabled'] != 'true' or not settings['webhook_url']:
         return
+
+    # Check event filter — empty means all events enabled
+    allowed_events = settings.get('webhook_events', '')
+    if allowed_events:
+        allowed = [e.strip() for e in allowed_events.split(',')]
+        if event not in allowed:
+            return
 
     # Generate title and message based on event type
     if event == 'warning':

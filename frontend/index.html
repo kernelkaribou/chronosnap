@@ -298,6 +298,23 @@
                                     <code>{title}</code> <code>{message}</code> <code>{event}</code> <code>{job_name}</code> <code>{job_id}</code> <code>{failure_count}</code> <code>{error_message}</code>
                                 </div>
                             </div>
+                            <div class="webhook-row">
+                                <label class="webhook-label">Events</label>
+                                <div class="webhook-events" style="display:flex; flex-wrap:wrap; gap:0.5rem 1rem;">
+                                    <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;">
+                                        <input type="checkbox" class="webhook-event-cb" value="warning" onchange="markWebhookDirty()"> Capture Warnings
+                                    </label>
+                                    <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;">
+                                        <input type="checkbox" class="webhook-event-cb" value="recovered" onchange="markWebhookDirty()"> Recovery
+                                    </label>
+                                    <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;">
+                                        <input type="checkbox" class="webhook-event-cb" value="completed" onchange="markWebhookDirty()"> Job Completed
+                                    </label>
+                                    <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;">
+                                        <input type="checkbox" class="webhook-event-cb" value="auto_build_complete" onchange="markWebhookDirty()"> Auto-Build
+                                    </label>
+                                </div>
+                            </div>
                             <div class="webhook-actions">
                                 <button class="btn btn-secondary" onclick="testWebhook()">Test Webhook</button>
                                 <button class="btn btn-purple" id="webhook-save-btn" onclick="saveWebhookSettings()" disabled>Save</button>
