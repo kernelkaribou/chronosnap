@@ -11,7 +11,7 @@ import logging
 import sys
 
 from .database import init_db
-from .routers import jobs, captures, videos, settings, storage
+from .routers import jobs, captures, videos, settings, storage, tags
 from .services.capture_scheduler import CaptureScheduler
 from .auth import verify_api_key
 from . import config
@@ -104,6 +104,7 @@ app.include_router(captures.router, prefix="/api/captures", tags=["captures"], d
 app.include_router(videos.router, prefix="/api/videos", tags=["videos"], dependencies=[Depends(verify_api_key)])
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"], dependencies=[Depends(verify_api_key)])
 app.include_router(storage.router, prefix="/api/storage", tags=["storage"], dependencies=[Depends(verify_api_key)])
+app.include_router(tags.router, prefix="/api/tags", tags=["tags"], dependencies=[Depends(verify_api_key)])
 
 # Serve static files for frontend
 app.mount("/static", StaticFiles(directory="frontend/static"), name="static")

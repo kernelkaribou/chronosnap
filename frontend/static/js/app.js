@@ -412,6 +412,9 @@ function toggleTimeWindow() {
 document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
     
+    // Load tags globally (needed by tag pickers in modals)
+    loadTagManager();
+    
     // Load initial view based on URL hash or default to jobs
     const hash = window.location.hash.slice(1); // Remove #
     const validViews = ['jobs', 'videos', 'settings'];
@@ -631,6 +634,7 @@ function renderJobs(jobs) {
                 </div>
             </div>
             <div class="job-card-badges">
+                ${job.tags && job.tags.length ? `<div class="card-tags">${job.tags.map(t => tagChipHTML(t, true)).join('')}</div>` : ''}
                 ${job.auto_build_enabled ? '<span class="auto-build-badge">Auto-Build</span>' : ''}
                 <span class="job-status ${statusClass}">${statusLabel}</span>
             </div>
@@ -899,6 +903,11 @@ async function showJobDetails(jobId) {
                     ${job.last_auto_build_at ? `<small style="color: var(--text-secondary);">Last auto-build: ${formatDateTime(job.last_auto_build_at)}</small>` : ''}
                 </div>
 
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label>Tags</label>
+                    <div class="tag-picker" id="edit-job-tags"></div>
+                </div>
+
                 <input type="hidden" id="edit_start_datetime" value="${job.start_datetime}">
                 
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: space-between; align-items: center; padding-top: 1rem; border-top: 2px solid var(--border-color);">
@@ -943,6 +952,13 @@ async function showJobDetails(jobId) {
         
         // Initialize edit overlay section
         initEditJobOverlay(job);
+        
+        // Render tag picker with auto-save on toggle
+        renderTagPicker('edit-job-tags', (job.tags || []).map(t => t.id), (tagIds) => {
+            apiRequest(`/jobs/${job.id}`, { method: 'PATCH', body: { tag_ids: tagIds } })
+                .then(() => loadJobs())
+                .catch(err => showNotification(err.message || 'Failed to update tags', 'error'));
+        });
         
         // Track changes to enable/disable save button
         setupJobEditChangeTracking(job);
@@ -1028,7 +1044,8 @@ async function createJob(event) {
         auto_build_fps: values.auto_build_fps || 30,
         auto_build_quality: values.auto_build_quality || 'medium',
         auto_build_resolution: values.auto_build_resolution || '1920x1080',
-        auto_build_text_overlay: values.auto_build_enabled ? JSON.stringify(readOverlayConfig('create-ab')) : null
+        auto_build_text_overlay: values.auto_build_enabled ? JSON.stringify(readOverlayConfig('create-ab')) : null,
+        tag_ids: getSelectedTagIds('create-job-tags')
     };
     
     try {
@@ -1452,6 +1469,12 @@ function populateVideoFilters(videos) {
     yearSelect.innerHTML = '<option value="">All Years</option>' +
         years.map(y => `<option value="${y}">${y}</option>`).join('');
     yearSelect.value = currentYear;
+    
+    // Initialize tag filter (once)
+    const tagWrap = document.getElementById('video-tag-filter-wrap');
+    if (tagWrap && !tagWrap._tagFilterSelected) {
+        renderTagFilter('video-tag-filter-wrap', () => filterVideos());
+    }
 }
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -1487,6 +1510,7 @@ function resetVideoFilters() {
     document.getElementById('video-year-filter').value = '';
     document.getElementById('video-month-filter').value = '';
     document.getElementById('video-month-filter').disabled = true;
+    clearTagFilter('video-tag-filter-wrap');
     videoFavoritesOnly = false;
     const favBtn = document.getElementById('video-fav-filter');
     if (favBtn) favBtn.classList.remove('active');
@@ -1497,6 +1521,7 @@ function filterVideos(opts = {}) {
     const search = (document.getElementById('video-search').value || '').toLowerCase();
     const yearFilter = document.getElementById('video-year-filter').value;
     const monthFilter = document.getElementById('video-month-filter').value;
+    const selectedTags = getTagFilterIds('video-tag-filter-wrap');
     
     let filtered = allVideos;
     
@@ -1521,8 +1546,12 @@ function filterVideos(opts = {}) {
         filtered = filtered.filter(v => v.is_favorite);
     }
     
+    if (selectedTags.length > 0) {
+        filtered = filtered.filter(v => v.tags && selectedTags.every(tid => v.tags.some(t => t.id === tid)));
+    }
+    
     // Show/hide reset button
-    const hasFilters = search || yearFilter || monthFilter !== '' || videoFavoritesOnly;
+    const hasFilters = search || yearFilter || monthFilter !== '' || videoFavoritesOnly || selectedTags.length > 0;
     document.getElementById('video-filter-reset').style.display = hasFilters ? '' : 'none';
     
     const countEl = document.getElementById('video-count');
@@ -1625,6 +1654,7 @@ function renderVideos(videos, isEmpty) {
             <div class="video-gallery-info">
                 <div class="video-gallery-name">${escapeHtml(video.name)}</div>
                 <div class="video-gallery-job">${video.job_name ? escapeHtml(video.job_name) : 'No job'}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}</div>
+                ${video.tags && video.tags.length ? `<div class="card-tags">${video.tags.map(t => tagChipHTML(t, true)).join('')}</div>` : ''}
             </div>
         </div>`;
     }).join('');
@@ -1678,6 +1708,24 @@ async function openVideoDetail(videoId) {
         metaHtml += `<dt>Quality</dt><dd>${video.quality}</dd><dt>Frames</dt><dd>${video.total_frames.toLocaleString()}</dd>`;
         
         meta.innerHTML = metaHtml;
+        
+        // Build editable tags section for video
+        const tagsContainer = document.getElementById('video-detail-tags');
+        if (tagsContainer) {
+            const currentTagIds = (video.tags || []).map(t => t.id);
+            tagsContainer.innerHTML = `
+                <div style="margin: 0.5rem 0;">
+                    <label style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Tags</label>
+                    <div class="tag-picker" id="video-detail-tag-picker"></div>
+                </div>
+            `;
+            tagsContainer.style.display = 'block';
+            renderTagPicker('video-detail-tag-picker', currentTagIds, (tagIds) => {
+                apiRequest(`/videos/${video.id}/tags`, { method: 'PUT', body: { tag_ids: tagIds } })
+                    .then(() => loadVideos())
+                    .catch(err => showNotification(err.message || 'Failed to update tags', 'error'));
+            });
+        }
         
         // Build actions
         let actionsHtml = '';
@@ -2714,6 +2762,9 @@ function showCreateJobModal() {
     
     showModal('create-job-modal');
     
+    // Render tag picker
+    renderTagPicker('create-job-tags');
+    
     // Trigger initial duration estimate with default values
     setTimeout(() => {
         updateDurationEstimate();
@@ -2796,6 +2847,9 @@ async function duplicateJob(jobId) {
         
         updateEndDateMin();
         showModal('create-job-modal');
+        
+        // Pre-select tags from source job
+        renderTagPicker('create-job-tags', (job.tags || []).map(t => t.id));
         
         setTimeout(() => updateDurationEstimate(), 100);
     } catch (error) {
@@ -4073,6 +4127,7 @@ async function loadSettings() {
 
     // Load webhook settings
     loadWebhookSettings();
+    loadTagManager();
 }
 
 function updateTimeFormatButtons() {
@@ -4226,6 +4281,375 @@ async function testWebhook() {
     }
 }
 
+// =============================================================================
+// Tags Manager & Tag Picker
+// =============================================================================
+
+let allTags = [];
+
+const TAG_COLORS = [
+    '#ef4444', '#f97316', '#f59e0b', '#eab308',
+    '#22c55e', '#10b981', '#14b8a6', '#06b6d4',
+    '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7',
+    '#ec4899', '#f43f5e', '#78716c', '#64748b'
+];
+
+function colorSwatchHTML(containerId, selectedColor) {
+    return `<div class="color-swatch-row" id="${containerId}">${TAG_COLORS.map(c =>
+        `<span class="color-swatch${c === selectedColor ? ' selected' : ''}" style="background:${c};" data-color="${c}" onclick="selectSwatch(this)"></span>`
+    ).join('')}</div>`;
+}
+
+function selectSwatch(el) {
+    el.parentElement.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+    el.classList.add('selected');
+}
+
+function getSwatchColor(containerId, fallback = '#6366f1') {
+    const selected = document.querySelector(`#${containerId} .color-swatch.selected`);
+    return selected ? selected.dataset.color : fallback;
+}
+
+async function loadTagManager() {
+    try {
+        allTags = await apiRequest('/tags/');
+        renderTagList();
+        // Render create swatches if not already populated
+        const swatchContainer = document.getElementById('tag-create-swatches');
+        if (swatchContainer && !swatchContainer.children.length) {
+            swatchContainer.innerHTML = TAG_COLORS.map(c =>
+                `<span class="color-swatch${c === '#6366f1' ? ' selected' : ''}" style="background:${c};" data-color="${c}" onclick="selectSwatch(this)"></span>`
+            ).join('');
+        }
+    } catch (error) {
+        console.error('Failed to load tags:', error);
+    }
+}
+
+function renderTagList() {
+    const container = document.getElementById('tag-list');
+    if (!container) return;
+
+    if (allTags.length === 0) {
+        container.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">No tags yet. Create one above.</div>';
+        return;
+    }
+
+    container.innerHTML = allTags.map(tag => `
+        <div class="tag-list-item" data-tag-id="${tag.id}">
+            <span class="tag-chip" style="background: ${tag.color}22; color: ${tag.color}; border: 1px solid ${tag.color}44;">
+                <span style="width:8px;height:8px;border-radius:50%;background:${tag.color};display:inline-block;"></span>
+                ${escapeHtml(tag.name)}
+            </span>
+            <span class="tag-usage">${tag.job_count} job${tag.job_count !== 1 ? 's' : ''}, ${tag.video_count} video${tag.video_count !== 1 ? 's' : ''}</span>
+            <span class="tag-actions">
+                <button onclick="editTagInline(${tag.id})" title="Edit" class="tag-action-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                </button>
+                <button onclick="deleteTag(${tag.id}, '${escapeHtml(tag.name)}')" title="Delete" class="tag-action-btn tag-action-delete">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                </button>
+            </span>
+        </div>
+    `).join('');
+}
+
+async function createTag() {
+    const nameInput = document.getElementById('tag-create-name');
+    const color = getSwatchColor('tag-create-swatches');
+    const name = nameInput.value.trim();
+    if (!name) {
+        showNotification('Enter a tag name', 'error');
+        return;
+    }
+    try {
+        await apiRequest('/tags/', {
+            method: 'POST',
+            body: { name, color }
+        });
+        nameInput.value = '';
+        await loadTagManager();
+        showNotification(`Tag "${name}" created`);
+    } catch (error) {
+        showNotification(error.message || 'Failed to create tag', 'error');
+    }
+}
+
+function editTagInline(tagId) {
+    const tag = allTags.find(t => t.id === tagId);
+    if (!tag) return;
+
+    const item = document.querySelector(`.tag-list-item[data-tag-id="${tagId}"]`);
+    if (!item) return;
+
+    item.innerHTML = `
+        <input type="text" class="form-control" value="${escapeHtml(tag.name)}" id="tag-edit-name-${tagId}" style="flex:1;max-width:150px;font-size:0.85rem;padding:0.25rem 0.5rem;">
+        ${colorSwatchHTML(`tag-edit-swatches-${tagId}`, tag.color)}
+        <button class="btn btn-sm btn-purple" onclick="saveTagEdit(${tagId})">Save</button>
+        <button class="btn btn-sm btn-secondary" onclick="renderTagList()">Cancel</button>
+    `;
+    document.getElementById(`tag-edit-name-${tagId}`).focus();
+}
+
+async function saveTagEdit(tagId) {
+    const name = document.getElementById(`tag-edit-name-${tagId}`).value.trim();
+    const color = getSwatchColor(`tag-edit-swatches-${tagId}`);
+    if (!name) {
+        showNotification('Tag name cannot be empty', 'error');
+        return;
+    }
+    try {
+        await apiRequest(`/tags/${tagId}`, {
+            method: 'PUT',
+            body: { name, color }
+        });
+        await loadTagManager();
+        showNotification('Tag updated');
+    } catch (error) {
+        showNotification(error.message || 'Failed to update tag', 'error');
+    }
+}
+
+async function deleteTag(tagId, tagName) {
+    confirmAction(`Delete tag "${tagName}"? It will be removed from all jobs and timelapses.`, async () => {
+        try {
+            await apiRequest(`/tags/${tagId}`, { method: 'DELETE' });
+            await loadTagManager();
+            showNotification(`Tag "${tagName}" deleted`);
+        } catch (error) {
+            showNotification('Failed to delete tag', 'error');
+        }
+    });
+}
+
+// Tag chip HTML helper
+function tagChipHTML(tag, small = false) {
+    const sizeStyle = small ? 'font-size:0.6rem;padding:0.1rem 0.4rem;' : '';
+    return `<span class="tag-chip" style="${sizeStyle}background:${tag.color}22;color:${tag.color};border:1px solid ${tag.color}44;">
+        <span style="width:6px;height:6px;border-radius:50%;background:${tag.color};display:inline-block;"></span>
+        ${escapeHtml(tag.name)}</span>`;
+}
+
+// Tag picker for modals — renders all tags, toggles selection on click
+// onToggle(tagIds): optional callback fired after every toggle (for auto-save)
+function renderTagPicker(containerId, selectedTagIds = [], onToggle = null) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    // Store callback and containerId for toggle/inline-create to reference
+    container._tagOnToggle = onToggle;
+    container._tagPickerId = containerId;
+
+    let html = allTags.map(tag => {
+        const isSelected = selectedTagIds.includes(tag.id);
+        return `<span class="tag-chip ${isSelected ? 'selected' : ''}" data-tag-id="${tag.id}"
+            style="background:${tag.color}22;color:${tag.color};border:1px solid ${tag.color}44;cursor:pointer;opacity:${isSelected ? '1' : '0.4'};"
+            onclick="toggleTagInPicker(this)">
+            <span style="width:6px;height:6px;border-radius:50%;background:${tag.color};display:inline-block;"></span>
+            ${escapeHtml(tag.name)}</span>`;
+    }).join('');
+
+    // Inline create button
+    html += `<span class="tag-chip tag-inline-create" onclick="showInlineTagCreate('${containerId}')" title="Create new tag"
+        style="cursor:pointer;opacity:0.5;border:1px dashed var(--border-color);color:var(--text-secondary);background:transparent;">＋ New</span>`;
+
+    container.innerHTML = html;
+}
+
+function showInlineTagCreate(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container || container.querySelector('.tag-inline-form')) return;
+
+    const createBtn = container.querySelector('.tag-inline-create');
+    if (createBtn) createBtn.remove();
+
+    const form = document.createElement('div');
+    form.className = 'tag-inline-form';
+    form.innerHTML = `
+        <input type="text" class="form-control" placeholder="Tag name..." maxlength="50" style="width:100px;font-size:0.75rem;padding:0.2rem 0.4rem;">
+        <div class="color-swatch-row" style="gap:2px;">${TAG_COLORS.slice(0, 10).map(c =>
+            `<span class="color-swatch${c === '#6366f1' ? ' selected' : ''}" style="background:${c};width:16px;height:16px;" data-color="${c}" onclick="selectSwatch(this)"></span>`
+        ).join('')}</div>
+        <button class="btn btn-purple btn-sm" style="font-size:0.7rem;padding:0.15rem 0.5rem;" onclick="submitInlineTag('${containerId}')">Add</button>
+        <button class="btn btn-secondary btn-sm" style="font-size:0.7rem;padding:0.15rem 0.4rem;" onclick="cancelInlineTagCreate('${containerId}')">✕</button>
+    `;
+    container.appendChild(form);
+    form.querySelector('input').focus();
+    form.querySelector('input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') submitInlineTag(containerId);
+        if (e.key === 'Escape') cancelInlineTagCreate(containerId);
+    });
+}
+
+function cancelInlineTagCreate(containerId) {
+    const container = document.getElementById(containerId);
+    const onToggle = container?._tagOnToggle || null;
+    renderTagPicker(containerId, getSelectedTagIds(containerId), onToggle);
+}
+
+async function submitInlineTag(containerId) {
+    const container = document.getElementById(containerId);
+    const form = container?.querySelector('.tag-inline-form');
+    if (!form) return;
+    const name = form.querySelector('input').value.trim();
+    const swatchRow = form.querySelector('.color-swatch-row');
+    const selected = swatchRow?.querySelector('.color-swatch.selected');
+    const color = selected ? selected.dataset.color : '#6366f1';
+    if (!name) { showNotification('Enter a tag name', 'error'); return; }
+    try {
+        const newTag = await apiRequest('/tags/', { method: 'POST', body: { name, color } });
+        allTags.push(newTag);
+        const currentIds = getSelectedTagIds(containerId);
+        currentIds.push(newTag.id);
+        const onToggle = container._tagOnToggle || null;
+        renderTagPicker(containerId, currentIds, onToggle);
+        // Fire callback for the newly added tag
+        if (onToggle) onToggle(currentIds);
+        showNotification(`Tag "${name}" created`);
+    } catch (error) {
+        showNotification(error.message || 'Failed to create tag', 'error');
+    }
+}
+
+function toggleTagInPicker(el) {
+    el.classList.toggle('selected');
+    el.style.opacity = el.classList.contains('selected') ? '1' : '0.4';
+    // Fire auto-save callback if present
+    const container = el.closest('.tag-picker');
+    if (container?._tagOnToggle) {
+        const tagIds = getSelectedTagIds(container._tagPickerId);
+        container._tagOnToggle(tagIds);
+    }
+}
+
+function getSelectedTagIds(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return [];
+    return Array.from(container.querySelectorAll('.tag-chip.selected')).map(el => parseInt(el.dataset.tagId));
+}
+
+// Tag filter dropdown for galleries — searchable multi-select
+function renderTagFilter(wrapId, onChange) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+
+    wrap._tagFilterSelected = new Set();
+    wrap._tagFilterOnChange = onChange;
+
+    wrap.innerHTML = `
+        <div class="tag-filter-trigger" onclick="toggleTagFilterDropdown('${wrapId}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.5"/></svg>
+            <span class="tag-filter-label">Tags</span>
+        </div>
+        <div class="tag-filter-dropdown" id="${wrapId}-dropdown">
+            <div class="tag-filter-search">
+                <input type="text" placeholder="Search tags..." oninput="filterTagDropdown('${wrapId}', this.value)">
+            </div>
+            <div class="tag-filter-list" id="${wrapId}-list"></div>
+        </div>
+    `;
+
+    populateTagFilterList(wrapId);
+
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+        if (!wrap.contains(e.target)) {
+            const dd = document.getElementById(`${wrapId}-dropdown`);
+            if (dd) dd.classList.remove('open');
+            const trigger = wrap.querySelector('.tag-filter-trigger');
+            if (trigger) trigger.classList.remove('active');
+        }
+    });
+}
+
+function populateTagFilterList(wrapId) {
+    const list = document.getElementById(`${wrapId}-list`);
+    if (!list) return;
+    const wrap = document.getElementById(wrapId);
+    const selected = wrap?._tagFilterSelected || new Set();
+
+    list.innerHTML = allTags.map(tag => `
+        <div class="tag-filter-item ${selected.has(tag.id) ? 'selected' : ''}" data-tag-id="${tag.id}" data-name="${escapeHtml(tag.name.toLowerCase())}"
+             onclick="toggleTagFilter('${wrapId}', ${tag.id})">
+            <span class="tag-filter-check"></span>
+            <span class="tag-filter-dot" style="background:${tag.color};"></span>
+            <span>${escapeHtml(tag.name)}</span>
+        </div>
+    `).join('');
+
+    if (allTags.length === 0) {
+        list.innerHTML = '<div style="padding:0.5rem;color:var(--text-secondary);font-size:0.8rem;">No tags</div>';
+    }
+}
+
+function toggleTagFilterDropdown(wrapId) {
+    const dd = document.getElementById(`${wrapId}-dropdown`);
+    const trigger = document.querySelector(`#${wrapId} .tag-filter-trigger`);
+    if (!dd) return;
+    const isOpen = dd.classList.toggle('open');
+    if (trigger) trigger.classList.toggle('active', isOpen);
+    if (isOpen) {
+        populateTagFilterList(wrapId);
+        const input = dd.querySelector('input');
+        if (input) { input.value = ''; input.focus(); }
+    }
+}
+
+function filterTagDropdown(wrapId, query) {
+    const list = document.getElementById(`${wrapId}-list`);
+    if (!list) return;
+    const q = query.toLowerCase();
+    list.querySelectorAll('.tag-filter-item').forEach(item => {
+        item.style.display = item.dataset.name.includes(q) ? '' : 'none';
+    });
+}
+
+function toggleTagFilter(wrapId, tagId) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    const selected = wrap._tagFilterSelected;
+    if (selected.has(tagId)) selected.delete(tagId);
+    else selected.add(tagId);
+
+    // Update item visual
+    const item = document.querySelector(`#${wrapId}-list .tag-filter-item[data-tag-id="${tagId}"]`);
+    if (item) item.classList.toggle('selected', selected.has(tagId));
+
+    // Update trigger label
+    updateTagFilterTrigger(wrapId);
+
+    // Fire callback
+    if (wrap._tagFilterOnChange) wrap._tagFilterOnChange([...selected]);
+}
+
+function updateTagFilterTrigger(wrapId) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    const selected = wrap._tagFilterSelected;
+    const label = wrap.querySelector('.tag-filter-label');
+    if (!label) return;
+
+    if (selected.size === 0) {
+        label.textContent = 'Tags';
+    } else if (selected.size <= 2) {
+        const names = allTags.filter(t => selected.has(t.id)).map(t => t.name);
+        label.textContent = names.join(', ');
+    } else {
+        label.innerHTML = `Tags <span class="tag-filter-count">${selected.size}</span>`;
+    }
+}
+
+function getTagFilterIds(wrapId) {
+    const wrap = document.getElementById(wrapId);
+    return wrap?._tagFilterSelected ? [...wrap._tagFilterSelected] : [];
+}
+
+function clearTagFilter(wrapId) {
+    const wrap = document.getElementById(wrapId);
+    if (wrap?._tagFilterSelected) wrap._tagFilterSelected.clear();
+    updateTagFilterTrigger(wrapId);
+}
+
 // Nav Warning Badge
 function updateJobWarningBadge(jobs) {
     const jobsLink = document.querySelector('.nav-link[data-view="jobs"]');
@@ -4254,6 +4678,7 @@ let capturesState = {
     pageSize: 16,
     sortOrder: 'desc',
     jobFilter: null,
+    tagFilter: null,
     startTime: null,
     endTime: null,
     favoritesOnly: false,
@@ -4286,6 +4711,12 @@ async function loadCaptures() {
                 option.textContent = job.name;
                 jobSelect.appendChild(option);
             });
+        }
+        
+        // Initialize tag filter (once)
+        const tagWrap = document.getElementById('captures-tag-filter-wrap');
+        if (tagWrap && !tagWrap._tagFilterSelected) {
+            renderTagFilter('captures-tag-filter-wrap', () => applyCaptureSortAndFilter());
         }
         
         await loadCapturesPage();
@@ -4497,6 +4928,10 @@ async function loadCapturesPage() {
             query.favorites_only = true;
         }
         
+        if (capturesState.tagFilter) {
+            query.tag_id = capturesState.tagFilter;
+        }
+        
         const data = await apiRequest('/captures/', { query });
         
         const countEl = document.getElementById('captures-count');
@@ -4540,6 +4975,7 @@ function renderCaptures(captures) {
             <div class="capture-info">
                 <div class="capture-job-name">${escapeHtml(capture.job_name || 'Unknown Job')}</div>
                 <div class="capture-time">${formatDateTime(capture.captured_at)}</div>
+                ${capture.tags && capture.tags.length ? `<div class="card-tags">${capture.tags.map(t => tagChipHTML(t, true)).join('')}</div>` : ''}
             </div>
         </div>
     `).join('');
@@ -4596,12 +5032,14 @@ function goToPage(page) {
 
 function applyCaptureSortAndFilter() {
     const jobFilter = getValue('captures-job-filter');
+    const selectedTags = getTagFilterIds('captures-tag-filter-wrap');
     const startTime = getValue('captures-start-time');
     const endTime = getValue('captures-end-time');
     const sortOrder = getValue('captures-sort-order');
     const pageSize = getValue('captures-page-size');
     
     capturesState.jobFilter = jobFilter || null;
+    capturesState.tagFilter = selectedTags.length > 0 ? selectedTags.join(',') : null;
     capturesState.startTime = startTime ? new Date(startTime).toISOString() : null;
     capturesState.endTime = endTime ? new Date(endTime).toISOString() : null;
     capturesState.sortOrder = sortOrder || 'desc';
@@ -4609,7 +5047,7 @@ function applyCaptureSortAndFilter() {
     capturesState.currentPage = 1;
     
     // Show/hide reset button
-    const hasFilters = jobFilter || startTime || endTime || capturesState.favoritesOnly;
+    const hasFilters = jobFilter || selectedTags.length > 0 || startTime || endTime || capturesState.favoritesOnly;
     document.getElementById('captures-filter-reset').style.display = hasFilters ? '' : 'none';
     
     loadCapturesPage();
@@ -4617,10 +5055,12 @@ function applyCaptureSortAndFilter() {
 
 function clearCaptureFilters() {
     setValue('captures-job-filter', '');
+    clearTagFilter('captures-tag-filter-wrap');
     setValue('captures-start-time', '');
     setValue('captures-end-time', '');
     document.getElementById('captures-filter-reset').style.display = 'none';
     capturesState.jobFilter = null;
+    capturesState.tagFilter = null;
     capturesState.startTime = null;
     capturesState.endTime = null;
     capturesState.favoritesOnly = false;

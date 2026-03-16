@@ -63,3 +63,53 @@ def normalize_favorite(record_dict: dict) -> dict:
     """Convert SQLite integer is_favorite to Python bool."""
     record_dict['is_favorite'] = bool(record_dict.get('is_favorite', 0))
     return record_dict
+
+
+def fetch_tags_for_jobs(cursor, job_ids: list) -> dict:
+    """Fetch tags for a list of job IDs. Returns {job_id: [tag_dicts]}."""
+    if not job_ids:
+        return {}
+    placeholders = ','.join('?' for _ in job_ids)
+    cursor.execute(f"""
+        SELECT jt.job_id, t.id, t.name, t.color
+        FROM job_tags jt
+        JOIN tags t ON t.id = jt.tag_id
+        WHERE jt.job_id IN ({placeholders})
+        ORDER BY t.name
+    """, job_ids)
+    result = {jid: [] for jid in job_ids}
+    for row in cursor.fetchall():
+        result[row['job_id']].append({'id': row['id'], 'name': row['name'], 'color': row['color']})
+    return result
+
+
+def fetch_tags_for_videos(cursor, video_ids: list) -> dict:
+    """Fetch tags for a list of video IDs. Returns {video_id: [tag_dicts]}."""
+    if not video_ids:
+        return {}
+    placeholders = ','.join('?' for _ in video_ids)
+    cursor.execute(f"""
+        SELECT vt.video_id, t.id, t.name, t.color
+        FROM video_tags vt
+        JOIN tags t ON t.id = vt.tag_id
+        WHERE vt.video_id IN ({placeholders})
+        ORDER BY t.name
+    """, video_ids)
+    result = {vid: [] for vid in video_ids}
+    for row in cursor.fetchall():
+        result[row['video_id']].append({'id': row['id'], 'name': row['name'], 'color': row['color']})
+    return result
+
+
+def set_job_tags(cursor, job_id: int, tag_ids: list):
+    """Replace all tags for a job."""
+    cursor.execute("DELETE FROM job_tags WHERE job_id = ?", (job_id,))
+    for tag_id in tag_ids:
+        cursor.execute("INSERT OR IGNORE INTO job_tags (job_id, tag_id) VALUES (?, ?)", (job_id, tag_id))
+
+
+def set_video_tags(cursor, video_id: int, tag_ids: list):
+    """Replace all tags for a video."""
+    cursor.execute("DELETE FROM video_tags WHERE video_id = ?", (video_id,))
+    for tag_id in tag_ids:
+        cursor.execute("INSERT OR IGNORE INTO video_tags (video_id, tag_id) VALUES (?, ?)", (video_id, tag_id))

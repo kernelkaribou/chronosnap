@@ -80,6 +80,7 @@
                     <button class="btn btn-sm fav-filter-btn" id="video-fav-filter" onclick="toggleVideoFavoritesFilter()" title="Show favorites only">
                         <span class="fav-heart">♥</span>
                     </button>
+                    <div class="tag-filter-wrap" id="video-tag-filter-wrap"></div>
                     <button class="btn btn-secondary btn-sm" id="video-filter-reset" onclick="resetVideoFilters()" style="display:none;" title="Clear all filters">Reset</button>
                     <span class="gallery-count" id="video-count"></span>
                 </div>
@@ -128,6 +129,7 @@
                     <button class="btn btn-sm fav-filter-btn" id="captures-fav-filter" onclick="toggleCaptureFavoritesFilter()" title="Show favorites only">
                         <span class="fav-heart">♥</span>
                     </button>
+                    <div class="tag-filter-wrap" id="captures-tag-filter-wrap"></div>
                     <select class="gallery-filter-select" id="captures-sort-order" onchange="applyCaptureSortAndFilter()">
                         <option value="desc">Newest</option>
                         <option value="asc">Oldest</option>
@@ -288,6 +290,22 @@
                             <div class="webhook-actions">
                                 <button class="btn btn-secondary" onclick="testWebhook()">Test Webhook</button>
                                 <button class="btn btn-purple" id="webhook-save-btn" onclick="saveWebhookSettings()" disabled>Save</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tags Manager Section -->
+                    <div class="settings-section">
+                        <h3>Tags</h3>
+                        <p class="settings-description">Create and manage tags to categorize jobs and timelapses. Tags assigned to a job are automatically inherited by its captures and timelapse builds.</p>
+                        <div class="tag-manager">
+                            <div class="tag-create-row">
+                                <input type="text" id="tag-create-name" class="form-control" placeholder="New tag name..." maxlength="50">
+                                <div class="color-swatch-row" id="tag-create-swatches"></div>
+                                <button class="btn btn-purple btn-sm" onclick="createTag()">Add Tag</button>
+                            </div>
+                            <div id="tag-list" class="tag-list">
+                                <!-- Populated dynamically -->
                             </div>
                         </div>
                     </div>
@@ -463,6 +481,11 @@
                 </div>
 
                 <div class="form-group">
+                    <label>Tags</label>
+                    <div class="tag-picker" id="create-job-tags"></div>
+                </div>
+
+                <div class="form-group">
                     <label>Capture Path</label>
                     <input type="text" id="capture_path" class="form-control" placeholder="Leave empty for default">
                 </div>
@@ -631,6 +654,7 @@
                         </video>
                     </div>
                     <dl class="video-detail-meta" id="video-detail-meta"></dl>
+                    <div id="video-detail-tags"></div>
                     <div class="video-detail-actions" id="video-detail-actions"></div>
                 </div>
             </div>

@@ -46,6 +46,7 @@ class JobCreate(BaseModel):
     auto_build_quality: str = Field(default="medium", pattern=r"^(low|medium|high|lossless)$")
     auto_build_resolution: str = Field(default="1920x1080", pattern=r"^\d+x\d+$")
     auto_build_text_overlay: Optional[str] = None  # JSON string of TextOverlayConfig
+    tag_ids: Optional[List[int]] = None
     
     @field_validator('url')
     @classmethod
@@ -107,6 +108,7 @@ class JobUpdate(BaseModel):
     auto_build_quality: Optional[str] = Field(None, pattern=r"^(low|medium|high|lossless)$")
     auto_build_resolution: Optional[str] = Field(None, pattern=r"^\d+x\d+$")
     auto_build_text_overlay: Optional[str] = None  # JSON string of TextOverlayConfig
+    tag_ids: Optional[List[int]] = None
 
     @field_validator('url')
     @classmethod
@@ -114,6 +116,12 @@ class JobUpdate(BaseModel):
         if v is not None and not v.startswith(('http://', 'https://', 'rtsp://', 'rtsps://')):
             raise ValueError("URL must start with http://, https://', rtsp://, or rtsps://")
         return v
+
+
+class TagBrief(BaseModel):
+    id: int
+    name: str
+    color: str
 
 
 class JobResponse(BaseModel):
@@ -143,9 +151,10 @@ class JobResponse(BaseModel):
     auto_build_text_overlay: Optional[str] = None
     last_auto_build_at: Optional[str] = None
     auto_build_in_progress: int = 0
-    next_scheduled_capture_at: Optional[str] = None  # New: scheduled capture time from DB
-    next_capture_at: Optional[str] = None  # Calculated field from enrich function
-    latest_capture: Optional[Dict[str, Any]] = None  # Latest capture info
+    next_scheduled_capture_at: Optional[str] = None
+    next_capture_at: Optional[str] = None
+    latest_capture: Optional[Dict[str, Any]] = None
+    tags: List[TagBrief] = []
     created_at: str
     updated_at: str
 
@@ -160,6 +169,7 @@ class CaptureResponse(BaseModel):
     is_favorite: bool = False
     thumbnail_path: Optional[str] = None
     has_thumbnail: bool = False
+    tags: List[TagBrief] = []
 
 
 class CaptureListResponse(BaseModel):
@@ -224,7 +234,8 @@ class VideoResponse(BaseModel):
     thumbnail_path: Optional[str] = None
     build_source: str = "manual"
     is_favorite: bool = False
-    text_overlay: Optional[str] = None  # JSON string of TextOverlayConfig
+    text_overlay: Optional[str] = None
+    tags: List[TagBrief] = []
 
 
 class TestUrlResponse(BaseModel):
