@@ -2664,3 +2664,122 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 }
 .shared-video-item .share-link-url { flex: 1; }
 .shared-video-item .tag-action-btn { flex-shrink: 0; }
+
+/* =============================================================================
+   Video Comparison
+   ============================================================================= */
+
+.compare-mode-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--primary-color);
+    color: #fff;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+.compare-mode-banner .btn {
+    margin-left: auto;
+    color: #fff;
+    border-color: rgba(255,255,255,0.3);
+}
+.compare-mode-banner .btn:hover {
+    background: rgba(255,255,255,0.15);
+}
+.compare-btn {
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid var(--border-color);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+.compare-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--text-secondary);
+}
+.compare-btn.active {
+    background: var(--primary-color);
+    color: #fff;
+    border-color: var(--primary-color);
+}
+.compare-mode .video-gallery-card {
+    cursor: pointer;
+}
+
+.comparison-modal-content {
+    max-width: 95vw;
+    width: 1400px;
+}
+.comparison-players {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+.comparison-side video {
+    width: 100%;
+    max-height: 50vh;
+    border-radius: 6px;
+    background: #000;
+}
+.comparison-label {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+.comparison-label strong {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.comparison-label span {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+.comparison-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--border-color);
+}
+.compare-scrubber {
+    flex: 1;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--border-color);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+.compare-scrubber::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    cursor: pointer;
+}
+.compare-scrubber::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    border: none;
+    cursor: pointer;
+}
+.compare-time {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    min-width: 3rem;
+    text-align: center;
+}

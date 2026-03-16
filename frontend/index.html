@@ -67,7 +67,13 @@
             <div id="videos-view" class="view">
                 <div class="view-header">
                     <h2>Timelapses</h2>
-                    <button class="btn btn-purple" onclick="showProcessVideoModal()">+ Build Timelapse</button>
+                    <div style="display:flex;gap:0.5rem;">
+                        <button class="btn btn-secondary compare-btn" id="compare-mode-btn" onclick="toggleCompareMode()" title="Compare two timelapses">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="10" height="18" rx="1"/><rect x="13" y="3" width="10" height="18" rx="1"/><polyline points="3,17 6,12 9,17"/><polyline points="15,17 18,12 21,17"/></svg>
+                            Compare
+                        </button>
+                        <button class="btn btn-purple" onclick="showProcessVideoModal()">+ Build Timelapse</button>
+                    </div>
                 </div>
                 <div class="gallery-filters">
                     <input type="text" class="gallery-search" id="video-search" placeholder="Search..." oninput="filterVideos()">
@@ -83,6 +89,11 @@
                     <div class="tag-filter-wrap" id="video-tag-filter-wrap"></div>
                     <button class="btn btn-secondary btn-sm" id="video-filter-reset" onclick="resetVideoFilters()" style="display:none;" title="Clear all filters">Reset</button>
                     <span class="gallery-count" id="video-count"></span>
+                </div>
+                <div class="compare-mode-banner" id="compare-mode-banner" style="display:none;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="10" height="18" rx="1"/><rect x="13" y="3" width="10" height="18" rx="1"/><polyline points="3,17 6,12 9,17"/><polyline points="15,17 18,12 21,17"/></svg>
+                    <span id="compare-mode-text">Select 2 timelapses to compare</span>
+                    <button class="btn btn-secondary btn-sm" onclick="toggleCompareMode()">Cancel</button>
                 </div>
                 <div class="captures-selection-controls" id="video-selection-controls" style="display: none;">
                     <span class="selection-clear" onclick="videoSelection.clear()" title="Clear selection">&times;</span>
@@ -665,6 +676,39 @@
                     <div id="video-detail-tags"></div>
                     <div class="video-detail-actions" id="video-detail-actions"></div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Comparison Modal -->
+    <div id="comparison-modal" class="modal">
+        <div class="modal-content comparison-modal-content">
+            <div class="modal-header">
+                <h3>Compare Timelapses</h3>
+                <span class="close" onclick="closeComparison()">&times;</span>
+            </div>
+            <div class="comparison-players">
+                <div class="comparison-side">
+                    <video id="compare-player-a" preload="metadata">
+                        <source id="compare-source-a" type="video/mp4">
+                    </video>
+                    <div class="comparison-label" id="compare-label-a"></div>
+                </div>
+                <div class="comparison-side">
+                    <video id="compare-player-b" preload="metadata">
+                        <source id="compare-source-b" type="video/mp4">
+                    </video>
+                    <div class="comparison-label" id="compare-label-b"></div>
+                </div>
+            </div>
+            <div class="comparison-controls">
+                <button class="btn btn-secondary btn-sm" id="compare-play-btn" onclick="toggleComparisonPlay()">
+                    <svg id="compare-play-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <svg id="compare-pause-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                </button>
+                <span class="compare-time" id="compare-time-current">0:00</span>
+                <input type="range" id="compare-scrubber" class="compare-scrubber" min="0" max="1000" value="0" oninput="scrubComparison(this.value)">
+                <span class="compare-time" id="compare-time-duration">0:00</span>
             </div>
         </div>
     </div>
