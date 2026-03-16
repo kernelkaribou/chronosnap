@@ -597,6 +597,8 @@ async function showJobDetails(jobId) {
                     <label>Stream URL *</label>
                     <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required>
                     <small style="color: var(--text-secondary);">HTTP or RTSP stream URL</small>
+                    <button type="button" class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="previewStream('edit_url', 'edit-preview-result')">Preview</button>
+                    <div id="edit-preview-result" class="test-result"></div>
                 </div>
 
                 <div class="form-group" style="margin-bottom: 1rem;">
@@ -1145,15 +1147,19 @@ async function deleteJob(jobId, jobName) {
 }
 
 async function testUrl() {
-    const url = document.getElementById('job_url').value;
-    const resultDiv = document.getElementById('test-result');
+    previewStream('job_url', 'test-result');
+}
+
+async function previewStream(urlInputId, resultDivId) {
+    const url = document.getElementById(urlInputId).value;
+    const resultDiv = document.getElementById(resultDivId);
     
     if (!url) {
         showNotification('Please enter a URL first', 'warning');
         return;
     }
     
-    resultDiv.innerHTML = '<p style="color: var(--text-secondary);">Testing URL...</p>';
+    resultDiv.innerHTML = '<p style="color: var(--text-secondary);">Loading preview...</p>';
     resultDiv.className = 'test-result';
     
     try {
@@ -1165,7 +1171,7 @@ async function testUrl() {
         if (result.success) {
             resultDiv.className = 'test-result';
             resultDiv.innerHTML = `
-                <img src="${result.image_data}" alt="Test capture" style="max-width: 100%; margin-top: 10px; border: 1px solid var(--border-color); border-radius: 4px;">
+                <img src="${result.image_data}" alt="Preview capture" style="max-width: 100%; margin-top: 10px; border: 1px solid var(--border-color); border-radius: 4px;">
             `;
         } else {
             resultDiv.className = 'test-result error';
