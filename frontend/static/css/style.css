@@ -934,6 +934,34 @@ body {
     width: 120px;
 }
 
+/* Overlay two-column layout */
+.overlay-layout {
+    display: flex;
+    gap: 1.25rem;
+}
+
+.overlay-controls {
+    flex: 1;
+    min-width: 0;
+}
+
+.overlay-preview-panel {
+    width: 220px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    padding-top: 0.25rem;
+}
+
+@media (max-width: 768px) {
+    .overlay-layout {
+        flex-direction: column;
+    }
+    .overlay-preview-panel {
+        width: 100%;
+    }
+}
+
 .overlay-position-grid .pos-btn {
     width: 100%;
     aspect-ratio: 1.5;

@@ -2033,10 +2033,11 @@ const OVERLAY_POSITIONS = [
 /**
  * Generate overlay widget HTML for a container.
  * @param {string} prefix  - Unique prefix for element IDs (e.g., "build", "create-ab", "edit-ab")
- * @param {object} opts    - { label: string, onchange: string|null }
+ * @param {object} opts    - { label: string, showPreview: bool, onchange: string|null }
  */
 function generateOverlayHTML(prefix, opts = {}) {
     const label = opts.label || 'Text Overlay';
+    const showPreview = opts.showPreview || false;
     const onchangeAttr = opts.onchange ? ` onchange="${opts.onchange}"` : '';
     const inputEvent = opts.onchange ? ` oninput="${opts.onchange}" onchange="${opts.onchange}"` : '';
 
@@ -2048,17 +2049,10 @@ function generateOverlayHTML(prefix, opts = {}) {
         ? _overlayFontsCache.map(f => `<option value="${f.name}">${f.name}</option>`).join('')
         : '<option value="DejaVu Sans">DejaVu Sans</option>';
 
-    return `
-        <div class="form-group" style="margin-top: 0.5rem;">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <input type="checkbox" id="${prefix}-overlay-enabled"${onchangeAttr}>
-                <span>${label}</span>
-            </div>
-        </div>
-        <div id="${prefix}-overlay-fields" style="display: none;">
+    const controlsHtml = `
             <div class="form-group">
                 <label>Overlay Text</label>
-                <input type="text" id="${prefix}-overlay-text" class="form-control" placeholder="{job_name} - {date} {time}"${inputEvent}>
+                <input type="text" id="${prefix}-overlay-text" class="form-control" value="{job_name}" placeholder="{job_name} - {date} {time}"${inputEvent}>
                 <small style="color: var(--text-secondary);">Variables: <code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code> <code>{total_frames}</code></small>
             </div>
             <div class="form-row">
@@ -2103,8 +2097,31 @@ function generateOverlayHTML(prefix, opts = {}) {
                         <span id="${prefix}-overlay-opacity-label" style="width:35px;text-align:right;font-size:0.85rem;color:var(--text-secondary);">50%</span>
                     </div>
                 </div>
+            </div>`;
+
+    const previewHtml = showPreview ? `
+            <div class="overlay-preview-panel" id="${prefix}-overlay-preview-panel">
+                <img id="${prefix}-overlay-preview-img" alt="Overlay preview" style="width:100%; border-radius: var(--radius-lg); border: 1px solid var(--border-color); display: none;">
+                <div id="${prefix}-overlay-preview-placeholder" style="width:100%; aspect-ratio:16/9; background:var(--surface-color); border:1px dashed var(--border-color); border-radius:var(--radius-lg); display:flex; align-items:center; justify-content:center; color:var(--text-secondary); font-size:0.8rem;">
+                    Loading preview…
+                </div>
+            </div>` : '';
+
+    const fieldsInner = showPreview
+        ? `<div class="overlay-layout">\n<div class="overlay-controls">${controlsHtml}</div>\n${previewHtml}\n</div>`
+        : controlsHtml;
+
+    return `
+        <div class="form-group" style="margin-top: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <input type="checkbox" id="${prefix}-overlay-enabled"${onchangeAttr}>
+                <span>${label}</span>
             </div>
+        </div>
+        <div id="${prefix}-overlay-fields" style="display: none;">
+            ${fieldsInner}
         </div>`;
+}
 }
 
 /**
@@ -2277,8 +2294,28 @@ function initCreateJobOverlay() {
     mountOverlayWidget('create-ab-overlay-container', 'create-ab', { label: 'Text Overlay' });
 }
 
+let _editOverlayPreviewTimeout = null;
+
 function initEditJobOverlay(job) {
-    mountOverlayWidget('edit-ab-overlay-container', 'edit-ab', { label: 'Text Overlay' });
+    // Store job context for preview
+    window._editOverlayJob = job;
+
+    const triggerEditPreview = () => {
+        clearTimeout(_editOverlayPreviewTimeout);
+        _editOverlayPreviewTimeout = setTimeout(() => updateGenericOverlayPreview('edit-ab', job), 300);
+    };
+
+    mountOverlayWidget('edit-ab-overlay-container', 'edit-ab', {
+        label: 'Text Overlay',
+        showPreview: true,
+        onchange: '_editAbOverlayChanged()',
+        onToggle: (enabled) => { if (enabled) triggerEditPreview(); },
+        onChange: () => triggerEditPreview(),
+    });
+
+    // Expose for inline onchange attr
+    window._editAbOverlayChanged = triggerEditPreview;
+
     // Load existing config from job
     if (job.auto_build_text_overlay) {
         try {
@@ -2286,6 +2323,62 @@ function initEditJobOverlay(job) {
             if (config) writeOverlayConfig('edit-ab', config);
         } catch (e) {}
     }
+
+    // Load preview image from latest capture
+    loadOverlayPreviewImage('edit-ab', job);
+}
+
+async function loadOverlayPreviewImage(prefix, job) {
+    const img = document.getElementById(`${prefix}-overlay-preview-img`);
+    const placeholder = document.getElementById(`${prefix}-overlay-preview-placeholder`);
+    if (!img) return;
+
+    try {
+        // Use the job's latest capture for the preview
+        const capsData = await apiRequest('/captures/', { query: { job_id: job.id, page_size: 1, sort_order: 'desc' } });
+        if (capsData.captures && capsData.captures.length > 0) {
+            const cap = capsData.captures[0];
+            img._filePath = cap.file_path;
+            img._originalSrc = `${API_BASE}/captures/${cap.id}/thumbnail`;
+            img.src = img._originalSrc;
+            img.style.display = 'block';
+            if (placeholder) placeholder.style.display = 'none';
+            // If overlay is already enabled, render preview
+            const cb = document.getElementById(`${prefix}-overlay-enabled`);
+            if (cb && cb.checked) {
+                setTimeout(() => updateGenericOverlayPreview(prefix, job), 100);
+            }
+        } else {
+            if (placeholder) placeholder.textContent = 'No captures yet';
+        }
+    } catch (e) {
+        if (placeholder) placeholder.textContent = 'Preview unavailable';
+    }
+}
+
+async function updateGenericOverlayPreview(prefix, job) {
+    const config = readOverlayConfig(prefix);
+    const img = document.getElementById(`${prefix}-overlay-preview-img`);
+    if (!img || !img._filePath) return;
+    if (!config) {
+        // Restore original
+        if (img._originalSrc) img.src = img._originalSrc;
+        if (img._overlayUrl) { URL.revokeObjectURL(img._overlayUrl); img._overlayUrl = null; }
+        return;
+    }
+    try {
+        const resp = await fetch(`${API_BASE}/videos/text-overlay-preview`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Referer': window.location.href },
+            body: JSON.stringify({ image_path: img._filePath, config, job_name: job.name || 'Sample Job' })
+        });
+        if (!resp.ok) throw new Error('Preview failed');
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        if (img._overlayUrl) URL.revokeObjectURL(img._overlayUrl);
+        img._overlayUrl = url;
+        img.src = url;
+    } catch (e) { console.error('Edit overlay preview error:', e); }
 }
 
 async function processVideo(event) {
