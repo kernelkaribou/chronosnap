@@ -4,13 +4,12 @@ and API routes (auth-protected) for managing shared links.
 """
 import secrets
 import string
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from ..database import get_db
 from ..database import get_db, dict_from_row
 
 # ── Auth-protected API routes ──────────────────────────────────────────────
@@ -25,78 +24,47 @@ def generate_token() -> str:
     return ''.join(secrets.choice(TOKEN_ALPHABET) for _ in range(TOKEN_LENGTH))
 
 
-class CreateSharedLink(BaseModel):
+class ToggleShareRequest(BaseModel):
     video_id: int
-    expires_in_hours: Optional[int] = None  # None = never expires
+    enabled: bool
 
 
-class SharedLinkResponse(BaseModel):
-    id: int
-    token: str
-    video_id: int
-    video_name: Optional[str] = None
-    created_at: str
-    expires_at: Optional[str] = None
-    url: Optional[str] = None
-
-
-@router.get("/", response_model=List[SharedLinkResponse])
-async def list_shared_links(video_id: Optional[int] = Query(None)):
-    """List all shared links, optionally filtered by video_id"""
+@router.get("/")
+async def list_shared_links():
+    """List all active shared links"""
     with get_db() as conn:
         cursor = conn.cursor()
-        if video_id is not None:
-            cursor.execute("""
-                SELECT sl.*, pv.name as video_name
-                FROM shared_links sl
-                LEFT JOIN processed_videos pv ON sl.video_id = pv.id
-                WHERE sl.video_id = ?
-                ORDER BY sl.created_at DESC
-            """, (video_id,))
-        else:
-            cursor.execute("""
-                SELECT sl.*, pv.name as video_name
-                FROM shared_links sl
-                LEFT JOIN processed_videos pv ON sl.video_id = pv.id
-                ORDER BY sl.created_at DESC
-            """)
+        cursor.execute("""
+            SELECT sl.*, pv.name as video_name
+            FROM shared_links sl
+            LEFT JOIN processed_videos pv ON sl.video_id = pv.id
+            ORDER BY sl.created_at DESC
+        """)
         return [dict_from_row(row) for row in cursor.fetchall()]
 
 
-@router.post("/", response_model=SharedLinkResponse)
-async def create_shared_link(body: CreateSharedLink):
-    """Create a new shared link for a video"""
+@router.post("/toggle")
+async def toggle_share(body: ToggleShareRequest):
+    """Toggle sharing on/off for a video. Returns the new share token or null."""
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id, name FROM processed_videos WHERE id = ?",
-            (body.video_id,)
-        )
-        video = cursor.fetchone()
-        if not video:
+        cursor.execute("SELECT id, name FROM processed_videos WHERE id = ?", (body.video_id,))
+        if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Video not found")
 
-        token = generate_token()
-        now = datetime.now(timezone.utc).isoformat()
-        expires_at = None
-        if body.expires_in_hours:
-            expires_at = (
-                datetime.now(timezone.utc) + timedelta(hours=body.expires_in_hours)
-            ).isoformat()
-
-        cursor.execute(
-            "INSERT INTO shared_links (token, video_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
-            (token, body.video_id, now, expires_at)
-        )
-        link_id = cursor.lastrowid
-        return {
-            "id": link_id,
-            "token": token,
-            "video_id": body.video_id,
-            "video_name": video["name"],
-            "created_at": now,
-            "expires_at": expires_at,
-        }
+        if body.enabled:
+            # Remove any existing link first, then create fresh
+            cursor.execute("DELETE FROM shared_links WHERE video_id = ?", (body.video_id,))
+            token = generate_token()
+            now = datetime.now(timezone.utc).isoformat()
+            cursor.execute(
+                "INSERT INTO shared_links (token, video_id, created_at) VALUES (?, ?, ?)",
+                (token, body.video_id, now)
+            )
+            return {"enabled": True, "token": token}
+        else:
+            cursor.execute("DELETE FROM shared_links WHERE video_id = ?", (body.video_id,))
+            return {"enabled": False, "token": None}
 
 
 @router.delete("/{link_id}")

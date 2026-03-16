@@ -1731,16 +1731,15 @@ async function openVideoDetail(videoId) {
         let actionsHtml = '';
         if (video.status === 'completed') {
             actionsHtml += `<a href="${API_BASE}/videos/${video.id}/download" class="btn btn-primary btn-sm">Download</a>`;
-            actionsHtml += `<button class="btn btn-secondary btn-sm" onclick="showSharePanel(${video.id})">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-                Share</button>`;
         }
         actionsHtml += `<button class="btn btn-danger btn-sm" onclick="deleteVideoFromDetail(${video.id}, '${escapeHtml(video.name)}')">Delete</button>`;
         actions.innerHTML = actionsHtml;
         
-        // Load shared links for this video
+        // Render share toggle
         const shareContainer = document.getElementById('video-detail-share');
-        if (shareContainer) shareContainer.innerHTML = '';
+        if (shareContainer && video.status === 'completed') {
+            renderShareToggle(shareContainer, video.id, video.share_token || null);
+        }
         
         modal.classList.add('active');
     } catch (error) {
@@ -1774,83 +1773,43 @@ async function deleteVideoFromDetail(videoId, videoName) {
 
 // ── Shared Links ──────────────────────────────────────────────────────────
 
-async function showSharePanel(videoId) {
-    const container = document.getElementById('video-detail-share');
-    if (!container) return;
+function renderShareToggle(container, videoId, shareToken) {
+    const isShared = !!shareToken;
+    const url = shareToken ? `${window.location.origin}/shared/${shareToken}` : '';
 
     container.innerHTML = `
-        <div class="share-panel">
-            <div class="share-panel-header">
-                <strong>Shared Links</strong>
-            </div>
-            <div class="share-create-row">
-                <select id="share-expiry" class="form-control" style="max-width:160px;font-size:0.8rem;">
-                    <option value="">Never expires</option>
-                    <option value="1">1 hour</option>
-                    <option value="24">24 hours</option>
-                    <option value="168">7 days</option>
-                    <option value="720">30 days</option>
-                </select>
-                <button class="btn btn-purple btn-sm" onclick="createSharedLink(${videoId})">Create Link</button>
-            </div>
-            <div id="share-links-list" class="share-links-list">
-                <span style="color:var(--text-secondary);font-size:0.8rem;">Loading...</span>
-            </div>
+        <div class="share-toggle-row">
+            <label class="share-toggle-label">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                Share
+            </label>
+            <label class="toggle-switch">
+                <input type="checkbox" ${isShared ? 'checked' : ''} onchange="toggleShare(${videoId}, this.checked)">
+                <span class="toggle-slider"></span>
+            </label>
         </div>
+        ${isShared ? `
+        <div class="share-link-url" style="margin-top:0.4rem;">
+            <input type="text" value="${url}" readonly onclick="this.select()">
+            <button class="btn btn-secondary btn-sm" onclick="copyShareLink(this, '${url}')" title="Copy">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+        </div>` : ''}
     `;
-
-    await loadSharedLinks(videoId);
 }
 
-async function loadSharedLinks(videoId) {
-    const list = document.getElementById('share-links-list');
-    if (!list) return;
+async function toggleShare(videoId, enabled) {
     try {
-        const links = await apiRequest('/shared/', { query: { video_id: videoId } });
-        if (links.length === 0) {
-            list.innerHTML = '<span style="color:var(--text-secondary);font-size:0.8rem;">No shared links yet</span>';
-            return;
-        }
-        list.innerHTML = links.map(link => {
-            const url = `${window.location.origin}/shared/${link.token}`;
-            const expiry = link.expires_at
-                ? `Expires ${formatDateTimeNoSeconds(link.expires_at)}`
-                : 'Never expires';
-            const isExpired = link.expires_at && new Date(link.expires_at) < new Date();
-            return `
-                <div class="share-link-item ${isExpired ? 'expired' : ''}">
-                    <div class="share-link-url">
-                        <input type="text" value="${url}" readonly onclick="this.select()">
-                        <button class="btn btn-secondary btn-sm" onclick="copyShareLink(this, '${url}')" title="Copy">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                        </button>
-                    </div>
-                    <div class="share-link-meta">
-                        <span>${expiry}${isExpired ? ' (expired)' : ''}</span>
-                        <button class="tag-action-btn tag-action-delete" onclick="revokeSharedLink(${link.id}, ${link.video_id})" title="Revoke">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
-                        </button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    } catch (error) {
-        list.innerHTML = '<span style="color:#ef4444;font-size:0.8rem;">Failed to load links</span>';
-    }
-}
-
-async function createSharedLink(videoId) {
-    const expirySelect = document.getElementById('share-expiry');
-    const expiryHours = expirySelect?.value ? parseInt(expirySelect.value) : null;
-    try {
-        await apiRequest('/shared/', {
+        const result = await apiRequest('/shared/toggle', {
             method: 'POST',
-            body: { video_id: videoId, expires_in_hours: expiryHours }
+            body: { video_id: videoId, enabled }
         });
-        await loadSharedLinks(videoId);
-        showNotification('Shared link created');
+        const container = document.getElementById('video-detail-share');
+        if (container) renderShareToggle(container, videoId, result.token);
+        loadVideos();
+        showNotification(enabled ? 'Sharing enabled' : 'Sharing disabled');
     } catch (error) {
-        showNotification(error.message || 'Failed to create link', 'error');
+        showNotification(error.message || 'Failed to toggle sharing', 'error');
     }
 }
 
@@ -1862,13 +1821,47 @@ function copyShareLink(btn, url) {
     });
 }
 
-async function revokeSharedLink(linkId, videoId) {
+async function loadSharedVideosList() {
+    const container = document.getElementById('shared-videos-list');
+    if (!container) return;
     try {
-        await apiRequest(`/shared/${linkId}`, { method: 'DELETE' });
-        await loadSharedLinks(videoId);
-        showNotification('Link revoked');
+        const links = await apiRequest('/shared/');
+        if (links.length === 0) {
+            container.innerHTML = '<span style="color:var(--text-secondary);font-size:0.85rem;">No shared videos</span>';
+            return;
+        }
+        container.innerHTML = links.map(link => {
+            const url = `${window.location.origin}/shared/${link.token}`;
+            return `
+                <div class="shared-video-item">
+                    <span class="shared-video-name">${escapeHtml(link.video_name || 'Unknown')}</span>
+                    <div class="share-link-url">
+                        <input type="text" value="${url}" readonly onclick="this.select()">
+                        <button class="btn btn-secondary btn-sm" onclick="copyShareLink(this, '${url}')" title="Copy">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        </button>
+                    </div>
+                    <button class="tag-action-btn tag-action-delete" onclick="disableShareFromSettings(${link.video_id})" title="Disable sharing">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                    </button>
+                </div>
+            `;
+        }).join('');
     } catch (error) {
-        showNotification('Failed to revoke link', 'error');
+        container.innerHTML = '<span style="color:#ef4444;font-size:0.85rem;">Failed to load shared videos</span>';
+    }
+}
+
+async function disableShareFromSettings(videoId) {
+    try {
+        await apiRequest('/shared/toggle', {
+            method: 'POST',
+            body: { video_id: videoId, enabled: false }
+        });
+        await loadSharedVideosList();
+        showNotification('Sharing disabled');
+    } catch (error) {
+        showNotification('Failed to disable sharing', 'error');
     }
 }
 
@@ -4235,6 +4228,7 @@ async function loadSettings() {
     // Load webhook settings
     loadWebhookSettings();
     loadTagManager();
+    loadSharedVideosList();
 }
 
 function updateTimeFormatButtons() {
