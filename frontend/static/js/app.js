@@ -939,16 +939,16 @@ async function showJobDetails(jobId) {
                     <div id="edit-auto-build-fields" class="toggle-fields ${job.auto_build_enabled ? '' : 'disabled'}" style="margin-bottom: 1rem; margin-left: 1.5rem;">
                         <div class="form-group" style="margin-bottom: 0.75rem;">
                             <label>Build Interval</label>
-                            <div class="auto-build-presets">
-                                <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 1)">Hourly</button>
-                                <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 6)">6 Hours</button>
-                                <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 24)">Daily</button>
-                                <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 168)">Weekly</button>
-                                <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 720)">Monthly</button>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                                 <input type="number" id="edit_auto_build_interval_hours" class="form-control" min="1" max="8760" value="${job.auto_build_interval_hours || 168}" style="width: 100px;">
                                 <small style="color: var(--text-secondary);">hours</small>
+                                <div class="auto-build-presets" style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 1)">Hourly</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 6)">6 Hours</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 24)">Daily</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 168)">Weekly</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 720)">Monthly</button>
+                                </div>
                             </div>
                         </div>
                         <div class="form-row">
@@ -2535,7 +2535,7 @@ const OVERLAY_POSITIONS = [
  * @param {object} opts    - { label: string, showPreview: bool, onchange: string|null }
  */
 function generateOverlayHTML(prefix, opts = {}) {
-    const label = opts.label || 'Text Overlay';
+    const label = opts.label || 'Add Text Overlay';
     const showPreview = opts.showPreview || false;
     const onchangeAttr = opts.onchange ? ` onchange="${opts.onchange}"` : '';
     const inputEvent = opts.onchange ? ` oninput="${opts.onchange}" onchange="${opts.onchange}"` : '';
@@ -2610,7 +2610,7 @@ function generateOverlayHTML(prefix, opts = {}) {
                 <span>${label}</span>
             </div>
         </div>
-        <div id="${prefix}-overlay-fields" style="display: none;">
+        <div id="${prefix}-overlay-fields" class="toggle-fields disabled">
             ${fieldsInner}
         </div>`;
 }
@@ -2638,8 +2638,12 @@ function initOverlayWidget(prefix, opts = {}) {
 
     // Toggle visibility
     cb.addEventListener('change', () => {
-        fields.style.display = cb.checked ? 'block' : 'none';
-        if (cb.checked && !_overlayFontsLoaded) loadOverlayFonts();
+        if (cb.checked) {
+            fields.classList.remove('disabled');
+            if (!_overlayFontsLoaded) loadOverlayFonts();
+        } else {
+            fields.classList.add('disabled');
+        }
         if (opts.onToggle) opts.onToggle(cb.checked);
     });
 
@@ -2691,7 +2695,13 @@ function writeOverlayConfig(prefix, config) {
     const el = id => document.getElementById(`${prefix}-overlay-${id}`);
     if (el('enabled')) el('enabled').checked = !!config.enabled;
     const fields = document.getElementById(`${prefix}-overlay-fields`);
-    if (fields) fields.style.display = config.enabled ? 'block' : 'none';
+    if (fields) {
+        if (config.enabled) {
+            fields.classList.remove('disabled');
+        } else {
+            fields.classList.add('disabled');
+        }
+    }
     if (el('text')) el('text').value = config.text || '';
     if (el('font')) el('font').value = config.font || 'DejaVu Sans';
     if (el('size')) el('size').value = config.font_size || 5;
@@ -2738,7 +2748,7 @@ async function loadOverlayFonts() {
 
 function initBuildOverlay() {
     mountOverlayWidget('build-overlay-container', 'build', {
-        label: 'Text Overlay',
+        label: 'Add Text Overlay',
         onchange: 'debouncedOverlayPreview()',
         onToggle: (enabled) => { if (enabled) debouncedOverlayPreview(); else resetOverlayPreview(); },
         onChange: () => debouncedOverlayPreview(),
@@ -2802,7 +2812,7 @@ function initCreateJobOverlay() {
     };
 
     mountOverlayWidget('create-ab-overlay-container', 'create-ab', {
-        label: 'Text Overlay',
+        label: 'Add Text Overlay',
         showPreview: true,
         onchange: '_createAbOverlayChanged()',
         onToggle: (enabled) => { if (enabled) fetchOverlayPreviewFromUrl('create-ab'); },
@@ -2823,7 +2833,7 @@ function initEditJobOverlay(job) {
     };
 
     mountOverlayWidget('edit-ab-overlay-container', 'edit-ab', {
-        label: 'Text Overlay',
+        label: 'Add Text Overlay',
         showPreview: true,
         onchange: '_editAbOverlayChanged()',
         onToggle: (enabled) => { if (enabled) triggerEditPreview(); },

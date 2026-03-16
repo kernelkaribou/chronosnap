@@ -497,16 +497,16 @@
                     <div id="auto-build-fields" class="toggle-fields disabled" style="margin-bottom: 1rem; margin-left: 1.5rem;">
                         <div class="form-group" style="margin-bottom: 0.75rem;">
                             <label>Build Interval</label>
-                            <div class="auto-build-presets">
-                                <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 1)">Hourly</button>
-                                <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 6)">6 Hours</button>
-                                <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 24)">Daily</button>
-                                <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 168)">Weekly</button>
-                                <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 720)">Monthly</button>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                                 <input type="number" id="auto_build_interval_hours" class="form-control" min="1" max="8760" value="168" style="width: 100px;">
                                 <small style="color: var(--text-secondary);">hours</small>
+                                <div class="auto-build-presets" style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 1)">Hourly</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 6)">6 Hours</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 24)">Daily</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 168)">Weekly</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 720)">Monthly</button>
+                                </div>
                             </div>
                         </div>
                         <div class="form-row">
