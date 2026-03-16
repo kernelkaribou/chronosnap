@@ -977,6 +977,22 @@ async function showJobDetails(jobId) {
         // Initialize edit overlay section
         initEditJobOverlay(job);
         
+        // Add native resolution option to auto-build dropdown
+        if (job.capture_count > 0) {
+            fetch(`${API_BASE}/captures/job/${job.id}/time-range`).then(r => r.json()).then(tr => {
+                if (tr.native_resolution) {
+                    const sel = document.getElementById('edit_auto_build_resolution');
+                    if (sel && !sel.querySelector(`option[value="${tr.native_resolution}"]`)) {
+                        const opt = document.createElement('option');
+                        opt.value = tr.native_resolution;
+                        opt.textContent = `Native (${tr.native_resolution})`;
+                        sel.insertBefore(opt, sel.firstChild);
+                        if (job.auto_build_resolution === tr.native_resolution) sel.value = tr.native_resolution;
+                    }
+                }
+            }).catch(() => {});
+        }
+        
         // Render tag picker with auto-save on toggle
         renderTagPicker('edit-job-tags', (job.tags || []).map(t => t.id), (tagIds) => {
             apiRequest(`/jobs/${job.id}`, { method: 'PATCH', body: { tag_ids: tagIds } })
@@ -2231,6 +2247,19 @@ async function populateVideoFormFromJob(jobId, jobName) {
     document.getElementById('video_name').value = `${jobName}_${timestamp}`;
     document.getElementById('video_framerate').value = job.framerate;
     document.getElementById('video_output_path').value = '/timelapses';
+    
+    // Add native resolution option if available
+    const resSelect = document.getElementById('video_resolution');
+    const existingNative = resSelect.querySelector('option[value^="native:"]');
+    if (existingNative) existingNative.remove();
+    if (timeRange.native_resolution) {
+        const nativeOpt = document.createElement('option');
+        nativeOpt.value = timeRange.native_resolution;
+        nativeOpt.textContent = `Native (${timeRange.native_resolution})`;
+        resSelect.insertBefore(nativeOpt, resSelect.firstChild);
+        resSelect.value = timeRange.native_resolution;
+        toggleCustomResolution();
+    }
     
     // Store capture count for duration calculation
     document.getElementById('video_framerate').setAttribute('data-capture-count', captureCount);

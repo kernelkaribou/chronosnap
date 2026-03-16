@@ -500,11 +500,28 @@ async def get_capture_time_range(
         row = cursor.fetchone()
         count, first_time, last_time = row
         
+        # Get native resolution from the latest capture image
+        native_resolution = None
+        if count > 0:
+            cursor.execute(
+                "SELECT file_path FROM captures WHERE job_id = ? ORDER BY captured_at DESC LIMIT 1",
+                (job_id,)
+            )
+            cap_row = cursor.fetchone()
+            if cap_row and cap_row[0]:
+                try:
+                    from PIL import Image
+                    with Image.open(cap_row[0]) as img:
+                        native_resolution = f"{img.width}x{img.height}"
+                except Exception:
+                    pass
+        
         return {
             "job_id": job_id,
             "count": count,
             "first_capture_time": first_time,
-            "last_capture_time": last_time
+            "last_capture_time": last_time,
+            "native_resolution": native_resolution
         }
 
 
