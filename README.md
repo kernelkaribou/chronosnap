@@ -47,12 +47,13 @@ A self-hosted web application for creating automated timelapse captures from HTT
 
 ### Webhook Notifications
 
-- Configurable webhook alerts when a job fails consecutive captures
-- Customizable failure threshold (default: 3 consecutive failures)
+- Event-driven webhook notifications for job state changes
+- Events: **warning** (consecutive capture failures), **recovered** (success after warning), **completed** (job finished its schedule)
+- Per-job warning threshold configurable from 1 to 50 consecutive failures (default: 3)
 - JSON payload template with variable substitution for integration with Home Assistant, Discord, Slack, or any HTTP endpoint
-- Available template variables: `{title}`, `{message}`, `{job_name}`, `{job_id}`, `{failure_count}`, `{error_message}`
+- Available template variables: `{title}`, `{message}`, `{event}`, `{job_name}`, `{job_id}`, `{failure_count}`, `{error_message}`
 - Test button to verify webhook configuration before relying on it
-- Alerts fire once when the threshold is first reached (non-spamming)
+- Alerts fire once per state transition (non-spamming)
 
 ## Quick Start
 
@@ -224,7 +225,7 @@ If you want to stop a job without losing data, disable it or let it complete nat
 
 ### Network and Camera Reliability
 
-FFmpeg capture operations time out based on the `FFMPEG_TIMEOUT` setting. If your cameras are on a slow or unreliable network, increase this value. The scheduler tracks consecutive failures per job and sets a warning after reaching the configurable threshold (default: 3). If webhook notifications are configured in Settings, an alert is sent when the threshold is first reached. Jobs are never automatically disabled by failures; manual intervention is required to stop a persistently failing job.
+FFmpeg capture operations time out based on the `FFMPEG_TIMEOUT` setting. If your cameras are on a slow or unreliable network, increase this value. The scheduler tracks consecutive failures per job and triggers a warning after reaching the job's configured threshold (default: 3 failures). Each job can have its own threshold — set low (1-2) for once-a-day captures where every miss matters, or higher for frequent captures where brief outages are tolerable. If webhook notifications are enabled in Settings, events fire on state transitions: when a job enters warning state, when it recovers after being in warning, and when it completes its schedule. Jobs are never automatically disabled by failures; manual intervention is required to stop a persistently failing job.
 
 RTSP captures use TCP transport for reliability over UDP. Ensure the container can reach your camera network and that any firewalls allow the RTSP port (typically 554 or 7441 for UniFi Protect).
 

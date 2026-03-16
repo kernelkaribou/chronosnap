@@ -1,5 +1,5 @@
 """
-Webhook notification service for capture health alerts
+Webhook notification service for event-driven alerts
 """
 import json
 import logging
@@ -20,8 +20,9 @@ DEFAULT_PAYLOAD_TEMPLATE = '{"title": "{title}", "message": "{message}"}'
 TEMPLATE_VARIABLES = {
     '{job_name}': 'Name of the job',
     '{job_id}': 'ID of the job',
-    '{failure_count}': 'Number of consecutive failures',
-    '{error_message}': 'Last error message',
+    '{event}': 'Event type (warning, completed, recovered)',
+    '{failure_count}': 'Number of consecutive failures (warning events)',
+    '{error_message}': 'Last error message (warning events)',
     '{title}': 'Auto-generated title',
     '{message}': 'Auto-generated message with details',
 }
@@ -32,14 +33,13 @@ def _get_webhook_settings() -> dict:
     defaults = {
         'webhook_enabled': 'false',
         'webhook_url': '',
-        'webhook_failure_threshold': '3',
         'webhook_payload_template': DEFAULT_PAYLOAD_TEMPLATE,
     }
     try:
         with get_db() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?)",
+                "SELECT key, value FROM settings WHERE key IN (?, ?, ?)",
                 tuple(defaults.keys())
             )
             rows = cursor.fetchall()
@@ -50,47 +50,51 @@ def _get_webhook_settings() -> dict:
     return defaults
 
 
-def get_failure_threshold() -> int:
-    """Get the configured failure threshold."""
-    settings = _get_webhook_settings()
-    try:
-        return int(settings['webhook_failure_threshold'])
-    except (ValueError, KeyError):
-        return 3
-
-
-def send_webhook_alert(job_name: str, job_id: int, failure_count: int, error_message: str):
-    """Send a webhook alert in a background thread to avoid blocking the scheduler."""
+def send_webhook_event(event: str, job_name: str, job_id: int,
+                       failure_count: int = 0, error_message: str = ''):
+    """Send a webhook notification in a background thread."""
     thread = threading.Thread(
-        target=_send_webhook_alert_sync,
-        args=(job_name, job_id, failure_count, error_message),
+        target=_send_webhook_event_sync,
+        args=(event, job_name, job_id, failure_count, error_message),
         daemon=True
     )
     thread.start()
 
 
-def _send_webhook_alert_sync(job_name: str, job_id: int, failure_count: int, error_message: str):
-    """Synchronously send a webhook alert."""
+def _send_webhook_event_sync(event: str, job_name: str, job_id: int,
+                             failure_count: int, error_message: str):
+    """Synchronously send a webhook notification."""
     settings = _get_webhook_settings()
 
     if settings['webhook_enabled'] != 'true' or not settings['webhook_url']:
         return
 
-    title = f"Capture Alert: {job_name}"
-    message = f"Job \"{job_name}\" (ID: {job_id}) has failed {failure_count} consecutive captures. Last error: {error_message}"
+    # Generate title and message based on event type
+    if event == 'warning':
+        title = f"Capture Alert: {job_name}"
+        message = f"{job_name} has failed {failure_count} consecutive captures. Last error: {error_message}"
+    elif event == 'completed':
+        title = f"Job Completed: {job_name}"
+        message = f"{job_name} has completed its scheduled capture period."
+    elif event == 'recovered':
+        title = f"Job Recovered: {job_name}"
+        message = f"{job_name} has recovered after previous capture failures."
+    else:
+        title = f"TimeLapse-Manager: {job_name}"
+        message = f"Event '{event}' for {job_name}."
 
     template = settings['webhook_payload_template'] or DEFAULT_PAYLOAD_TEMPLATE
 
     # Replace template variables
     payload_str = template.replace('{job_name}', _json_safe(job_name))
     payload_str = payload_str.replace('{job_id}', str(job_id))
+    payload_str = payload_str.replace('{event}', _json_safe(event))
     payload_str = payload_str.replace('{failure_count}', str(failure_count))
     payload_str = payload_str.replace('{error_message}', _json_safe(error_message))
     payload_str = payload_str.replace('{title}', _json_safe(title))
     payload_str = payload_str.replace('{message}', _json_safe(message))
 
     try:
-        # Validate JSON
         json.loads(payload_str)
     except json.JSONDecodeError:
         logger.error(f"Webhook payload template produced invalid JSON: {payload_str}")
@@ -104,11 +108,11 @@ def _send_webhook_alert_sync(job_name: str, job_id: int, failure_count: int, err
             method='POST'
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
-            logger.info(f"Webhook alert sent for job {job_id} ({job_name}): HTTP {resp.status}")
+            logger.info(f"Webhook [{event}] sent for job {job_id} ({job_name}): HTTP {resp.status}")
     except urllib.error.HTTPError as e:
-        logger.error(f"Webhook alert failed for job {job_id}: HTTP {e.code} - {e.reason}")
+        logger.error(f"Webhook [{event}] failed for job {job_id}: HTTP {e.code} - {e.reason}")
     except Exception as e:
-        logger.error(f"Webhook alert failed for job {job_id}: {e}")
+        logger.error(f"Webhook [{event}] failed for job {job_id}: {e}")
 
 
 def send_test_webhook(url: str, template: str) -> tuple[bool, str]:
@@ -118,6 +122,7 @@ def send_test_webhook(url: str, template: str) -> tuple[bool, str]:
 
     payload_str = template.replace('{job_name}', 'Test Job')
     payload_str = payload_str.replace('{job_id}', '0')
+    payload_str = payload_str.replace('{event}', 'test')
     payload_str = payload_str.replace('{failure_count}', '3')
     payload_str = payload_str.replace('{error_message}', 'This is a test error message')
     payload_str = payload_str.replace('{title}', _json_safe(title))

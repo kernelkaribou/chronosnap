@@ -27,7 +27,6 @@ class RegenerateResponse(BaseModel):
 class WebhookSettings(BaseModel):
     webhook_enabled: bool = False
     webhook_url: str = ''
-    webhook_failure_threshold: int = 3
     webhook_payload_template: str = DEFAULT_PAYLOAD_TEMPLATE
 
 
@@ -96,14 +95,13 @@ async def get_webhook_settings():
     defaults = {
         'webhook_enabled': 'false',
         'webhook_url': '',
-        'webhook_failure_threshold': '3',
         'webhook_payload_template': DEFAULT_PAYLOAD_TEMPLATE,
     }
     try:
         with get_db() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?)",
+                "SELECT key, value FROM settings WHERE key IN (?, ?, ?)",
                 tuple(defaults.keys())
             )
             for row in cursor.fetchall():
@@ -112,7 +110,6 @@ async def get_webhook_settings():
         return WebhookSettings(
             webhook_enabled=defaults['webhook_enabled'] == 'true',
             webhook_url=defaults['webhook_url'],
-            webhook_failure_threshold=int(defaults['webhook_failure_threshold']),
             webhook_payload_template=defaults['webhook_payload_template'],
         )
     except Exception as e:
@@ -128,7 +125,6 @@ async def update_webhook_settings(settings: WebhookSettings):
         pairs = {
             'webhook_enabled': 'true' if settings.webhook_enabled else 'false',
             'webhook_url': settings.webhook_url,
-            'webhook_failure_threshold': str(settings.webhook_failure_threshold),
             'webhook_payload_template': settings.webhook_payload_template,
         }
         with get_db() as conn:
