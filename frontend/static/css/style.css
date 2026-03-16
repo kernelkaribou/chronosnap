@@ -982,7 +982,7 @@ body {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 3px;
-    width: 120px;
+    width: 105px;
 }
 
 /* Overlay two-column layout → stacked: preview on top, compact controls below */
@@ -1050,7 +1050,7 @@ body {
     background: var(--bg-secondary);
     color: var(--text-secondary);
     cursor: pointer;
-    font-size: 0.75rem;
+    font-size: 0.65rem;
     display: flex;
     align-items: center;
     justify-content: center;

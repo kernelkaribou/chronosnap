@@ -2548,13 +2548,13 @@ function generateOverlayHTML(prefix, opts = {}) {
         : '<option value="DejaVu Sans">DejaVu Sans</option>';
 
     const controlsHtml = `
+            <div class="form-group" style="margin-bottom:0.5rem;">
+                <label>Overlay Text</label>
+                <input type="text" id="${prefix}-overlay-text" class="form-control" value="{job_name}" placeholder="{job_name} - {date} {time}" style="font-size:0.8rem;"${inputEvent}>
+                <small style="color: var(--text-secondary); font-size:0.65rem;"><code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code></small>
+            </div>
             <div class="form-row" style="gap:0.5rem; align-items:flex-end; margin-bottom:0.5rem;">
                 <div class="form-group flex-1" style="min-width:0; margin:0;">
-                    <label>Overlay Text</label>
-                    <input type="text" id="${prefix}-overlay-text" class="form-control" value="{job_name}" placeholder="{job_name} - {date} {time}" style="font-size:0.8rem;"${inputEvent}>
-                    <small style="color: var(--text-secondary);"><code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code></small>
-                </div>
-                <div class="form-group" style="min-width:0; margin:0; flex: 0 1 140px;">
                     <label>Font</label>
                     <select id="${prefix}-overlay-font" class="form-control" style="font-size:0.8rem;"${inputEvent}>${fontOpts}</select>
                 </div>
