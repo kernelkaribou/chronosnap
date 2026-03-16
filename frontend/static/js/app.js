@@ -262,13 +262,15 @@ function preventEnterSubmit(event) {
 }
 
 // Toggle time window fields visibility
+let _timeWindowListenersAdded = false;
 function toggleTimeWindow() {
     toggleFieldGroup('time_window_enabled', 'time-window-fields', {
         requiredIds: ['time_window_start', 'time_window_end'],
         onToggle: (enabled) => {
-            if (enabled) {
+            if (enabled && !_timeWindowListenersAdded) {
                 document.getElementById('time_window_start').addEventListener('change', updateDurationEstimate);
                 document.getElementById('time_window_end').addEventListener('change', updateDurationEstimate);
+                _timeWindowListenersAdded = true;
             }
             updateDurationEstimate();
         }

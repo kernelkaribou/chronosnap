@@ -13,7 +13,7 @@ import logging
 from ..models import CaptureResponse, CaptureListResponse, CaptureDeleteRequest
 from ..database import get_db, dict_from_row
 from ..utils import get_now, to_iso, parse_iso
-from ..helpers.db_helpers import get_or_404, enrich_capture, decrement_job_stats
+from ..helpers.db_helpers import get_or_404, fetch_one, enrich_capture, decrement_job_stats
 from ..helpers.file_helpers import delete_capture_file
 from ..services.thumbnail_generator import get_thumbnail_path, has_thumbnail, delete_thumbnail
 from .. import config
@@ -392,7 +392,6 @@ async def delete_multiple_captures(request: CaptureDeleteRequest):
         for capture_id in request.capture_ids:
             try:
                 # Get capture info
-                from ..helpers.db_helpers import fetch_one
                 cap = fetch_one(cursor,
                     "SELECT file_path, file_size, job_id FROM captures WHERE id = ?",
                     (capture_id,))
