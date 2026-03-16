@@ -866,7 +866,7 @@ async function showJobDetails(jobId) {
                         </button>
                         <div style="flex: 0 0 auto; text-align: center;">
                             <label style="font-size: 0.75rem; white-space: nowrap;">Warn After</label>
-                            <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50" style="width: 60px;">
+                            <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50" style="width: 72px;">
                             <small style="font-size: 0.65rem;">failures</small>
                         </div>
                     </div>
