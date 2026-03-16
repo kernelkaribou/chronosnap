@@ -938,7 +938,16 @@ function setupJobEditChangeTracking(originalJob) {
         'edit_auto_build_interval_hours',
         'edit_auto_build_fps',
         'edit_auto_build_quality',
-        'edit_auto_build_resolution'
+        'edit_auto_build_resolution',
+        'edit-ab-overlay-enabled',
+        'edit-ab-overlay-text',
+        'edit-ab-overlay-font',
+        'edit-ab-overlay-size',
+        'edit-ab-overlay-bold',
+        'edit-ab-overlay-color',
+        'edit-ab-overlay-bg',
+        'edit-ab-overlay-bg-color',
+        'edit-ab-overlay-bg-opacity'
     ];
     
     fields.forEach(fieldId => {
@@ -962,6 +971,14 @@ function setupJobEditChangeTracking(originalJob) {
 
     // Trigger initial estimate
     setTimeout(updateEditDurationEstimate, 100);
+
+    // Track overlay position grid clicks
+    const overlayGrid = document.getElementById('edit-ab-overlay-grid');
+    if (overlayGrid) {
+        overlayGrid.querySelectorAll('.pos-btn').forEach(btn => {
+            btn.addEventListener('click', enableSaveButton);
+        });
+    }
 }
 
 function confirmDisableJob(jobId, jobName) {
