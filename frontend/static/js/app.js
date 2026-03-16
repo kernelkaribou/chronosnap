@@ -856,121 +856,133 @@ async function showJobDetails(jobId) {
 
                 <h4 style="margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border-color);">Job Settings</h4>
 
-                <div class="form-group" style="margin-bottom: 0.75rem;">
-                    <label>Stream URL *</label>
-                    <div style="display: flex; gap: 0.5rem; align-items: center;">
-                        <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required style="flex: 1; min-width: 0;">
-                        <button type="button" class="btn btn-secondary" onclick="previewStream('edit_url', 'edit-preview-result')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                <circle cx="12" cy="12" r="3"></circle>
-                            </svg>
-                            Preview
-                        </button>
-                        <div style="flex: 0 0 auto; text-align: center;">
-                            <label style="font-size: 0.75rem; white-space: nowrap;">Warn After</label>
-                            <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50" style="width: 72px;">
-                            <small style="font-size: 0.65rem;">failures</small>
-                        </div>
-                    </div>
-                    <div id="edit-preview-result" class="test-result"></div>
-                </div>
-
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label>End Date & Time</label>
-                    <input type="datetime-local" id="edit_end_datetime" class="form-control">
-                    <small style="color: var(--text-secondary);">Leave empty for ongoing capture</small>
-                </div>
-                
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
-                            <input type="checkbox" id="edit_time_window_enabled" ${job.time_window_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditTimeWindow()">
-                            <span><strong>Daily Time Window</strong></span>
-                        </label>
-                        <div id="edit-time-window-fields" style="display: ${job.time_window_enabled ? 'flex' : 'none'}; align-items: center; gap: 0.5rem;">
-                            <label style="font-size: 0.8rem; margin: 0;">Start</label>
-                            <div class="time-picker-container" style="margin: 0;">
-                                <input type="time" id="edit_time_window_start_time" class="form-control" style="padding: 0.3rem 0.5rem;">
-                            </div>
-                            <input type="hidden" id="edit_time_window_start">
-                            <label style="font-size: 0.8rem; margin: 0;">End</label>
-                            <div class="time-picker-container" style="margin: 0;">
-                                <input type="time" id="edit_time_window_end_time" class="form-control" style="padding: 0.3rem 0.5rem;">
-                            </div>
-                            <input type="hidden" id="edit_time_window_end">
-                        </div>
-                    </div>
-                </div>
-
-                <div style="display: flex; gap: 0.75rem; align-items: stretch; margin-bottom: 1.5rem;">
-                    <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 0.5rem;">
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label>Capture Interval (s) *</label>
-                            <input type="number" id="edit_interval_seconds" class="form-control" value="${job.interval_seconds}" min="10" required style="width: 120px;">
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label>Timelapse FPS</label>
-                            <input type="number" id="edit_framerate" class="form-control" value="30" min="1" max="120" required style="width: 120px;">
-                        </div>
-                    </div>
-                    <div class="duration-estimate" id="edit-duration-estimate" style="flex: 1; margin: 0;"></div>
-                </div>
-
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
-                        <input type="checkbox" id="edit_auto_build_enabled" ${job.auto_build_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditAutoBuildFields()">
-                        <span><strong>Enable Auto-Build</strong></span>
-                    </label>
-                    <small style="color: var(--text-secondary); display: block; margin-left: 1.5rem;">Automatically build timelapse videos on a recurring schedule</small>
-                </div>
-
-                <div id="edit-auto-build-fields" style="display: ${job.auto_build_enabled ? 'block' : 'none'}; margin-bottom: 1rem; margin-left: 1.5rem;">
+                <div class="form-section">
+                    <div class="form-section-title">Source</div>
                     <div class="form-group" style="margin-bottom: 0.75rem;">
-                        <label>Build Interval</label>
-                        <div class="auto-build-presets">
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 1)">Hourly</button>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 6)">6 Hours</button>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 24)">Daily</button>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 168)">Weekly</button>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 720)">Monthly</button>
+                        <label>Stream URL *</label>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required style="flex: 1; min-width: 0;">
+                            <button type="button" class="btn btn-secondary" onclick="previewStream('edit_url', 'edit-preview-result')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                Preview
+                            </button>
+                            <div style="flex: 0 0 auto; text-align: center;">
+                                <label style="font-size: 0.75rem; white-space: nowrap;">Warn After</label>
+                                <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50" style="width: 72px;">
+                                <small style="font-size: 0.65rem;">failures</small>
+                            </div>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
-                            <input type="number" id="edit_auto_build_interval_hours" class="form-control" min="1" max="8760" value="${job.auto_build_interval_hours || 168}" style="width: 100px;">
-                            <small style="color: var(--text-secondary);">hours</small>
-                        </div>
+                        <div id="edit-preview-result" class="test-result"></div>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group flex-1">
-                            <label>FPS</label>
-                            <input type="number" id="edit_auto_build_fps" class="form-control" min="1" max="120" value="${job.auto_build_fps || 30}">
-                        </div>
-                        <div class="form-group flex-1">
-                            <label>Quality</label>
-                            <select id="edit_auto_build_quality" class="form-control">
-                                <option value="low" ${job.auto_build_quality === 'low' ? 'selected' : ''}>Low</option>
-                                <option value="medium" ${(!job.auto_build_quality || job.auto_build_quality === 'medium') ? 'selected' : ''}>Medium</option>
-                                <option value="high" ${job.auto_build_quality === 'high' ? 'selected' : ''}>High</option>
-                                <option value="lossless" ${job.auto_build_quality === 'lossless' ? 'selected' : ''}>Lossless</option>
-                            </select>
-                        </div>
-                        <div class="form-group flex-1">
-                            <label>Resolution</label>
-                            <select id="edit_auto_build_resolution" class="form-control">
-                                <option value="3840x2160" ${job.auto_build_resolution === '3840x2160' ? 'selected' : ''}>4K (3840x2160)</option>
-                                <option value="1920x1080" ${(!job.auto_build_resolution || job.auto_build_resolution === '1920x1080') ? 'selected' : ''}>Full HD (1920x1080)</option>
-                                <option value="1280x720" ${job.auto_build_resolution === '1280x720' ? 'selected' : ''}>HD (1280x720)</option>
-                                <option value="640x480" ${job.auto_build_resolution === '640x480' ? 'selected' : ''}>SD (640x480)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div id="edit-ab-overlay-container"></div>
-                    ${job.last_auto_build_at ? `<small style="color: var(--text-secondary);">Last auto-build: ${formatDateTime(job.last_auto_build_at)}</small>` : ''}
                 </div>
 
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label>Tags</label>
-                    <div class="tag-picker" id="edit-job-tags"></div>
+                <div class="form-section">
+                    <div class="form-section-title">Schedule</div>
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label>End Date & Time</label>
+                        <input type="datetime-local" id="edit_end_datetime" class="form-control">
+                        <small style="color: var(--text-secondary);">Leave empty for ongoing capture</small>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
+                                <input type="checkbox" id="edit_time_window_enabled" ${job.time_window_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditTimeWindow()">
+                                <span><strong>Daily Time Window</strong></span>
+                            </label>
+                            <div id="edit-time-window-fields" style="display: ${job.time_window_enabled ? 'flex' : 'none'}; align-items: center; gap: 0.5rem;">
+                                <label style="font-size: 0.8rem; margin: 0;">Start</label>
+                                <div class="time-picker-container" style="margin: 0;">
+                                    <input type="time" id="edit_time_window_start_time" class="form-control" style="padding: 0.3rem 0.5rem;">
+                                </div>
+                                <input type="hidden" id="edit_time_window_start">
+                                <label style="font-size: 0.8rem; margin: 0;">End</label>
+                                <div class="time-picker-container" style="margin: 0;">
+                                    <input type="time" id="edit_time_window_end_time" class="form-control" style="padding: 0.3rem 0.5rem;">
+                                </div>
+                                <input type="hidden" id="edit_time_window_end">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 0.75rem; align-items: stretch;">
+                        <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 0.5rem;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Capture Interval (s) *</label>
+                                <input type="number" id="edit_interval_seconds" class="form-control" value="${job.interval_seconds}" min="10" required style="width: 120px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Timelapse FPS</label>
+                                <input type="number" id="edit_framerate" class="form-control" value="30" min="1" max="120" required style="width: 120px;">
+                            </div>
+                        </div>
+                        <div class="duration-estimate" id="edit-duration-estimate" style="flex: 1; margin: 0;"></div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="form-section-title">Automation</div>
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
+                            <input type="checkbox" id="edit_auto_build_enabled" ${job.auto_build_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditAutoBuildFields()">
+                            <span><strong>Enable Auto-Build</strong></span>
+                        </label>
+                        <small style="color: var(--text-secondary); display: block; margin-left: 1.5rem;">Automatically build timelapse videos on a recurring schedule</small>
+                    </div>
+
+                    <div id="edit-auto-build-fields" style="display: ${job.auto_build_enabled ? 'block' : 'none'}; margin-bottom: 1rem; margin-left: 1.5rem;">
+                        <div class="form-group" style="margin-bottom: 0.75rem;">
+                            <label>Build Interval</label>
+                            <div class="auto-build-presets">
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 1)">Hourly</button>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 6)">6 Hours</button>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 24)">Daily</button>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 168)">Weekly</button>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 720)">Monthly</button>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                                <input type="number" id="edit_auto_build_interval_hours" class="form-control" min="1" max="8760" value="${job.auto_build_interval_hours || 168}" style="width: 100px;">
+                                <small style="color: var(--text-secondary);">hours</small>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <label>FPS</label>
+                                <input type="number" id="edit_auto_build_fps" class="form-control" min="1" max="120" value="${job.auto_build_fps || 30}">
+                            </div>
+                            <div class="form-group flex-1">
+                                <label>Quality</label>
+                                <select id="edit_auto_build_quality" class="form-control">
+                                    <option value="low" ${job.auto_build_quality === 'low' ? 'selected' : ''}>Low</option>
+                                    <option value="medium" ${(!job.auto_build_quality || job.auto_build_quality === 'medium') ? 'selected' : ''}>Medium</option>
+                                    <option value="high" ${job.auto_build_quality === 'high' ? 'selected' : ''}>High</option>
+                                    <option value="lossless" ${job.auto_build_quality === 'lossless' ? 'selected' : ''}>Lossless</option>
+                                </select>
+                            </div>
+                            <div class="form-group flex-1">
+                                <label>Resolution</label>
+                                <select id="edit_auto_build_resolution" class="form-control">
+                                    <option value="3840x2160" ${job.auto_build_resolution === '3840x2160' ? 'selected' : ''}>4K (3840x2160)</option>
+                                    <option value="1920x1080" ${(!job.auto_build_resolution || job.auto_build_resolution === '1920x1080') ? 'selected' : ''}>Full HD (1920x1080)</option>
+                                    <option value="1280x720" ${job.auto_build_resolution === '1280x720' ? 'selected' : ''}>HD (1280x720)</option>
+                                    <option value="640x480" ${job.auto_build_resolution === '640x480' ? 'selected' : ''}>SD (640x480)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="edit-ab-overlay-container"></div>
+                        ${job.last_auto_build_at ? `<small style="color: var(--text-secondary);">Last auto-build: ${formatDateTime(job.last_auto_build_at)}</small>` : ''}
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="form-section-title">Configuration</div>
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label>Tags</label>
+                        <div class="tag-picker" id="edit-job-tags"></div>
+                    </div>
                 </div>
 
                 <input type="hidden" id="edit_start_datetime" value="${job.start_datetime}">
