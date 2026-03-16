@@ -17,6 +17,15 @@ from .webhook import send_webhook_event
 logger = logging.getLogger(__name__)
 
 
+def reset_stuck_auto_builds():
+    """Reset any auto_build_in_progress flags left by a previous crash/restart."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE jobs SET auto_build_in_progress = 0 WHERE auto_build_in_progress = 1")
+        if cursor.rowcount > 0:
+            logger.info(f"Reset {cursor.rowcount} stuck auto-build flag(s) from previous run")
+
+
 def check_auto_builds():
     """Check all jobs for pending auto-builds and trigger if due."""
     now = get_now()
@@ -29,11 +38,22 @@ def check_auto_builds():
               AND auto_build_in_progress = 0
               AND status IN ('active', 'sleeping', 'completed')
               AND capture_count > 0
+              AND last_auto_build_at IS NOT NULL
         """)
         jobs = [dict_from_row(row) for row in cursor.fetchall()]
 
     for job in jobs:
         if _is_auto_build_due(job, now):
+            # Atomically claim the job to prevent race conditions
+            with get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE jobs SET auto_build_in_progress = 1 WHERE id = ? AND auto_build_in_progress = 0",
+                    (job['id'],)
+                )
+                if cursor.rowcount == 0:
+                    continue  # Another thread already claimed it
+
             thread = threading.Thread(
                 target=_run_auto_build,
                 args=(job, now),
@@ -54,22 +74,15 @@ def _is_auto_build_due(job: dict, now: datetime) -> bool:
 
 
 def _run_auto_build(job: dict, now: datetime):
-    """Execute an auto-build for a job. Runs in a daemon thread."""
+    """Execute an auto-build for a job. Runs in a daemon thread.
+    The in_progress flag is already set before this function is called."""
     job_id = job['id']
     job_name = job['name']
-
-    # Set in_progress flag
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE jobs SET auto_build_in_progress = 1 WHERE id = ?",
-            (job_id,)
-        )
+    success = False
 
     try:
         logger.info(f"Auto-build starting for job {job_id} ({job_name})")
 
-        # Determine capture range: since last auto-build or all captures
         last_build = job.get('last_auto_build_at')
         start_time = last_build if last_build else None
 
@@ -92,19 +105,16 @@ def _run_auto_build(job: dict, now: datetime):
             logger.info(f"Auto-build skipped for job {job_id} ({job_name}): no new captures")
             return
 
-        # Build video name
         date_str = now.strftime("%Y%m%d_%H%M%S")
         sanitized_name = re.sub(r'[^\w\s-]', '', job_name).strip()
         video_name = f"{sanitized_name}_auto_{date_str}"
 
-        # Prepare output path
         videos_path = config.DEFAULT_VIDEOS_PATH
         job_folder = f"{job_id}_{sanitized_name}"
         job_dir = os.path.join(videos_path, job_folder)
         os.makedirs(job_dir, exist_ok=True)
         output_path = os.path.join(job_dir, f"{video_name}.mp4")
 
-        # Create video record
         now_str = to_iso(now)
         with get_db() as conn:
             cursor = conn.cursor()
@@ -125,11 +135,9 @@ def _run_auto_build(job: dict, now: datetime):
             ))
             video_id = cursor.lastrowid
 
-        # Run video processing (blocking in this thread)
-        job_dict = dict(job)
         process_video(
             video_id=video_id,
-            job_dict=job_dict,
+            job_dict=dict(job),
             resolution=job.get('auto_build_resolution', '1920x1080'),
             framerate=job.get('auto_build_fps', 30),
             quality=job.get('auto_build_quality', 'medium'),
@@ -140,17 +148,14 @@ def _run_auto_build(job: dict, now: datetime):
             output_path=output_path
         )
 
-        # Check if video completed successfully
         with get_db() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT status FROM processed_videos WHERE id = ?",
-                (video_id,)
-            )
+            cursor.execute("SELECT status FROM processed_videos WHERE id = ?", (video_id,))
             row = cursor.fetchone()
             video_status = row[0] if row else 'failed'
 
         if video_status == 'completed':
+            success = True
             logger.info(f"Auto-build completed for job {job_id} ({job_name}): video_id={video_id}")
             send_webhook_event('auto_build_complete', job_name, job_id)
         else:
@@ -159,10 +164,16 @@ def _run_auto_build(job: dict, now: datetime):
     except Exception as e:
         logger.error(f"Auto-build error for job {job_id} ({job_name}): {e}", exc_info=True)
     finally:
-        # Clear in_progress flag and update last_auto_build_at
+        # Always clear in_progress flag; only advance timer on success
         with get_db() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE jobs SET auto_build_in_progress = 0, last_auto_build_at = ? WHERE id = ?",
-                (to_iso(now), job_id)
-            )
+            if success:
+                cursor.execute(
+                    "UPDATE jobs SET auto_build_in_progress = 0, last_auto_build_at = ? WHERE id = ?",
+                    (to_iso(now), job_id)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE jobs SET auto_build_in_progress = 0 WHERE id = ?",
+                    (job_id,)
+                )

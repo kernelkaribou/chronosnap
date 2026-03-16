@@ -14,7 +14,7 @@ from ..utils import get_now, to_iso, parse_iso
 from .image_capture import capture_image
 from .job_state import calculate_job_state, should_execute_capture
 from .webhook import send_webhook_event
-from .auto_builder import check_auto_builds
+from .auto_builder import check_auto_builds, reset_stuck_auto_builds
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,9 @@ class CaptureScheduler:
         
         # Hydrate in-memory queue from database on startup
         self._hydrate_from_database()
+        
+        # Clear any auto-build flags left by a previous crash
+        reset_stuck_auto_builds()
         
         self.running = True
         self.thread = threading.Thread(target=self._run_loop, daemon=True)
