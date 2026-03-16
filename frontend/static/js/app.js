@@ -2554,33 +2554,48 @@ function generateOverlayHTML(prefix, opts = {}) {
                 <small style="color: var(--text-secondary);">Variables: <code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code> <code>{total_frames}</code></small>
             </div>
             <div class="form-row" style="gap:0.5rem; align-items:flex-start;">
-                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.4rem;">
-                    <div class="form-row" style="gap:0.5rem;">
-                        <div class="form-group flex-1">
+                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.5rem;">
+                    <div class="form-row" style="gap:0.5rem; align-items:flex-end;">
+                        <div class="form-group flex-1" style="min-width:0;">
                             <label>Font</label>
                             <select id="${prefix}-overlay-font" class="form-control"${inputEvent}>${fontOpts}</select>
                         </div>
-                        <div class="form-group" style="width: 65px;">
+                        <div class="form-group" style="width: 60px;">
                             <label>Size %</label>
                             <input type="number" id="${prefix}-overlay-size" class="form-control" value="5" min="1" max="20" step="1"${inputEvent}>
                         </div>
-                        <div class="form-group" style="width: 45px;">
+                        <div class="form-group" style="width: 40px;">
                             <label>Bold</label>
                             <div style="display:flex;align-items:center;height:32px;">
                                 <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr}>
                             </div>
                         </div>
-                        <div class="form-group" style="width: 50px;">
+                        <div class="form-group" style="width: 46px;">
                             <label>Color</label>
                             <input type="color" id="${prefix}-overlay-color" value="#FFFFFF" class="form-control" style="padding:2px;height:32px;"${inputEvent}>
                         </div>
+                        <div class="form-group" style="width: 32px;">
+                            <label>BG</label>
+                            <div style="display:flex;align-items:center;height:32px;">
+                                <input type="checkbox" id="${prefix}-overlay-bg" checked${onchangeAttr}>
+                            </div>
+                        </div>
+                        <div class="form-group" style="width: 46px;">
+                            <label>BG</label>
+                            <input type="color" id="${prefix}-overlay-bg-color" value="#000000" class="form-control" style="padding:2px;height:32px;"${inputEvent}>
+                        </div>
                     </div>
-                    <div style="display:flex; align-items:center; gap:0.35rem;">
-                        <input type="checkbox" id="${prefix}-overlay-bg" checked${onchangeAttr}>
-                        <span style="font-size:0.8rem;">BG</span>
-                        <input type="color" id="${prefix}-overlay-bg-color" value="#000000" class="form-control" style="padding:2px;height:24px;width:32px;"${inputEvent}>
-                        <input type="range" id="${prefix}-overlay-bg-opacity" min="0" max="100" value="50" style="flex:1; height:16px;"${inputEvent}>
-                        <span id="${prefix}-overlay-opacity-label" style="width:28px;text-align:right;font-size:0.7rem;color:var(--text-secondary);">50%</span>
+                    <div style="display:flex; gap:0.75rem; align-items:center;">
+                        <div style="flex:1; display:flex; align-items:center; gap:0.35rem;">
+                            <span style="font-size:0.75rem; color:var(--text-secondary); white-space:nowrap;">Text</span>
+                            <input type="range" id="${prefix}-overlay-color-opacity" min="0" max="100" value="100" style="flex:1; height:16px;"${inputEvent}>
+                            <span id="${prefix}-overlay-color-opacity-label" style="width:28px;text-align:right;font-size:0.7rem;color:var(--text-secondary);">100%</span>
+                        </div>
+                        <div style="flex:1; display:flex; align-items:center; gap:0.35rem;">
+                            <span style="font-size:0.75rem; color:var(--text-secondary); white-space:nowrap;">BG</span>
+                            <input type="range" id="${prefix}-overlay-bg-opacity" min="0" max="100" value="50" style="flex:1; height:16px;"${inputEvent}>
+                            <span id="${prefix}-overlay-opacity-label" style="width:28px;text-align:right;font-size:0.7rem;color:var(--text-secondary);">50%</span>
+                        </div>
                     </div>
                 </div>
                 <div class="form-group" style="margin:0;">
@@ -2662,6 +2677,11 @@ function initOverlayWidget(prefix, opts = {}) {
     if (opSlider && opLabel) {
         opSlider.addEventListener('input', () => { opLabel.textContent = opSlider.value + '%'; });
     }
+    const colorOpSlider = document.getElementById(`${prefix}-overlay-color-opacity`);
+    const colorOpLabel = document.getElementById(`${prefix}-overlay-color-opacity-label`);
+    if (colorOpSlider && colorOpLabel) {
+        colorOpSlider.addEventListener('input', () => { colorOpLabel.textContent = colorOpSlider.value + '%'; });
+    }
 }
 
 /** Read overlay config from any widget by prefix. Returns config object or null. */
@@ -2679,6 +2699,7 @@ function readOverlayConfig(prefix) {
         font_size: parseInt(document.getElementById(`${prefix}-overlay-size`)?.value) || 5,
         bold: document.getElementById(`${prefix}-overlay-bold`)?.checked || false,
         color: document.getElementById(`${prefix}-overlay-color`)?.value || '#FFFFFF',
+        color_opacity: parseInt(document.getElementById(`${prefix}-overlay-color-opacity`)?.value || '100') / 100,
         position: activeBtn?.dataset.pos || 'bottom-left',
         background: document.getElementById(`${prefix}-overlay-bg`)?.checked !== false,
         background_color: document.getElementById(`${prefix}-overlay-bg-color`)?.value || '#000000',
@@ -2704,6 +2725,9 @@ function writeOverlayConfig(prefix, config) {
     if (el('size')) el('size').value = config.font_size || 5;
     if (el('bold')) el('bold').checked = !!config.bold;
     if (el('color')) el('color').value = config.color || '#FFFFFF';
+    if (el('color-opacity')) el('color-opacity').value = Math.round((config.color_opacity ?? 1.0) * 100);
+    const colorOpLabel = document.getElementById(`${prefix}-overlay-color-opacity-label`);
+    if (colorOpLabel) colorOpLabel.textContent = Math.round((config.color_opacity ?? 1.0) * 100) + '%';
     if (el('bg')) el('bg').checked = config.background !== false;
     if (el('bg-color')) el('bg-color').value = config.background_color || '#000000';
     if (el('bg-opacity')) el('bg-opacity').value = Math.round((config.background_opacity ?? 0.5) * 100);

@@ -192,6 +192,7 @@ class TextOverlayConfig(BaseModel):
     font_size: int = Field(default=5, ge=1, le=20, description="Font size as percentage of image height")
     bold: bool = False
     color: str = Field(default="#FFFFFF", pattern=r"^#[0-9a-fA-F]{6}$")
+    color_opacity: float = Field(default=1.0, ge=0.0, le=1.0)
     position: str = Field(default="bottom-left", pattern=r"^(top-left|top-center|top-right|middle-left|middle-center|middle-right|bottom-left|bottom-center|bottom-right)$")
     background: bool = True
     background_color: str = Field(default="#000000", pattern=r"^#[0-9a-fA-F]{6}$")

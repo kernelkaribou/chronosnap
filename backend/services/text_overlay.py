@@ -169,6 +169,7 @@ def render_overlay(
     font_size_pct = config.get('font_size', 5.0)
     bold = config.get('bold', False)
     color = config.get('color', '#FFFFFF')
+    color_opacity = config.get('color_opacity', 1.0)
     position = config.get('position', 'bottom-left')
     bg_enabled = config.get('background', True)
     bg_color = config.get('background_color', '#000000')
@@ -178,7 +179,7 @@ def render_overlay(
     font_size_px = max(8, int(image.height * font_size_pct / 100))
 
     font = _load_font(font_name, font_size_px, bold)
-    color_rgba = _hex_to_rgba(color)
+    color_rgba = _hex_to_rgba(color, color_opacity)
 
     # Work on RGBA copy for transparency support
     if image.mode != 'RGBA':
