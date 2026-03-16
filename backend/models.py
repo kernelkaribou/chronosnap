@@ -45,12 +45,13 @@ class JobCreate(BaseModel):
     auto_build_fps: int = Field(default=30, gt=0, le=120, description="FPS for auto-built videos")
     auto_build_quality: str = Field(default="medium", pattern=r"^(low|medium|high|lossless)$")
     auto_build_resolution: str = Field(default="1920x1080", pattern=r"^\d+x\d+$")
+    auto_build_text_overlay: Optional[str] = None  # JSON string of TextOverlayConfig
     
     @field_validator('url')
     @classmethod
     def validate_url(cls, v):
         if not v.startswith(('http://', 'https://', 'rtsp://', 'rtsps://')):
-            raise ValueError("URL must start with http://, https://, rtsp://, or rtsps://")
+            raise ValueError("URL must start with http://, https://', rtsp://', or rtsps://")
         return v
     
     @model_validator(mode='after')
@@ -105,12 +106,13 @@ class JobUpdate(BaseModel):
     auto_build_fps: Optional[int] = Field(None, gt=0, le=120)
     auto_build_quality: Optional[str] = Field(None, pattern=r"^(low|medium|high|lossless)$")
     auto_build_resolution: Optional[str] = Field(None, pattern=r"^\d+x\d+$")
-    
+    auto_build_text_overlay: Optional[str] = None  # JSON string of TextOverlayConfig
+
     @field_validator('url')
     @classmethod
     def validate_url(cls, v):
         if v is not None and not v.startswith(('http://', 'https://', 'rtsp://', 'rtsps://')):
-            raise ValueError("URL must start with http://, https://, rtsp://, or rtsps://")
+            raise ValueError("URL must start with http://, https://', rtsp://, or rtsps://")
         return v
 
 
@@ -138,6 +140,7 @@ class JobResponse(BaseModel):
     auto_build_fps: int = 30
     auto_build_quality: str = "medium"
     auto_build_resolution: str = "1920x1080"
+    auto_build_text_overlay: Optional[str] = None
     last_auto_build_at: Optional[str] = None
     auto_build_in_progress: int = 0
     next_scheduled_capture_at: Optional[str] = None  # New: scheduled capture time from DB
@@ -171,6 +174,19 @@ class CaptureDeleteRequest(BaseModel):
     capture_ids: List[int]
 
 
+class TextOverlayConfig(BaseModel):
+    enabled: bool = False
+    text: str = ""
+    font: str = "DejaVu Sans"
+    font_size: int = Field(default=48, ge=8, le=200)
+    bold: bool = False
+    color: str = Field(default="#FFFFFF", pattern=r"^#[0-9a-fA-F]{6}$")
+    position: str = Field(default="bottom-left", pattern=r"^(top-left|top-center|top-right|middle-left|middle-center|middle-right|bottom-left|bottom-center|bottom-right)$")
+    background: bool = True
+    background_color: str = Field(default="#000000", pattern=r"^#[0-9a-fA-F]{6}$")
+    background_opacity: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
 class VideoCreate(BaseModel):
     job_id: int
     name: str
@@ -182,6 +198,7 @@ class VideoCreate(BaseModel):
     end_capture_id: Optional[int] = None
     start_time: Optional[str] = None  # ISO datetime string
     end_time: Optional[str] = None  # ISO datetime string
+    text_overlay: Optional[TextOverlayConfig] = None
 
 
 class VideoResponse(BaseModel):
@@ -207,6 +224,7 @@ class VideoResponse(BaseModel):
     thumbnail_path: Optional[str] = None
     build_source: str = "manual"
     is_favorite: bool = False
+    text_overlay: Optional[str] = None  # JSON string of TextOverlayConfig
 
 
 class TestUrlResponse(BaseModel):

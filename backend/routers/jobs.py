@@ -15,6 +15,8 @@ from ..services.capture_scheduler import get_scheduler
 from ..services.maintenance import scan_job_files, cleanup_missing_captures, import_orphaned_files
 from ..services.job_state import calculate_job_state
 from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware
+from ..helpers.db_helpers import get_or_404
+from ..helpers.file_helpers import validate_writable_directory
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -45,23 +47,7 @@ async def create_job(job: JobCreate):
             job.naming_pattern = config.DEFAULT_CAPTURE_PATTERN
         
         # Validate capture_path exists and is writable
-        if not os.path.exists(job.capture_path):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Capture path does not exist: {job.capture_path}"
-            )
-        
-        if not os.path.isdir(job.capture_path):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Capture path is not a directory: {job.capture_path}"
-            )
-        
-        if not os.access(job.capture_path, os.W_OK):
-            raise HTTPException(
-                status_code=400,
-                detail=f"No write permission for capture path: {job.capture_path}"
-            )
+        validate_writable_directory(job.capture_path, "Capture path")
         
         now = get_now()
         now_str = to_iso(now)
@@ -74,9 +60,10 @@ async def create_job(job: JobCreate):
                 time_window_enabled, time_window_start, time_window_end,
                 warning_threshold,
                 auto_build_enabled, auto_build_interval_hours, auto_build_fps,
-                auto_build_quality, auto_build_resolution, last_auto_build_at,
+                auto_build_quality, auto_build_resolution, auto_build_text_overlay,
+                last_auto_build_at,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             job.name, job.url, job.stream_type.value,
             to_iso(job.start_datetime),
@@ -92,6 +79,7 @@ async def create_job(job: JobCreate):
             job.auto_build_fps,
             job.auto_build_quality,
             job.auto_build_resolution,
+            job.auto_build_text_overlay,
             now_str if job.auto_build_enabled else None,
             now_str, now_str
         ))
@@ -194,13 +182,7 @@ async def get_job(job_id: int):
     """Get a specific job by ID"""
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
-        row = cursor.fetchone()
-        
-        if not row:
-            raise HTTPException(status_code=404, detail="Job not found")
-        
-        job = dict_from_row(row)
+        job = get_or_404(cursor, "SELECT * FROM jobs WHERE id = ?", (job_id,), "Job not found")
         
         # Get latest capture for this job
         cursor.execute(
@@ -208,10 +190,7 @@ async def get_job(job_id: int):
             (job_id,)
         )
         latest_capture_row = cursor.fetchone()
-        if latest_capture_row:
-            job['latest_capture'] = dict_from_row(latest_capture_row)
-        else:
-            job['latest_capture'] = None
+        job['latest_capture'] = dict_from_row(latest_capture_row) if latest_capture_row else None
         
         return enrich_job_with_next_capture(job)
 
@@ -224,12 +203,7 @@ async def update_job(job_id: int, job_update: JobUpdate):
         cursor = conn.cursor()
         
         # Check if job exists and get current job data
-        cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Job not found")
-        
-        current_job = dict_from_row(row)
+        current_job = get_or_404(cursor, "SELECT * FROM jobs WHERE id = ?", (job_id,), "Job not found")
         
         # Build update query dynamically
         updates = []
@@ -318,6 +292,10 @@ async def update_job(job_id: int, job_update: JobUpdate):
         if job_update.auto_build_resolution is not None:
             updates.append("auto_build_resolution = ?")
             values.append(job_update.auto_build_resolution)
+        
+        if job_update.auto_build_text_overlay is not None:
+            updates.append("auto_build_text_overlay = ?")
+            values.append(job_update.auto_build_text_overlay)
         
         # Track manual status changes
         manual_status_change = False
@@ -430,26 +408,23 @@ async def delete_job(job_id: int):
         cursor = conn.cursor()
         
         # Check if job exists and get capture path
-        cursor.execute("SELECT name, capture_path FROM jobs WHERE id = ?", (job_id,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Job not found")
-        
-        job_name, job_folder = row
+        job_info = get_or_404(cursor,
+            "SELECT name, capture_path FROM jobs WHERE id = ?",
+            (job_id,), "Job not found")
         
         # Delete the entire job folder from disk
-        if job_folder:
+        if job_info['capture_path']:
             try:
-                if os.path.exists(job_folder) and os.path.isdir(job_folder):
-                    shutil.rmtree(job_folder)
-                    logger.info(f"Deleted job folder: {job_folder}")
+                if os.path.exists(job_info['capture_path']) and os.path.isdir(job_info['capture_path']):
+                    shutil.rmtree(job_info['capture_path'])
+                    logger.info(f"Deleted job folder: {job_info['capture_path']}")
             except Exception as e:
-                logger.warning(f"Failed to delete job folder {job_folder}: {e}")
+                logger.warning(f"Failed to delete job folder {job_info['capture_path']}: {e}")
         
         # Delete job (cascades captures, sets NULL on processed_videos)
         cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
         
-        logger.info(f"Deleted job '{job_name}' (ID: {job_id}) and all captures")
+        logger.info(f"Deleted job '{job_info['name']}' (ID: {job_id}) and all captures")
 
 
 @router.post("/test-url", response_model=TestUrlResponse)
@@ -468,13 +443,7 @@ async def estimate_duration(
     """Calculate estimated video duration based on capture settings"""
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
-        job = cursor.fetchone()
-        
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found")
-        
-        job_dict = dict_from_row(job)
+        job_dict = get_or_404(cursor, "SELECT * FROM jobs WHERE id = ?", (job_id,), "Job not found")
         return calculate_duration(job_dict, hours, days)
 
 
@@ -483,18 +452,14 @@ async def get_latest_image(job_id: int):
     """Get the path to the latest captured image for a job"""
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
+        cap = get_or_404(cursor, """
             SELECT file_path FROM captures
             WHERE job_id = ?
             ORDER BY captured_at DESC
             LIMIT 1
-        """, (job_id,))
-        row = cursor.fetchone()
+        """, (job_id,), "No captures found for this job")
         
-        if not row:
-            raise HTTPException(status_code=404, detail="No captures found for this job")
-        
-        return {"file_path": row[0]}
+        return {"file_path": cap['file_path']}
 
 
 @router.post("/{job_id}/capture")
@@ -505,13 +470,7 @@ async def manual_capture(job_id: int):
     """
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
-        row = cursor.fetchone()
-        
-        if not row:
-            raise HTTPException(status_code=404, detail="Job not found")
-        
-        job = dict_from_row(row)
+        job = get_or_404(cursor, "SELECT * FROM jobs WHERE id = ?", (job_id,), "Job not found")
     
     logger.info(f"Manual capture requested for job '{job['name']}' (ID: {job_id})")
     

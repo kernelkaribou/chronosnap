@@ -926,6 +926,105 @@ body {
     }
 }
 
+/* Text overlay position grid */
+.overlay-position-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
+    width: 120px;
+}
+
+/* Overlay two-column layout → stacked: preview on top, compact controls below */
+.overlay-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.overlay-controls {
+    min-width: 0;
+}
+
+.overlay-controls .form-group {
+    margin-bottom: 0.4rem;
+}
+
+.overlay-controls label {
+    font-size: 0.8rem;
+    margin-bottom: 0.15rem;
+}
+
+.overlay-controls .form-control {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+}
+
+.overlay-controls small {
+    font-size: 0.7rem;
+}
+
+.overlay-preview-panel {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.overlay-preview-panel img {
+    width: 100%;
+    cursor: pointer;
+    transition: opacity var(--transition-fast);
+}
+
+.overlay-preview-panel img:hover {
+    opacity: 0.85;
+}
+
+/* Fullscreen overlay preview lightbox */
+.overlay-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.overlay-lightbox img {
+    max-width: 95vw;
+    max-height: 95vh;
+    border-radius: var(--radius-lg);
+}
+
+.overlay-position-grid .pos-btn {
+    width: 100%;
+    aspect-ratio: 1.5;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+    padding: 0;
+}
+
+.overlay-position-grid .pos-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--accent-color);
+}
+
+.overlay-position-grid .pos-btn.active {
+    background: var(--accent-color);
+    color: #fff;
+    border-color: var(--accent-color);
+}
+
 .form-control {
     width: 100%;
     padding: 0.625rem 0.875rem;

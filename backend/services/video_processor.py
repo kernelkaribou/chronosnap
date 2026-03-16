@@ -23,7 +23,8 @@ def process_video(
     end_capture_id: Optional[int],
     start_time: Optional[str],
     end_time: Optional[str],
-    output_path: str
+    output_path: str,
+    text_overlay: Optional[Dict[str, Any]] = None
 ):
     """
     Process a timelapse video from captured images
@@ -97,12 +98,45 @@ def process_video(
         
         # Create a temporary file list for ffmpeg
         import tempfile
+        
+        overlay_dir = None
+        use_overlay = text_overlay and text_overlay.get('enabled') and text_overlay.get('text')
+        
+        if use_overlay:
+            # Process frames with text overlay using PIL
+            from .text_overlay import process_frames_with_overlay
+            overlay_dir = tempfile.mkdtemp(prefix='overlay_')
+            logger.info(f"Applying text overlay to {total_frames} frames...")
+            
+            def overlay_progress(frame_num, total):
+                progress = (frame_num / total) * 40  # Overlay is ~40% of work
+                _update_progress(video_id, progress)
+            
+            overlay_paths = process_frames_with_overlay(
+                captures=captures,
+                config=text_overlay,
+                job_name=job_dict.get('name', ''),
+                temp_dir=overlay_dir,
+                total_frames=total_frames,
+                progress_callback=overlay_progress,
+            )
+            
+            if not overlay_paths:
+                _update_video_status(video_id, 'failed', 0, "Text overlay processing produced no frames")
+                return
+            
+            logger.info(f"Text overlay applied to {len(overlay_paths)} frames")
+        
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
             list_file = f.name
-            for capture in captures:
-                # FFMPEG concat demuxer format
-                f.write(f"file '{capture[2]}'\n")  # capture[2] is file_path
-                f.write(f"duration {1/framerate}\n")
+            if use_overlay:
+                for path in overlay_paths:
+                    f.write(f"file '{path}'\n")
+                    f.write(f"duration {1/framerate}\n")
+            else:
+                for capture in captures:
+                    f.write(f"file '{capture[2]}'\n")  # capture[2] is file_path
+                    f.write(f"duration {1/framerate}\n")
         
         try:
             # Ensure output directory exists
@@ -157,7 +191,11 @@ def process_video(
                     try:
                         frame_str = line.split('frame=')[1].split()[0]
                         current_frame = int(frame_str)
-                        progress = (current_frame / total_frames) * 100
+                        if use_overlay:
+                            # Overlay used 40%, encoding uses remaining 60%
+                            progress = 40 + (current_frame / total_frames) * 60
+                        else:
+                            progress = (current_frame / total_frames) * 100
                         _update_progress(video_id, progress)
                     except (ValueError, IndexError):
                         pass
@@ -182,9 +220,12 @@ def process_video(
                 logger.error(f"Video processing failed: {error_msg[:500]}")
         
         finally:
-            # Clean up temp file
+            # Clean up temp files
             if os.path.exists(list_file):
                 os.remove(list_file)
+            if overlay_dir and os.path.isdir(overlay_dir):
+                import shutil
+                shutil.rmtree(overlay_dir, ignore_errors=True)
     
     except Exception as e:
         logger.error(f"Error processing video {video_id}: {e}")

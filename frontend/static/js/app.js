@@ -205,6 +205,54 @@ function closeConfirmModal(confirmed) {
     }
 }
 
+/**
+ * Show a confirmation dialog and execute an action if confirmed.
+ * Replaces the repeated showConfirm + if(confirmed) pattern.
+ * @param {string} message - Confirmation message
+ * @param {Function} actionFn - Async function to run if confirmed
+ * @param {Object} opts - Options: { closeModalId: string to close before action }
+ */
+function confirmAction(message, actionFn, opts = {}) {
+    showConfirm(message, async (confirmed) => {
+        if (confirmed) {
+            if (opts.closeModalId) closeModal(opts.closeModalId);
+            await actionFn();
+        }
+    });
+}
+
+/**
+ * Toggle visibility of a field group and optionally set required attributes.
+ * @param {string} checkboxId - ID of the controlling checkbox
+ * @param {string} containerId - ID of the container to show/hide
+ * @param {Object} opts - { requiredIds: string[], display: string, onToggle: fn }
+ */
+function toggleFieldGroup(checkboxId, containerId, opts = {}) {
+    const enabled = document.getElementById(checkboxId).checked;
+    const container = document.getElementById(containerId);
+    container.style.display = enabled ? (opts.display || 'block') : 'none';
+    if (opts.requiredIds) {
+        opts.requiredIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.required = enabled;
+        });
+    }
+    if (opts.onToggle) opts.onToggle(enabled);
+}
+
+/**
+ * Set a button's disabled state with consistent styling.
+ * @param {string|Element} btnOrId - Button element or ID
+ * @param {boolean} disabled - Whether to disable
+ */
+function setButtonState(btnOrId, disabled) {
+    const btn = typeof btnOrId === 'string' ? document.getElementById(btnOrId) : btnOrId;
+    if (!btn) return;
+    btn.disabled = disabled;
+    btn.style.opacity = disabled ? '0.5' : '1';
+    btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+}
+
 // Prevent Enter key from submitting forms
 function preventEnterSubmit(event) {
     if (event.key === 'Enter' && event.target.tagName !== 'TEXTAREA') {
@@ -214,28 +262,19 @@ function preventEnterSubmit(event) {
 }
 
 // Toggle time window fields visibility
+let _timeWindowListenersAdded = false;
 function toggleTimeWindow() {
-    const enabled = document.getElementById('time_window_enabled').checked;
-    const fieldsDiv = document.getElementById('time-window-fields');
-    const startInput = document.getElementById('time_window_start');
-    const endInput = document.getElementById('time_window_end');
-    
-    if (enabled) {
-        fieldsDiv.style.display = 'block';
-        startInput.required = true;
-        endInput.required = true;
-        
-        // Add event listeners for duration estimate updates
-        startInput.addEventListener('change', updateDurationEstimate);
-        endInput.addEventListener('change', updateDurationEstimate);
-    } else {
-        fieldsDiv.style.display = 'none';
-        startInput.required = false;
-        endInput.required = false;
-    }
-    
-    // Update duration estimate
-    updateDurationEstimate();
+    toggleFieldGroup('time_window_enabled', 'time-window-fields', {
+        requiredIds: ['time_window_start', 'time_window_end'],
+        onToggle: (enabled) => {
+            if (enabled && !_timeWindowListenersAdded) {
+                document.getElementById('time_window_start').addEventListener('change', updateDurationEstimate);
+                document.getElementById('time_window_end').addEventListener('change', updateDurationEstimate);
+                _timeWindowListenersAdded = true;
+            }
+            updateDurationEstimate();
+        }
+    });
 }
 
 // Initialize app
@@ -312,6 +351,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Trigger initial duration estimate
     updateDurationEstimate();
+    
+    // Mount create-job auto-build overlay widget
+    initCreateJobOverlay();
     
     // Prevent Enter key from submitting forms
     document.querySelectorAll('form').forEach(form => {
@@ -722,6 +764,7 @@ async function showJobDetails(jobId) {
                             </select>
                         </div>
                     </div>
+                    <div id="edit-ab-overlay-container"></div>
                     ${job.last_auto_build_at ? `<small style="color: var(--text-secondary);">Last auto-build: ${formatDateTime(job.last_auto_build_at)}</small>` : ''}
                 </div>
 
@@ -766,6 +809,9 @@ async function showJobDetails(jobId) {
         
         // Initialize custom time pickers for edit modal
         initializeEditTimePickers(job);
+        
+        // Initialize edit overlay section
+        initEditJobOverlay(job);
         
         // Track changes to enable/disable save button
         setupJobEditChangeTracking(job);
@@ -850,7 +896,8 @@ async function createJob(event) {
         auto_build_interval_hours: values.auto_build_interval_hours || 168,
         auto_build_fps: values.auto_build_fps || 30,
         auto_build_quality: values.auto_build_quality || 'medium',
-        auto_build_resolution: values.auto_build_resolution || '1920x1080'
+        auto_build_resolution: values.auto_build_resolution || '1920x1080',
+        auto_build_text_overlay: values.auto_build_enabled ? JSON.stringify(readOverlayConfig('create-ab')) : null
     };
     
     try {
@@ -869,20 +916,26 @@ async function createJob(event) {
 function setupJobEditChangeTracking(originalJob) {
     const saveBtn = document.getElementById('save-job-btn');
     if (!saveBtn) return;
-    
+
     // Initially disabled
-    saveBtn.disabled = true;
-    saveBtn.style.opacity = '0.5';
-    saveBtn.style.cursor = 'not-allowed';
-    
-    const enableSaveButton = () => {
-        saveBtn.disabled = false;
-        saveBtn.style.opacity = '1';
-        saveBtn.style.cursor = 'pointer';
+    setButtonState(saveBtn, true);
+
+    // Snapshot initial form values to compare against
+    const getFormSnapshot = () => {
+        const vals = {};
+        trackedFields.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            vals[id] = el.type === 'checkbox' ? el.checked : el.value;
+        });
+        // Include overlay position
+        const grid = document.getElementById('edit-ab-overlay-grid');
+        const activeBtn = grid?.querySelector('.pos-btn.active');
+        vals['_overlay_pos'] = activeBtn?.dataset.pos || '';
+        return vals;
     };
-    
-    // Track changes on all editable fields
-    const fields = [
+
+    const trackedFields = [
         'edit_interval_seconds',
         'edit_end_datetime',
         'edit_time_window_enabled',
@@ -895,14 +948,36 @@ function setupJobEditChangeTracking(originalJob) {
         'edit_auto_build_interval_hours',
         'edit_auto_build_fps',
         'edit_auto_build_quality',
-        'edit_auto_build_resolution'
+        'edit_auto_build_resolution',
+        'edit-ab-overlay-enabled',
+        'edit-ab-overlay-text',
+        'edit-ab-overlay-font',
+        'edit-ab-overlay-size',
+        'edit-ab-overlay-bold',
+        'edit-ab-overlay-color',
+        'edit-ab-overlay-bg',
+        'edit-ab-overlay-bg-color',
+        'edit-ab-overlay-bg-opacity'
     ];
-    
-    fields.forEach(fieldId => {
+
+    // Take snapshot after a tick so DOM values are fully populated
+    let initialSnapshot = null;
+    setTimeout(() => { initialSnapshot = getFormSnapshot(); }, 50);
+
+    const checkForChanges = () => {
+        if (!initialSnapshot) { setButtonState(saveBtn, true); return; }
+        const current = getFormSnapshot();
+        const hasChanges = Object.keys(initialSnapshot).some(k =>
+            String(initialSnapshot[k]) !== String(current[k])
+        );
+        setButtonState(saveBtn, !hasChanges);
+    };
+
+    trackedFields.forEach(fieldId => {
         const field = document.getElementById(fieldId);
         if (field) {
-            field.addEventListener('change', enableSaveButton);
-            field.addEventListener('input', enableSaveButton);
+            field.addEventListener('change', checkForChanges);
+            field.addEventListener('input', checkForChanges);
         }
     });
 
@@ -919,64 +994,48 @@ function setupJobEditChangeTracking(originalJob) {
 
     // Trigger initial estimate
     setTimeout(updateEditDurationEstimate, 100);
+
+    // Track overlay position grid clicks
+    const overlayGrid = document.getElementById('edit-ab-overlay-grid');
+    if (overlayGrid) {
+        overlayGrid.querySelectorAll('.pos-btn').forEach(btn => {
+            btn.addEventListener('click', () => setTimeout(checkForChanges, 10));
+        });
+    }
 }
 
 function confirmDisableJob(jobId, jobName) {
-    showConfirm(
+    confirmAction(
         `Are you sure you want to disable the job "${jobName}"? The job will stop capturing images until re-enabled.`,
-        async (confirmed) => {
-            if (confirmed) {
-                closeModal('job-details-modal');
-                await updateJobStatus(jobId, 'disabled', jobName);
-            }
-        }
+        () => updateJobStatus(jobId, 'disabled', jobName),
+        { closeModalId: 'job-details-modal' }
     );
 }
 
 function confirmEnableJob(jobId, jobName) {
-    showConfirm(
+    confirmAction(
         `Are you sure you want to enable the job "${jobName}"? The job will start capturing images according to its schedule.`,
-        async (confirmed) => {
-            if (confirmed) {
-                closeModal('job-details-modal');
-                await updateJobStatus(jobId, 'active', jobName);
-            }
-        }
+        () => updateJobStatus(jobId, 'active', jobName),
+        { closeModalId: 'job-details-modal' }
     );
 }
 
 function confirmCompleteJob(jobId, jobName) {
-    showConfirm(
+    confirmAction(
         `Are you sure you want to complete the job "${jobName}"? This will set the job's end time to now and mark it as completed.`,
-        async (confirmed) => {
-            if (confirmed) {
-                closeModal('job-details-modal');
-                await completeJob(jobId, jobName);
-            }
-        }
+        () => completeJob(jobId, jobName),
+        { closeModalId: 'job-details-modal' }
     );
 }
 
 async function completeJob(jobId, jobName) {
     try {
-        const now = new Date();
-        const endDatetime = now.toISOString();
-        
-        const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
+        await apiRequest(`/jobs/${jobId}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                status: 'completed',
-                end_datetime: endDatetime
-            })
+            body: { status: 'completed', end_datetime: new Date().toISOString() }
         });
-        
-        if (response.ok) {
-            loadJobs();
-            showNotification(`Job "${jobName}" completed successfully`);
-        } else {
-            showNotification('Failed to complete job', 'error');
-        }
+        loadJobs();
+        showNotification(`Job "${jobName}" completed successfully`);
     } catch (error) {
         console.error('Failed to complete job:', error);
         showNotification('Failed to complete job', 'error');
@@ -985,19 +1044,10 @@ async function completeJob(jobId, jobName) {
 
 async function updateJobStatus(jobId, status, jobName) {
     try {
-        const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status })
-        });
-        
-        if (response.ok) {
-            loadJobs();
-            const action = status === 'active' ? 'enabled' : 'disabled';
-            showNotification(`Job "${jobName}" ${action} successfully`);
-        } else {
-            showNotification('Failed to update job status', 'error');
-        }
+        await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { status } });
+        loadJobs();
+        const action = status === 'active' ? 'enabled' : 'disabled';
+        showNotification(`Job "${jobName}" ${action} successfully`);
     } catch (error) {
         console.error('Failed to update job:', error);
         showNotification('Failed to update job', 'error');
@@ -1009,74 +1059,47 @@ async function updateJobEndTime(jobId) {
     const rawValue = endDatetimeInput.value || null;
     const endDatetime = rawValue ? datetimeLocalToISO(rawValue) : null;
     
-    // Validate end time if provided
     if (endDatetime) {
         const endTime = new Date(endDatetime);
-        const now = new Date();
-        
-        if (endTime <= now) {
+        if (endTime <= new Date()) {
             showNotification('End time must be in the future', 'error');
             return;
         }
     }
     
     try {
-        const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ end_datetime: endDatetime })
-        });
-        
-        if (response.ok) {
-            closeModal('job-details-modal');
-            loadJobs();
-            showNotification('End time updated successfully');
-        } else {
-            const error = await response.json();
-            showNotification(error.detail || 'Failed to update end time', 'error');
-        }
+        await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { end_datetime: endDatetime } });
+        closeModal('job-details-modal');
+        loadJobs();
+        showNotification('End time updated successfully');
     } catch (error) {
         console.error('Failed to update end time:', error);
-        showNotification('Failed to update end time', 'error');
+        showNotification(error.message || 'Failed to update end time', 'error');
     }
 }
 
 async function updateJobUrl(jobId) {
-    const urlInput = document.getElementById('edit_url');
-    const url = urlInput.value.trim();
+    const url = document.getElementById('edit_url').value.trim();
     
     if (!url) {
         showNotification('URL cannot be empty', 'error');
         return;
     }
     
-    // Auto-detect stream type from URL
     const stream_type = url.toLowerCase().startsWith('rtsp://') ? 'rtsp' : 'http';
     
     try {
-        const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, stream_type })
-        });
-        
-        if (response.ok) {
-            showNotification('Stream URL updated successfully');
-            // Refresh the modal to show updated info
-            showJobDetails(jobId);
-        } else {
-            const error = await response.json();
-            showNotification(error.detail || 'Failed to update URL', 'error');
-        }
+        await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { url, stream_type } });
+        showNotification('Stream URL updated successfully');
+        showJobDetails(jobId);
     } catch (error) {
         console.error('Failed to update URL:', error);
-        showNotification('Failed to update URL', 'error');
+        showNotification(error.message || 'Failed to update URL', 'error');
     }
 }
 
 async function updateJobInterval(jobId) {
-    const intervalInput = document.getElementById('edit_interval_seconds');
-    const interval = parseInt(intervalInput.value);
+    const interval = parseInt(document.getElementById('edit_interval_seconds').value);
     
     if (!interval || interval < 10) {
         showNotification('Interval must be at least 10 seconds', 'error');
@@ -1084,51 +1107,27 @@ async function updateJobInterval(jobId) {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ interval_seconds: interval })
-        });
-        
-        if (response.ok) {
-            showNotification('Capture interval updated successfully');
-            // Refresh the modal to show updated info
-            showJobDetails(jobId);
-        } else {
-            const error = await response.json();
-            showNotification(error.detail || 'Failed to update interval', 'error');
-        }
+        await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { interval_seconds: interval } });
+        showNotification('Capture interval updated successfully');
+        showJobDetails(jobId);
     } catch (error) {
         console.error('Failed to update interval:', error);
-        showNotification('Failed to update interval', 'error');
+        showNotification(error.message || 'Failed to update interval', 'error');
     }
 }
 
 function toggleEditTimeWindow() {
-    const enabled = document.getElementById('edit_time_window_enabled').checked;
-    const fieldsDiv = document.getElementById('edit-time-window-fields');
-    const startInput = document.getElementById('edit_time_window_start');
-    const endInput = document.getElementById('edit_time_window_end');
-    
-    if (enabled) {
-        fieldsDiv.style.display = 'block';
-        startInput.required = true;
-        endInput.required = true;
-    } else {
-        fieldsDiv.style.display = 'none';
-        startInput.required = false;
-        endInput.required = false;
-    }
+    toggleFieldGroup('edit_time_window_enabled', 'edit-time-window-fields', {
+        requiredIds: ['edit_time_window_start', 'edit_time_window_end']
+    });
 }
 
 function toggleAutoBuildFields() {
-    const enabled = document.getElementById('auto_build_enabled').checked;
-    document.getElementById('auto-build-fields').style.display = enabled ? 'block' : 'none';
+    toggleFieldGroup('auto_build_enabled', 'auto-build-fields');
 }
 
 function toggleEditAutoBuildFields() {
-    const enabled = document.getElementById('edit_auto_build_enabled').checked;
-    document.getElementById('edit-auto-build-fields').style.display = enabled ? 'block' : 'none';
+    toggleFieldGroup('edit_auto_build_enabled', 'edit-auto-build-fields');
 }
 
 function setAutoBuildInterval(inputId, hours) {
@@ -1205,48 +1204,29 @@ async function saveJobChanges(jobId) {
         auto_build_interval_hours: autoBuildIntervalHours,
         auto_build_fps: autoBuildFps,
         auto_build_quality: autoBuildQuality,
-        auto_build_resolution: autoBuildResolution
+        auto_build_resolution: autoBuildResolution,
+        auto_build_text_overlay: JSON.stringify(readOverlayConfig('edit-ab'))
     };
     
     try {
-        const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updateData)
-        });
-        
-        if (response.ok) {
-            // Reload jobs BEFORE closing modal to prevent showing stale data
-            await loadJobs();
-            closeModal('job-details-modal');
-            showNotification('Job settings updated successfully');
-        } else {
-            const error = await response.json();
-            showNotification(error.detail || 'Failed to update job', 'error');
-        }
+        await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: updateData });
+        await loadJobs();
+        closeModal('job-details-modal');
+        showNotification('Job settings updated successfully');
     } catch (error) {
         console.error('Failed to update job:', error);
-        showNotification('Failed to update job', 'error');
+        showNotification(error.message || 'Failed to update job', 'error');
     }
 }
 
 async function deleteJob(jobId, jobName) {
-    showConfirm(
+    confirmAction(
         `Are you sure you want to delete the job "${jobName}"? This will permanently remove the job and all its captures. Timelapse videos will be preserved.`,
-        async (confirmed) => {
-            if (!confirmed) return;
-            
+        async () => {
             try {
-                const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
-                    method: 'DELETE'
-                });
-                
-                if (response.ok) {
-                    loadJobs();
-                    showNotification(`Job "${jobName}" and all captures deleted successfully`);
-                } else {
-                    showNotification(`Failed to delete job "${jobName}"`, 'error');
-                }
+                await apiRequest(`/jobs/${jobId}`, { method: 'DELETE' });
+                loadJobs();
+                showNotification(`Job "${jobName}" and all captures deleted successfully`);
             } catch (error) {
                 console.error('Failed to delete job:', error);
                 showNotification(`Failed to delete job "${jobName}"`, 'error');
@@ -1272,10 +1252,7 @@ async function previewStream(urlInputId, resultDivId) {
     resultDiv.className = 'test-result';
     
     try {
-        const response = await fetch(`${API_BASE}/jobs/test-url?url=${encodeURIComponent(url)}`, {
-            method: 'POST'
-        });
-        const result = await response.json();
+        const result = await apiRequest('/jobs/test-url', { method: 'POST', query: { url } });
         
         if (result.success) {
             resultDiv.className = 'test-result';
@@ -1302,8 +1279,7 @@ let selectedVideos = new Set();
 
 async function loadVideos() {
     try {
-        const response = await fetch(`${API_BASE}/videos/`);
-        const videos = await response.json();
+        const videos = await apiRequest('/videos/');
         allVideos = videos;
         
         // Check if any videos are processing
@@ -1516,9 +1492,7 @@ function renderVideos(videos, isEmpty) {
 
 async function openVideoDetail(videoId) {
     try {
-        const response = await fetch(`${API_BASE}/videos/${videoId}`);
-        if (!response.ok) return;
-        const video = await response.json();
+        const video = await apiRequest(`/videos/${videoId}`);
         
         const modal = document.getElementById('video-detail-modal');
         const title = document.getElementById('video-detail-title');
@@ -1586,19 +1560,14 @@ function closeVideoDetail() {
 }
 
 async function deleteVideoFromDetail(videoId, videoName) {
-    showConfirm(
+    confirmAction(
         `Are you sure you want to delete "${videoName}"?`,
-        async (confirmed) => {
-            if (!confirmed) return;
+        async () => {
             try {
-                const response = await fetch(`${API_BASE}/videos/${videoId}`, { method: 'DELETE' });
-                if (response.ok) {
-                    closeVideoDetail();
-                    loadVideos();
-                    showNotification(`Video "${videoName}" deleted successfully`);
-                } else {
-                    showNotification(`Failed to delete video "${videoName}"`, 'error');
-                }
+                await apiRequest(`/videos/${videoId}`, { method: 'DELETE' });
+                closeVideoDetail();
+                loadVideos();
+                showNotification(`Video "${videoName}" deleted successfully`);
             } catch (error) {
                 showNotification(`Failed to delete video "${videoName}"`, 'error');
             }
@@ -1677,17 +1646,14 @@ async function deleteSelectedVideos() {
     const count = selectedVideos.size;
     if (count === 0) return;
     
-    showConfirm(
+    confirmAction(
         `Are you sure you want to delete ${count} timelapse${count > 1 ? 's' : ''}?`,
-        async (confirmed) => {
-            if (!confirmed) return;
+        async () => {
             try {
-                const response = await fetch(`${API_BASE}/videos/delete-multiple`, {
+                const result = await apiRequest('/videos/delete-multiple', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ video_ids: [...selectedVideos] })
+                    body: { video_ids: [...selectedVideos] }
                 });
-                const result = await response.json();
                 selectedVideos.clear();
                 loadVideos();
                 showNotification(`Deleted ${result.deleted} timelapse${result.deleted > 1 ? 's' : ''}`);
@@ -1706,6 +1672,11 @@ async function showProcessVideoModal(jobId, jobName) {
         document.getElementById('capture-range').style.display = 'none';
         document.getElementById('video-duration-estimate').innerHTML = '';
         document.getElementById('available-range-info').style.display = 'none';
+        // Reset text overlay
+        const buildOverlayContainer = document.getElementById('build-overlay-container');
+        if (buildOverlayContainer) buildOverlayContainer.innerHTML = '';
+        window._overlayPreviewPath = null;
+        window._overlayJobName = null;
         const previewImage = document.getElementById('builder-preview-image');
         const previewPlaceholder = document.getElementById('builder-preview-placeholder');
         if (previewImage) previewImage.style.display = 'none';
@@ -1735,9 +1706,7 @@ async function showProcessVideoModal(jobId, jobName) {
             // Disable create button until a job is selected
             const createBtn = document.getElementById('create-video-btn');
             if (createBtn) {
-                createBtn.disabled = true;
-                createBtn.style.opacity = '0.5';
-                createBtn.style.cursor = 'not-allowed';
+                setButtonState(createBtn, true);
             }
         }
         
@@ -1753,8 +1722,7 @@ async function populateJobSelector() {
     jobSelect.innerHTML = '<option value="">Select a job...</option>';
     
     try {
-        const response = await fetch(`${API_BASE}/jobs/`);
-        const jobs = await response.json();
+        const jobs = await apiRequest('/jobs/');
         
         // Only show jobs that have captures
         const jobsWithCaptures = jobs.filter(j => j.capture_count > 0);
@@ -1794,9 +1762,7 @@ async function onJobSelectChange() {
         document.getElementById('available-range-info').style.display = 'none';
         const createBtn = document.getElementById('create-video-btn');
         if (createBtn) {
-            createBtn.disabled = true;
-            createBtn.style.opacity = '0.5';
-            createBtn.style.cursor = 'not-allowed';
+            setButtonState(createBtn, true);
         }
         return;
     }
@@ -1825,10 +1791,17 @@ async function populateVideoFormFromJob(jobId, jobName) {
     if (previewImage && latestCaptures.captures && latestCaptures.captures.length > 0) {
         const cap = latestCaptures.captures[0];
         const img = document.getElementById('job-preview-img');
-        img.src = `${API_BASE}/captures/${cap.id}/thumbnail`;
+        const thumbUrl = `${API_BASE}/captures/${cap.id}/thumbnail`;
+        img.src = thumbUrl;
+        img._originalSrc = thumbUrl;
         document.getElementById('job-preview-label').textContent = `Latest capture: ${formatDateTime(cap.captured_at)}`;
         previewImage.style.display = 'flex';
         if (previewPlaceholder) previewPlaceholder.style.display = 'none';
+        // Store file_path for text overlay preview
+        window._overlayPreviewPath = cap.file_path;
+        window._overlayJobName = jobName;
+        // Mount overlay widget now that we have a preview image
+        initBuildOverlay();
     }
     
     const captureCount = timeRange.count;
@@ -1971,9 +1944,7 @@ function displayDurationEstimate(captureCount, framerate) {
                     formatDateTime(window.lastCaptureTime.toISOString()) + '</p>';
                 
                 if (createBtn) {
-                    createBtn.disabled = true;
-                    createBtn.style.opacity = '0.5';
-                    createBtn.style.cursor = 'not-allowed';
+                    setButtonState(createBtn, true);
                 }
                 return;
             }
@@ -1988,18 +1959,14 @@ function displayDurationEstimate(captureCount, framerate) {
         
         // Disable create button when no captures
         if (createBtn) {
-            createBtn.disabled = true;
-            createBtn.style.opacity = '0.5';
-            createBtn.style.cursor = 'not-allowed';
+            setButtonState(createBtn, true);
         }
         return;
     }
     
     // Enable create button when captures exist
     if (createBtn) {
-        createBtn.disabled = false;
-        createBtn.style.opacity = '1';
-        createBtn.style.cursor = 'pointer';
+        setButtonState(createBtn, false);
     }
     
     const durationSeconds = captureCount / framerate;
@@ -2041,6 +2008,500 @@ function toggleCustomResolution() {
         customHeight.required = false;
     }
 }
+
+// ─── Text Overlay Component ───
+// Reusable overlay widget: generateOverlayHTML(prefix) → readOverlayConfig(prefix)
+// Three instances: "build" (manual build modal), "create-ab" (create-job auto-build),
+// "edit-ab" (edit-job auto-build). All share the same HTML generator and config reader.
+
+let _overlayPreviewTimeout = null;
+let _overlayFontsLoaded = false;
+let _overlayFontsCache = [];
+
+const OVERLAY_POSITIONS = [
+    { pos: 'top-left',      icon: '↖' },
+    { pos: 'top-center',    icon: '↑' },
+    { pos: 'top-right',     icon: '↗' },
+    { pos: 'middle-left',   icon: '←' },
+    { pos: 'middle-center', icon: '●' },
+    { pos: 'middle-right',  icon: '→' },
+    { pos: 'bottom-left',   icon: '↙' },
+    { pos: 'bottom-center', icon: '↓' },
+    { pos: 'bottom-right',  icon: '↘' },
+];
+
+/**
+ * Generate overlay widget HTML for a container.
+ * @param {string} prefix  - Unique prefix for element IDs (e.g., "build", "create-ab", "edit-ab")
+ * @param {object} opts    - { label: string, showPreview: bool, onchange: string|null }
+ */
+function generateOverlayHTML(prefix, opts = {}) {
+    const label = opts.label || 'Text Overlay';
+    const showPreview = opts.showPreview || false;
+    const onchangeAttr = opts.onchange ? ` onchange="${opts.onchange}"` : '';
+    const inputEvent = opts.onchange ? ` oninput="${opts.onchange}" onchange="${opts.onchange}"` : '';
+
+    const gridBtns = OVERLAY_POSITIONS.map(p =>
+        `<button type="button" class="pos-btn${p.pos === 'bottom-left' ? ' active' : ''}" data-pos="${p.pos}" title="${p.pos}">${p.icon}</button>`
+    ).join('');
+
+    const fontOpts = _overlayFontsCache.length
+        ? _overlayFontsCache.map(f => `<option value="${f.name}">${f.name}</option>`).join('')
+        : '<option value="DejaVu Sans">DejaVu Sans</option>';
+
+    const controlsHtml = `
+            <div class="form-group">
+                <label>Overlay Text</label>
+                <input type="text" id="${prefix}-overlay-text" class="form-control" value="{job_name}" placeholder="{job_name} - {date} {time}"${inputEvent}>
+                <small style="color: var(--text-secondary);">Variables: <code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code> <code>{total_frames}</code></small>
+            </div>
+            <div class="form-row" style="gap:0.5rem; align-items:flex-start;">
+                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.4rem;">
+                    <div class="form-row" style="gap:0.5rem;">
+                        <div class="form-group flex-1">
+                            <label>Font</label>
+                            <select id="${prefix}-overlay-font" class="form-control"${inputEvent}>${fontOpts}</select>
+                        </div>
+                        <div class="form-group" style="width: 65px;">
+                            <label>Size</label>
+                            <input type="number" id="${prefix}-overlay-size" class="form-control" value="48" min="8" max="200"${inputEvent}>
+                        </div>
+                        <div class="form-group" style="width: 45px;">
+                            <label>Bold</label>
+                            <div style="display:flex;align-items:center;height:32px;">
+                                <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr}>
+                            </div>
+                        </div>
+                        <div class="form-group" style="width: 50px;">
+                            <label>Color</label>
+                            <input type="color" id="${prefix}-overlay-color" value="#FFFFFF" class="form-control" style="padding:2px;height:32px;"${inputEvent}>
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:0.35rem;">
+                        <input type="checkbox" id="${prefix}-overlay-bg" checked${onchangeAttr}>
+                        <span style="font-size:0.8rem;">BG</span>
+                        <input type="color" id="${prefix}-overlay-bg-color" value="#000000" class="form-control" style="padding:2px;height:24px;width:32px;"${inputEvent}>
+                        <input type="range" id="${prefix}-overlay-bg-opacity" min="0" max="100" value="50" style="flex:1; height:16px;"${inputEvent}>
+                        <span id="${prefix}-overlay-opacity-label" style="width:28px;text-align:right;font-size:0.7rem;color:var(--text-secondary);">50%</span>
+                    </div>
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label>Position</label>
+                    <div class="overlay-position-grid" id="${prefix}-overlay-grid">${gridBtns}</div>
+                </div>
+            </div>`;
+
+    const previewHtml = showPreview ? `
+            <div class="overlay-preview-panel" id="${prefix}-overlay-preview-panel">
+                <img id="${prefix}-overlay-preview-img" alt="Overlay preview" onclick="openOverlayLightbox(this)" style="border-radius: var(--radius-lg); border: 1px solid var(--border-color); display: none;" title="Click to enlarge">
+                <div id="${prefix}-overlay-preview-placeholder" style="width:100%; aspect-ratio:16/9; background:var(--surface-color); border:1px dashed var(--border-color); border-radius:var(--radius-lg); display:flex; align-items:center; justify-content:center; color:var(--text-secondary); font-size:0.8rem;">
+                    Loading preview…
+                </div>
+            </div>` : '';
+
+    // Preview on top, controls below
+    const fieldsInner = showPreview
+        ? `<div class="overlay-layout">\n${previewHtml}\n<div class="overlay-controls">${controlsHtml}</div>\n</div>`
+        : controlsHtml;
+
+    return `
+        <div class="form-group" style="margin-top: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <input type="checkbox" id="${prefix}-overlay-enabled"${onchangeAttr}>
+                <span>${label}</span>
+            </div>
+        </div>
+        <div id="${prefix}-overlay-fields" style="display: none;">
+            ${fieldsInner}
+        </div>`;
+}
+
+function openOverlayLightbox(imgEl) {
+    if (!imgEl || !imgEl.src) return;
+    const lb = document.createElement('div');
+    lb.className = 'overlay-lightbox';
+    lb.innerHTML = `<img src="${imgEl.src}" alt="Overlay preview">`;
+    lb.addEventListener('click', () => lb.remove());
+    document.addEventListener('keydown', function esc(e) {
+        if (e.key === 'Escape') { lb.remove(); document.removeEventListener('keydown', esc); }
+    });
+    document.body.appendChild(lb);
+}
+
+/**
+ * Initialize an overlay widget after its HTML is in the DOM.
+ * Sets up position grid clicks and toggle behavior.
+ */
+function initOverlayWidget(prefix, opts = {}) {
+    const cb = document.getElementById(`${prefix}-overlay-enabled`);
+    const fields = document.getElementById(`${prefix}-overlay-fields`);
+    if (!cb || !fields) return;
+
+    // Toggle visibility
+    cb.addEventListener('change', () => {
+        fields.style.display = cb.checked ? 'block' : 'none';
+        if (cb.checked && !_overlayFontsLoaded) loadOverlayFonts();
+        if (opts.onToggle) opts.onToggle(cb.checked);
+    });
+
+    // Position grid clicks
+    const grid = document.getElementById(`${prefix}-overlay-grid`);
+    if (grid) {
+        grid.querySelectorAll('.pos-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                grid.querySelectorAll('.pos-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                if (opts.onChange) opts.onChange();
+            });
+        });
+    }
+
+    // Opacity label sync
+    const opSlider = document.getElementById(`${prefix}-overlay-bg-opacity`);
+    const opLabel = document.getElementById(`${prefix}-overlay-opacity-label`);
+    if (opSlider && opLabel) {
+        opSlider.addEventListener('input', () => { opLabel.textContent = opSlider.value + '%'; });
+    }
+}
+
+/** Read overlay config from any widget by prefix. Returns config object or null. */
+function readOverlayConfig(prefix) {
+    const cb = document.getElementById(`${prefix}-overlay-enabled`);
+    if (!cb || !cb.checked) return null;
+    const text = document.getElementById(`${prefix}-overlay-text`)?.value || '';
+    if (!text.trim()) return null;
+    const grid = document.getElementById(`${prefix}-overlay-grid`);
+    const activeBtn = grid?.querySelector('.pos-btn.active');
+    return {
+        enabled: true,
+        text,
+        font: document.getElementById(`${prefix}-overlay-font`)?.value || 'DejaVu Sans',
+        font_size: parseInt(document.getElementById(`${prefix}-overlay-size`)?.value) || 48,
+        bold: document.getElementById(`${prefix}-overlay-bold`)?.checked || false,
+        color: document.getElementById(`${prefix}-overlay-color`)?.value || '#FFFFFF',
+        position: activeBtn?.dataset.pos || 'bottom-left',
+        background: document.getElementById(`${prefix}-overlay-bg`)?.checked !== false,
+        background_color: document.getElementById(`${prefix}-overlay-bg-color`)?.value || '#000000',
+        background_opacity: parseInt(document.getElementById(`${prefix}-overlay-bg-opacity`)?.value || '50') / 100
+    };
+}
+
+/** Write overlay config into any widget by prefix. */
+function writeOverlayConfig(prefix, config) {
+    if (!config) return;
+    const el = id => document.getElementById(`${prefix}-overlay-${id}`);
+    if (el('enabled')) el('enabled').checked = !!config.enabled;
+    const fields = document.getElementById(`${prefix}-overlay-fields`);
+    if (fields) fields.style.display = config.enabled ? 'block' : 'none';
+    if (el('text')) el('text').value = config.text || '';
+    if (el('font')) el('font').value = config.font || 'DejaVu Sans';
+    if (el('size')) el('size').value = config.font_size || 48;
+    if (el('bold')) el('bold').checked = !!config.bold;
+    if (el('color')) el('color').value = config.color || '#FFFFFF';
+    if (el('bg')) el('bg').checked = config.background !== false;
+    if (el('bg-color')) el('bg-color').value = config.background_color || '#000000';
+    if (el('bg-opacity')) el('bg-opacity').value = Math.round((config.background_opacity ?? 0.5) * 100);
+    const opLabel = document.getElementById(`${prefix}-overlay-opacity-label`);
+    if (opLabel) opLabel.textContent = Math.round((config.background_opacity ?? 0.5) * 100) + '%';
+    // Set position
+    const grid = document.getElementById(`${prefix}-overlay-grid`);
+    if (grid && config.position) {
+        grid.querySelectorAll('.pos-btn').forEach(b => b.classList.remove('active'));
+        const match = grid.querySelector(`[data-pos="${config.position}"]`);
+        if (match) match.classList.add('active');
+    }
+}
+
+/** Mount an overlay widget into a container element. */
+function mountOverlayWidget(containerId, prefix, opts = {}) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = generateOverlayHTML(prefix, opts);
+    initOverlayWidget(prefix, opts);
+}
+
+async function loadOverlayFonts() {
+    try {
+        _overlayFontsCache = await apiRequest('/videos/fonts');
+        // Update all font selects currently in the DOM
+        document.querySelectorAll('[id$="-overlay-font"]').forEach(sel => {
+            sel.innerHTML = _overlayFontsCache.map(f =>
+                `<option value="${f.name}">${f.name}</option>`
+            ).join('');
+        });
+        _overlayFontsLoaded = true;
+    } catch (e) {
+        console.error('Failed to load fonts:', e);
+    }
+}
+
+// ─── Build Modal Overlay (with live preview) ───
+
+function initBuildOverlay() {
+    mountOverlayWidget('build-overlay-container', 'build', {
+        label: 'Text Overlay',
+        onchange: 'debouncedOverlayPreview()',
+        onToggle: (enabled) => { if (enabled) debouncedOverlayPreview(); else resetOverlayPreview(); },
+        onChange: () => debouncedOverlayPreview(),
+    });
+}
+
+function debouncedOverlayPreview() {
+    clearTimeout(_overlayPreviewTimeout);
+    _overlayPreviewTimeout = setTimeout(updateOverlayPreview, 400);
+    // Sync opacity label
+    const opSlider = document.getElementById('build-overlay-bg-opacity');
+    const opLabel = document.getElementById('build-overlay-opacity-label');
+    if (opSlider && opLabel) opLabel.textContent = opSlider.value + '%';
+}
+
+async function updateOverlayPreview() {
+    const config = readOverlayConfig('build');
+    const imagePath = window._overlayPreviewPath;
+    if (!config || !imagePath) { resetOverlayPreview(); return; }
+
+    try {
+        const resp = await fetch(`${API_BASE}/videos/text-overlay-preview`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Referer': window.location.href },
+            body: JSON.stringify({ image_path: imagePath, config, job_name: window._overlayJobName || 'Sample Job' })
+        });
+        if (!resp.ok) throw new Error('Preview failed');
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const img = document.getElementById('job-preview-img');
+        if (img) {
+            if (img._overlayUrl) URL.revokeObjectURL(img._overlayUrl);
+            img._overlayUrl = url;
+            img.src = url;
+        }
+    } catch (e) { console.error('Overlay preview error:', e); }
+}
+
+function resetOverlayPreview() {
+    const img = document.getElementById('job-preview-img');
+    if (img) {
+        if (img._overlayUrl) {
+            URL.revokeObjectURL(img._overlayUrl);
+            img._overlayUrl = null;
+        }
+        // Restore original thumbnail
+        if (img._originalSrc) {
+            img.src = img._originalSrc;
+        }
+    }
+}
+
+// ─── Auto-Build Overlay (create-job and edit-job) ───
+
+let _createOverlayPreviewTimeout = null;
+
+function initCreateJobOverlay() {
+    const triggerCreatePreview = () => {
+        clearTimeout(_createOverlayPreviewTimeout);
+        _createOverlayPreviewTimeout = setTimeout(() => updateOverlayFromUrl('create-ab'), 300);
+    };
+
+    mountOverlayWidget('create-ab-overlay-container', 'create-ab', {
+        label: 'Text Overlay',
+        showPreview: true,
+        onchange: '_createAbOverlayChanged()',
+        onToggle: (enabled) => { if (enabled) fetchOverlayPreviewFromUrl('create-ab'); },
+        onChange: () => triggerCreatePreview(),
+    });
+    window._createAbOverlayChanged = triggerCreatePreview;
+}
+
+let _editOverlayPreviewTimeout = null;
+
+function initEditJobOverlay(job) {
+    // Store job context for preview
+    window._editOverlayJob = job;
+
+    const triggerEditPreview = () => {
+        clearTimeout(_editOverlayPreviewTimeout);
+        _editOverlayPreviewTimeout = setTimeout(() => updateGenericOverlayPreview('edit-ab', job), 300);
+    };
+
+    mountOverlayWidget('edit-ab-overlay-container', 'edit-ab', {
+        label: 'Text Overlay',
+        showPreview: true,
+        onchange: '_editAbOverlayChanged()',
+        onToggle: (enabled) => { if (enabled) triggerEditPreview(); },
+        onChange: () => triggerEditPreview(),
+    });
+
+    // Expose for inline onchange attr
+    window._editAbOverlayChanged = triggerEditPreview;
+
+    // Load existing config from job
+    if (job.auto_build_text_overlay) {
+        try {
+            const config = JSON.parse(job.auto_build_text_overlay);
+            if (config) writeOverlayConfig('edit-ab', config);
+        } catch (e) {}
+    }
+
+    // Load preview image from latest capture
+    loadOverlayPreviewImage('edit-ab', job);
+}
+
+async function loadOverlayPreviewImage(prefix, job) {
+    const img = document.getElementById(`${prefix}-overlay-preview-img`);
+    const placeholder = document.getElementById(`${prefix}-overlay-preview-placeholder`);
+    if (!img) return;
+
+    try {
+        // Use the job's latest capture for the preview
+        const capsData = await apiRequest('/captures/', { query: { job_id: job.id, page_size: 1, sort_order: 'desc' } });
+        if (capsData.captures && capsData.captures.length > 0) {
+            const cap = capsData.captures[0];
+            img._filePath = cap.file_path;
+            img._originalSrc = `${API_BASE}/captures/${cap.id}/thumbnail`;
+            img.src = img._originalSrc;
+            img.style.display = 'block';
+            if (placeholder) placeholder.style.display = 'none';
+            // If overlay is already enabled, render preview
+            const cb = document.getElementById(`${prefix}-overlay-enabled`);
+            if (cb && cb.checked) {
+                setTimeout(() => updateGenericOverlayPreview(prefix, job), 100);
+            }
+        } else {
+            // No captures — try to fetch from the job's URL
+            showOverlayPreviewPlaceholder(prefix, 'No captures yet', job.url);
+        }
+    } catch (e) {
+        showOverlayPreviewPlaceholder(prefix, 'Preview unavailable');
+    }
+}
+
+function showOverlayPreviewPlaceholder(prefix, message, streamUrl) {
+    const placeholder = document.getElementById(`${prefix}-overlay-preview-placeholder`);
+    if (!placeholder) return;
+    const refreshBtn = streamUrl
+        ? `<button type="button" class="btn btn-secondary" style="font-size:0.75rem; padding:0.3rem 0.6rem; margin-top:0.4rem;" onclick="fetchOverlayPreviewFromUrl('${prefix}')">
+               Fetch Preview
+           </button>`
+        : '';
+    placeholder.innerHTML = `
+        <div style="text-align:center;">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4; margin-bottom:0.25rem;">
+                <rect x="2" y="2" width="20" height="20" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <path d="m21 15-5-5L5 21"/>
+            </svg>
+            <div style="font-size:0.8rem;">${message}</div>
+            ${refreshBtn}
+        </div>`;
+}
+
+async function fetchOverlayPreviewFromUrl(prefix) {
+    const placeholder = document.getElementById(`${prefix}-overlay-preview-placeholder`);
+    const img = document.getElementById(`${prefix}-overlay-preview-img`);
+    if (!img) return;
+
+    // Determine URL source based on context
+    let url;
+    if (prefix === 'create-ab') {
+        url = document.getElementById('job_url')?.value;
+    } else if (prefix === 'edit-ab') {
+        url = document.getElementById('edit_url')?.value;
+    }
+    if (!url) {
+        showOverlayPreviewPlaceholder(prefix, 'Enter a stream URL first');
+        return;
+    }
+
+    if (placeholder) placeholder.innerHTML = '<div style="font-size:0.8rem; color:var(--text-secondary);">Fetching…</div>';
+
+    try {
+        const result = await apiRequest('/jobs/test-url', { method: 'POST', query: { url } });
+        if (result.success && result.image_data) {
+            img._base64 = result.image_data;
+            img._originalSrc = result.image_data;
+            img.src = result.image_data;
+            img.style.display = 'block';
+            if (placeholder) placeholder.style.display = 'none';
+            // If overlay is enabled, render with overlay
+            const cb = document.getElementById(`${prefix}-overlay-enabled`);
+            if (cb && cb.checked) {
+                setTimeout(() => updateOverlayFromUrl(prefix), 100);
+            }
+        } else {
+            showOverlayPreviewPlaceholder(prefix, 'Could not fetch preview', url);
+        }
+    } catch (e) {
+        showOverlayPreviewPlaceholder(prefix, 'Could not fetch preview', url);
+    }
+}
+
+async function updateOverlayFromUrl(prefix) {
+    const config = readOverlayConfig(prefix);
+    const img = document.getElementById(`${prefix}-overlay-preview-img`);
+    if (!img) return;
+    if (!config) {
+        if (img._originalSrc) img.src = img._originalSrc;
+        if (img._overlayUrl) { URL.revokeObjectURL(img._overlayUrl); img._overlayUrl = null; }
+        return;
+    }
+    // Need either file_path or base64
+    const hasFile = img._filePath;
+    const hasBase64 = img._base64;
+    if (!hasFile && !hasBase64) return;
+
+    const jobName = prefix === 'create-ab'
+        ? (document.getElementById('job_name')?.value || 'New Job')
+        : (window._editOverlayJob?.name || 'Sample Job');
+
+    try {
+        const body = { config, job_name: jobName };
+        if (hasFile) body.image_path = img._filePath;
+        else body.image_data = img._base64;
+
+        const resp = await fetch(`${API_BASE}/videos/text-overlay-preview`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Referer': window.location.href },
+            body: JSON.stringify(body)
+        });
+        if (!resp.ok) throw new Error('Preview failed');
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        if (img._overlayUrl) URL.revokeObjectURL(img._overlayUrl);
+        img._overlayUrl = url;
+        img.src = url;
+    } catch (e) { console.error('Overlay preview error:', e); }
+}
+
+async function updateGenericOverlayPreview(prefix, job) {
+    const config = readOverlayConfig(prefix);
+    const img = document.getElementById(`${prefix}-overlay-preview-img`);
+    if (!img) return;
+    // Delegate to URL-based previewer if we have base64 but no file
+    if (!img._filePath && img._base64) {
+        return updateOverlayFromUrl(prefix);
+    }
+    if (!img._filePath) return;
+    if (!config) {
+        // Restore original
+        if (img._originalSrc) img.src = img._originalSrc;
+        if (img._overlayUrl) { URL.revokeObjectURL(img._overlayUrl); img._overlayUrl = null; }
+        return;
+    }
+    try {
+        const resp = await fetch(`${API_BASE}/videos/text-overlay-preview`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Referer': window.location.href },
+            body: JSON.stringify({ image_path: img._filePath, config, job_name: job.name || 'Sample Job' })
+        });
+        if (!resp.ok) throw new Error('Preview failed');
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        if (img._overlayUrl) URL.revokeObjectURL(img._overlayUrl);
+        img._overlayUrl = url;
+        img.src = url;
+    } catch (e) { console.error('Edit overlay preview error:', e); }
+}
+
 async function processVideo(event) {
     event.preventDefault();
     
@@ -2070,28 +2531,19 @@ async function processVideo(event) {
         quality: document.getElementById('video_quality').value,
         output_path: document.getElementById('video_output_path').value.trim() || null,
         start_time: useRange ? datetimeLocalToISO(document.getElementById('video_start_datetime').value) : null,
-        end_time: useRange ? datetimeLocalToISO(document.getElementById('video_end_datetime').value) : null
+        end_time: useRange ? datetimeLocalToISO(document.getElementById('video_end_datetime').value) : null,
+        text_overlay: readOverlayConfig('build')
     };
     
     try {
-        const response = await fetch(`${API_BASE}/videos/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formData)
-        });
-        
-        if (response.ok) {
-            closeModal('process-video-modal');
-            document.getElementById('process-video-form').reset();
-            switchView('videos');
-            showNotification('Video processing started');
-        } else {
-            const error = await response.json();
-            showNotification(`Failed to start processing: ${error.detail || 'Unknown error'}`, 'error');
-        }
+        await apiRequest('/videos/', { method: 'POST', body: formData });
+        closeModal('process-video-modal');
+        document.getElementById('process-video-form').reset();
+        switchView('videos');
+        showNotification('Video processing started');
     } catch (error) {
         console.error('Failed to process video:', error);
-        showNotification('Failed to start video processing', 'error');
+        showNotification(`Failed to start processing: ${error.message || 'Unknown error'}`, 'error');
     }
 }
 
@@ -2272,6 +2724,18 @@ async function duplicateJob(jobId) {
             document.getElementById('auto_build_fps').value = job.auto_build_fps || 30;
             document.getElementById('auto_build_quality').value = job.auto_build_quality || 'medium';
             document.getElementById('auto_build_resolution').value = job.auto_build_resolution || '1920x1080';
+            
+            // Copy text overlay settings
+            if (job.auto_build_text_overlay) {
+                try {
+                    const overlayConfig = JSON.parse(job.auto_build_text_overlay);
+                    // Mount widget first, then populate
+                    initCreateJobOverlay();
+                    writeOverlayConfig('create-ab', overlayConfig);
+                } catch (e) {
+                    console.warn('Failed to parse auto_build_text_overlay for duplicate:', e);
+                }
+            }
         } else {
             abEnabled.checked = false;
             abFields.style.display = 'none';
@@ -2665,22 +3129,13 @@ window.addEventListener('beforeunload', () => {
 let maintenanceData = null;
 
 async function manualCapture(jobId, jobName) {
-    showConfirm(
+    confirmAction(
         `Take a manual snapshot for "${jobName}"? This will not affect the scheduled capture timing.`,
-        async (confirmed) => {
-            if (!confirmed) return;
-            
+        async () => {
             showNotification('Capturing snapshot...', 'info');
             
             try {
-                const response = await fetch(`${API_BASE}/jobs/${jobId}/capture`, {
-                    method: 'POST'
-                });
-                
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.detail || 'Capture failed');
-                }
+                await apiRequest(`/jobs/${jobId}/capture`, { method: 'POST' });
                 
                 showNotification('Snapshot captured successfully!', 'success');
                 
@@ -2715,15 +3170,7 @@ async function performMaintenanceScan(jobId, jobName) {
     modal.classList.add('active');
     
     try {
-        const response = await fetch(`${API_BASE}/jobs/${jobId}/maintenance/scan`, {
-            method: 'POST'
-        });
-        
-        if (!response.ok) {
-            throw new Error('Scan failed');
-        }
-        
-        maintenanceData = await response.json();
+        maintenanceData = await apiRequest(`/jobs/${jobId}/maintenance/scan`, { method: 'POST' });
         displayMaintenanceResults(jobId, jobName);
         
     } catch (error) {
@@ -2870,13 +3317,9 @@ function confirmMaintenanceSubmit(jobId, jobName) {
     if (data.orphaned_count > 0) parts.push(`import ${data.orphaned_count} file(s) with no database record`);
     const summary = parts.join(' and ');
     
-    showConfirm(
+    confirmAction(
         `This will ${summary}. This cannot be undone.`,
-        async (confirmed) => {
-            if (confirmed) {
-                await performMaintenanceActions(jobId, jobName);
-            }
-        }
+        () => performMaintenanceActions(jobId, jobName)
     );
 }
 
@@ -2897,30 +3340,18 @@ async function performMaintenanceActions(jobId, jobName) {
         // Perform cleanup if there are missing files
         if (data.missing_count > 0) {
             const captureIds = data.missing_files.map(f => f.id);
-            const response = await fetch(`${API_BASE}/jobs/${jobId}/maintenance/cleanup`, {
+            cleanupResult = await apiRequest(`/jobs/${jobId}/maintenance/cleanup`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ capture_ids: captureIds })
+                body: { capture_ids: captureIds }
             });
-            
-            if (!response.ok) {
-                throw new Error('Cleanup failed');
-            }
-            cleanupResult = await response.json();
         }
         
         // Perform import if there are orphaned files
         if (data.orphaned_count > 0) {
-            const response = await fetch(`${API_BASE}/jobs/${jobId}/maintenance/import`, {
+            importResult = await apiRequest(`/jobs/${jobId}/maintenance/import`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orphaned_files: data.orphaned_files })
+                body: { orphaned_files: data.orphaned_files }
             });
-            
-            if (!response.ok) {
-                throw new Error('Import failed');
-            }
-            importResult = await response.json();
         }
         
         // Show success with combined results
@@ -2985,31 +3416,22 @@ async function performMaintenanceActions(jobId, jobName) {
 }
 
 function confirmMaintenanceCleanup(jobId, jobName) {
-    showConfirm(
+    confirmAction(
         `Are you absolutely sure you want to remove ${maintenanceData.missing_count} database record(s) for missing files? This action cannot be undone.`,
-        async (confirmed) => {
-            if (confirmed) {
-                await performMaintenanceCleanup(jobId, jobName);
-            }
-        }
+        () => performMaintenanceCleanup(jobId, jobName)
     );
 }
 
 function confirmMaintenanceImport(jobId, jobName) {
-    showConfirm(
+    confirmAction(
         `Import ${maintenanceData.orphaned_count} orphaned file(s) into the database? Timestamps will be extracted from the files.`,
-        async (confirmed) => {
-            if (confirmed) {
-                await performMaintenanceImport(jobId, jobName);
-            }
-        }
+        () => performMaintenanceImport(jobId, jobName)
     );
 }
 
 async function performMaintenanceImport(jobId, jobName) {
     const content = document.getElementById('maintenance-content');
     
-    // Show importing message
     content.innerHTML = `
         <div style="text-align: center; padding: 2rem;">
             <div style="font-size: 2rem; margin-bottom: 1rem;">📥</div>
@@ -3018,21 +3440,10 @@ async function performMaintenanceImport(jobId, jobName) {
     `;
     
     try {
-        const response = await fetch(`${API_BASE}/jobs/${jobId}/maintenance/import`, {
+        const result = await apiRequest(`/jobs/${jobId}/maintenance/import`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                orphaned_files: maintenanceData.orphaned_files
-            })
+            body: { orphaned_files: maintenanceData.orphaned_files }
         });
-        
-        if (!response.ok) {
-            throw new Error('Import failed');
-        }
-        
-        const result = await response.json();
         
         // Show success
         content.innerHTML = `
@@ -3088,21 +3499,10 @@ async function performMaintenanceCleanup(jobId, jobName) {
     try {
         const captureIds = maintenanceData.missing_files.map(f => f.id);
         
-        const response = await fetch(`${API_BASE}/jobs/${jobId}/maintenance/cleanup`, {
+        const result = await apiRequest(`/jobs/${jobId}/maintenance/cleanup`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                capture_ids: captureIds
-            })
+            body: { capture_ids: captureIds }
         });
-        
-        if (!response.ok) {
-            throw new Error('Cleanup failed');
-        }
-        
-        const result = await response.json();
         
         // Show success
         content.innerHTML = `
@@ -3608,11 +4008,7 @@ async function loadSettings() {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/settings/api-key`);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
+        const data = await apiRequest('/settings/api-key');
         apiKeyInput.value = data.api_key;
     } catch (error) {
         console.error('Failed to load settings:', error);
@@ -3659,26 +4055,19 @@ async function copyApiKey() {
 }
 
 async function regenerateApiKey() {
-    showConfirm('Are you sure you want to regenerate the API key? This will invalidate the current key and any external integrations using it will need to be updated.', async (confirmed) => {
-        if (!confirmed) return;
-        
-        try {
-            const response = await fetch(`${API_BASE}/settings/api-key/regenerate`, {
-                method: 'POST'
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to regenerate API key');
+    confirmAction(
+        'Are you sure you want to regenerate the API key? This will invalidate the current key and any external integrations using it will need to be updated.',
+        async () => {
+            try {
+                const data = await apiRequest('/settings/api-key/regenerate', { method: 'POST' });
+                document.getElementById('api-key-display').value = data.api_key;
+                showNotification('API key regenerated successfully', 'success');
+            } catch (error) {
+                console.error('Failed to regenerate API key:', error);
+                showNotification('Failed to regenerate API key', 'error');
             }
-            
-            const data = await response.json();
-            document.getElementById('api-key-display').value = data.api_key;
-            showNotification('API key regenerated successfully', 'success');
-        } catch (error) {
-            console.error('Failed to regenerate API key:', error);
-            showNotification('Failed to regenerate API key', 'error');
         }
-    });
+    );
 }
 
 // Webhook Settings Functions
@@ -3961,11 +4350,9 @@ function displayOrphanedResults(data) {
 }
 
 async function deleteOrphanedGroup(type, folderPath, jobId, jobName) {
-    showConfirm(
+    confirmAction(
         `Delete all orphaned captures from "${jobName}"? This will permanently remove ${type === 'database' ? 'database records' : type === 'both' ? 'files and database records' : 'files from disk'}.`,
-        async (confirmed) => {
-            if (!confirmed) return;
-            
+        async () => {
             try {
                 const body = {};
                 if (folderPath) body.folders = [folderPath];
@@ -3994,11 +4381,9 @@ async function deleteOrphanedGroup(type, folderPath, jobId, jobName) {
 }
 
 async function deleteAllOrphanedCaptures() {
-    showConfirm(
+    confirmAction(
         'Delete ALL orphaned captures? This will permanently remove all orphaned files and database records.',
-        async (confirmed) => {
-            if (!confirmed) return;
-            
+        async () => {
             try {
                 const response = await apiRequest('/captures/orphaned/cleanup', {
                     method: 'POST',
@@ -4314,9 +4699,7 @@ function closeCapturePreview() {
 function deleteSingleCapture() {
     if (!capturesState.currentCaptureId) return;
     
-    showConfirm('Are you sure you want to delete this capture? This action cannot be undone.', async (confirmed) => {
-        if (!confirmed) return;
-        
+    confirmAction('Are you sure you want to delete this capture? This action cannot be undone.', async () => {
         try {
             await apiRequest(`/captures/${capturesState.currentCaptureId}`, { method: 'DELETE' });
             showNotification('Capture deleted successfully', 'success');
@@ -4333,11 +4716,7 @@ function deleteSelectedCaptures() {
     const count = capturesState.selectedCaptures.size;
     if (count === 0) return;
     
-    const message = `Are you sure you want to delete ${count} capture${count > 1 ? 's' : ''}? This action cannot be undone.`;
-    
-    showConfirm(message, async (confirmed) => {
-        if (!confirmed) return;
-        
+    confirmAction(`Are you sure you want to delete ${count} capture${count > 1 ? 's' : ''}? This action cannot be undone.`, async () => {
         try {
             const captureIds = Array.from(capturesState.selectedCaptures);
             const result = await apiRequest('/captures/delete-multiple', {

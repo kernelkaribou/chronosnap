@@ -9,6 +9,7 @@ import string
 import logging
 from . import config
 from .utils import get_now, to_iso
+from .helpers.db_helpers import ensure_column
 
 logger = logging.getLogger(__name__)
 
@@ -113,60 +114,33 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_videos_job_id ON processed_videos(job_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)")
         
-        # Migration: Add warning_message column if it doesn't exist
-        cursor.execute("PRAGMA table_info(jobs)")
-        columns = [col[1] for col in cursor.fetchall()]
-        if 'warning_message' not in columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN warning_message TEXT")
-        
-        # Migration: Add time window columns if they don't exist
-        if 'time_window_enabled' not in columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN time_window_enabled INTEGER DEFAULT 0")
-        if 'time_window_start' not in columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN time_window_start TEXT")
-        if 'time_window_end' not in columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN time_window_end TEXT")
-        
-        # Migration: Add next_scheduled_capture_at column if it doesn't exist
-        if 'next_scheduled_capture_at' not in columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN next_scheduled_capture_at TEXT")
-        
-        # Migration: Add last_captured_at column if it doesn't exist
-        if 'last_captured_at' not in columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN last_captured_at TEXT")
-        
-        # Migration: Add warning_threshold column if it doesn't exist
-        if 'warning_threshold' not in columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN warning_threshold INTEGER DEFAULT 3")
-        
-        # Migration: Add auto-build columns if they don't exist
-        if 'auto_build_enabled' not in columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_enabled INTEGER DEFAULT 0")
-        if 'auto_build_interval_days' not in columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_interval_days INTEGER DEFAULT 7")
+        # Migrations: jobs table columns
+        ensure_column(cursor, 'jobs', 'warning_message', 'TEXT')
+        ensure_column(cursor, 'jobs', 'time_window_enabled', 'INTEGER DEFAULT 0')
+        ensure_column(cursor, 'jobs', 'time_window_start', 'TEXT')
+        ensure_column(cursor, 'jobs', 'time_window_end', 'TEXT')
+        ensure_column(cursor, 'jobs', 'next_scheduled_capture_at', 'TEXT')
+        ensure_column(cursor, 'jobs', 'last_captured_at', 'TEXT')
+        ensure_column(cursor, 'jobs', 'warning_threshold', 'INTEGER DEFAULT 3')
+        ensure_column(cursor, 'jobs', 'auto_build_enabled', 'INTEGER DEFAULT 0')
+        ensure_column(cursor, 'jobs', 'auto_build_interval_days', 'INTEGER DEFAULT 7')
         # Migration: rename interval_days to interval_hours
-        if 'auto_build_interval_hours' not in columns:
+        cursor.execute("PRAGMA table_info(jobs)")
+        job_cols = [col[1] for col in cursor.fetchall()]
+        if 'auto_build_interval_hours' not in job_cols:
             cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_interval_hours INTEGER DEFAULT 168")
-            # Migrate existing values: days * 24
             cursor.execute("UPDATE jobs SET auto_build_interval_hours = auto_build_interval_days * 24 WHERE auto_build_interval_days IS NOT NULL")
-        if 'auto_build_fps' not in columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_fps INTEGER DEFAULT 30")
-        if 'auto_build_quality' not in columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_quality TEXT DEFAULT 'medium'")
-        if 'auto_build_resolution' not in columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_resolution TEXT DEFAULT '1920x1080'")
-        if 'last_auto_build_at' not in columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN last_auto_build_at TEXT")
-        if 'auto_build_in_progress' not in columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN auto_build_in_progress INTEGER DEFAULT 0")
+            logger.info("Migration: added jobs.auto_build_interval_hours")
+        ensure_column(cursor, 'jobs', 'auto_build_fps', 'INTEGER DEFAULT 30')
+        ensure_column(cursor, 'jobs', 'auto_build_quality', "TEXT DEFAULT 'medium'")
+        ensure_column(cursor, 'jobs', 'auto_build_resolution', "TEXT DEFAULT '1920x1080'")
+        ensure_column(cursor, 'jobs', 'last_auto_build_at', 'TEXT')
+        ensure_column(cursor, 'jobs', 'auto_build_in_progress', 'INTEGER DEFAULT 0')
+        ensure_column(cursor, 'jobs', 'auto_build_text_overlay', 'TEXT')
         
-        # Migration: Add start_time and end_time columns to processed_videos if they don't exist
-        cursor.execute("PRAGMA table_info(processed_videos)")
-        video_columns = [col[1] for col in cursor.fetchall()]
-        if 'start_time' not in video_columns:
-            cursor.execute("ALTER TABLE processed_videos ADD COLUMN start_time TEXT")
-        if 'end_time' not in video_columns:
-            cursor.execute("ALTER TABLE processed_videos ADD COLUMN end_time TEXT")
+        # Migrations: processed_videos table columns
+        ensure_column(cursor, 'processed_videos', 'start_time', 'TEXT')
+        ensure_column(cursor, 'processed_videos', 'end_time', 'TEXT')
         
         # Migration: Change processed_videos FK from CASCADE to SET NULL
         # SQLite doesn't support ALTER CONSTRAINT, so we need to recreate the table
@@ -217,37 +191,27 @@ def init_db():
             cursor.execute("PRAGMA foreign_keys = ON")
             logger.info("Migration complete: processed_videos FK updated to SET NULL")
         
-        # Migration: Add job_name and thumbnail_path columns to processed_videos
+        # Migration: Add job_name column with backfill (special case)
         cursor.execute("PRAGMA table_info(processed_videos)")
         video_columns = [col[1] for col in cursor.fetchall()]
         if 'job_name' not in video_columns:
             cursor.execute("ALTER TABLE processed_videos ADD COLUMN job_name TEXT")
-            # Backfill job_name from jobs table for existing videos
             cursor.execute("""
                 UPDATE processed_videos SET job_name = (
                     SELECT j.name FROM jobs j WHERE j.id = processed_videos.job_id
                 ) WHERE job_id IS NOT NULL AND job_name IS NULL
             """)
-            logger.info("Migration complete: added job_name column to processed_videos")
-        if 'thumbnail_path' not in video_columns:
-            cursor.execute("ALTER TABLE processed_videos ADD COLUMN thumbnail_path TEXT")
-            logger.info("Migration complete: added thumbnail_path column to processed_videos")
-        if 'build_source' not in video_columns:
-            cursor.execute("ALTER TABLE processed_videos ADD COLUMN build_source TEXT DEFAULT 'manual'")
-            logger.info("Migration complete: added build_source column to processed_videos")
-        if 'error_message' not in video_columns:
-            cursor.execute("ALTER TABLE processed_videos ADD COLUMN error_message TEXT")
-            logger.info("Migration complete: added error_message column to processed_videos")
-        if 'is_favorite' not in video_columns:
-            cursor.execute("ALTER TABLE processed_videos ADD COLUMN is_favorite BOOLEAN DEFAULT 0")
-            logger.info("Migration complete: added is_favorite column to processed_videos")
+            logger.info("Migration: added processed_videos.job_name with backfill")
         
-        # Migration: Add is_favorite column to captures
-        cursor.execute("PRAGMA table_info(captures)")
-        capture_columns = {row[1] for row in cursor.fetchall()}
-        if 'is_favorite' not in capture_columns:
-            cursor.execute("ALTER TABLE captures ADD COLUMN is_favorite BOOLEAN DEFAULT 0")
-            logger.info("Migration complete: added is_favorite column to captures")
+        # Remaining processed_videos columns
+        ensure_column(cursor, 'processed_videos', 'thumbnail_path', 'TEXT')
+        ensure_column(cursor, 'processed_videos', 'build_source', "TEXT DEFAULT 'manual'")
+        ensure_column(cursor, 'processed_videos', 'error_message', 'TEXT')
+        ensure_column(cursor, 'processed_videos', 'is_favorite', 'BOOLEAN DEFAULT 0')
+        ensure_column(cursor, 'processed_videos', 'text_overlay', 'TEXT')
+        
+        # Migrations: captures table columns
+        ensure_column(cursor, 'captures', 'is_favorite', 'BOOLEAN DEFAULT 0')
         
         # Initialize API key if not exists
         cursor.execute("SELECT value FROM settings WHERE key = 'api_key'")
