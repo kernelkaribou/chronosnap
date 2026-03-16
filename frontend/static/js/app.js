@@ -3685,12 +3685,21 @@ async function loadWebhookSettings() {
 }
 
 async function saveWebhookSettings() {
+    const url = document.getElementById('webhook-url').value.trim();
+    const template = document.getElementById('webhook-template').value.trim();
+    const defaultTemplate = '{"title": "{title}", "message": "{message}"}';
+
     const settings = {
         webhook_enabled: document.getElementById('webhook-enabled').checked,
-        webhook_url: document.getElementById('webhook-url').value.trim(),
+        webhook_url: url,
         webhook_failure_threshold: parseInt(document.getElementById('webhook-threshold').value) || 3,
-        webhook_payload_template: document.getElementById('webhook-template').value,
+        webhook_payload_template: template || defaultTemplate,
     };
+
+    // If template was empty, update the textarea to show the default
+    if (!template) {
+        document.getElementById('webhook-template').value = defaultTemplate;
+    }
 
     // Validate JSON template
     try {
