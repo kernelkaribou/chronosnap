@@ -2555,17 +2555,17 @@ function generateOverlayHTML(prefix, opts = {}) {
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Text</label>
                             <input type="text" id="${prefix}-overlay-text" class="form-control" value="{job_name}" placeholder="{job_name}"${inputEvent}>
                         </div>
-                        <div style="flex: 0 0 159px;">
+                        <div style="flex: 0 0 163px;">
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Font</label>
                             <select id="${prefix}-overlay-font" class="form-control"${inputEvent}>${fontOpts}</select>
                         </div>
-                        <div style="flex:0 0 54px;">
+                        <div style="flex:0 0 56px;">
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Size</label>
                             <input type="number" id="${prefix}-overlay-size" class="form-control" value="5" min="1" max="20" step="1"${inputEvent}>
                         </div>
                         <div style="flex:0 0 36px;">
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Bold</label>
-                            <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr} style="margin-top:10px; margin-left:4px;">
+                            <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr} style="margin-top:10px; margin-left:6px;">
                         </div>
                     </div>
                     <small style="color: var(--text-secondary); font-size:0.6rem;"><code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code></small>
