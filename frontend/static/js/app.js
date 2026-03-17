@@ -3431,11 +3431,15 @@ async function loadImportBrowse(path) {
         document.getElementById('import-browse-path').textContent = _importBrowsePath;
 
         const list = document.getElementById('import-browse-list');
+        const scanBtn = document.getElementById('import-scan-btn');
+        
         if (!result.entries.length) {
             list.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">Empty directory</div>';
+            scanBtn.disabled = true;
             return;
         }
 
+        scanBtn.disabled = false;
         list.innerHTML = result.entries.map(e => {
             const icon = e.type === 'folder' ? '📁' :
                          e.type === 'image' ? '🖼️' :
@@ -3454,6 +3458,7 @@ async function loadImportBrowse(path) {
     } catch (error) {
         document.getElementById('import-browse-list').innerHTML =
             `<div style="padding:1rem;text-align:center;color:var(--danger);font-size:0.85rem;">${escapeHtml(error.message || 'Failed to browse')}</div>`;
+        document.getElementById('import-scan-btn').disabled = true;
     }
 }
 
