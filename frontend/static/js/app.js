@@ -3693,28 +3693,31 @@ async function executeImport() {
     }
 }
 
-// --- Import path settings ---
-let _importPathBackup = '';
+// --- Server path settings ---
+let _pathBackups = { import: '', export: '' };
 
-async function loadImportPath() {
+async function loadServerPaths() {
     try {
         const result = await apiRequest('/import/settings/path');
         document.getElementById('import-path-input').value = result.import_path;
-        _importPathBackup = result.import_path;
+        _pathBackups.import = result.import_path;
         _importBrowsePath = result.import_path;
+        document.getElementById('export-path-input').value = result.export_path || '/exports';
+        _pathBackups.export = result.export_path || '/exports';
     } catch (e) {
         document.getElementById('import-path-input').value = '/imports';
         _importBrowsePath = '/imports';
+        document.getElementById('export-path-input').value = '/exports';
     }
 }
 
-function toggleImportPathEdit(editing) {
-    const input = document.getElementById('import-path-input');
-    const editBtn = document.getElementById('import-path-edit-btn');
-    const saveBtn = document.getElementById('import-path-save-btn');
-    const cancelBtn = document.getElementById('import-path-cancel-btn');
+function togglePathEdit(type, editing) {
+    const input = document.getElementById(`${type}-path-input`);
+    const editBtn = document.getElementById(`${type}-path-edit-btn`);
+    const saveBtn = document.getElementById(`${type}-path-save-btn`);
+    const cancelBtn = document.getElementById(`${type}-path-cancel-btn`);
     if (editing) {
-        _importPathBackup = input.value;
+        _pathBackups[type] = input.value;
         input.removeAttribute('readonly');
         input.style.opacity = '1';
         editBtn.style.display = 'none';
@@ -3722,7 +3725,7 @@ function toggleImportPathEdit(editing) {
         cancelBtn.style.display = '';
         input.focus();
     } else {
-        input.value = _importPathBackup;
+        input.value = _pathBackups[type];
         input.setAttribute('readonly', '');
         input.style.opacity = '0.6';
         editBtn.style.display = '';
@@ -3731,17 +3734,19 @@ function toggleImportPathEdit(editing) {
     }
 }
 
-async function saveImportPath() {
-    const path = document.getElementById('import-path-input').value.trim();
-    if (!path) { showNotification('Import path cannot be empty', 'error'); return; }
+async function saveServerPath(type) {
+    const path = document.getElementById(`${type}-path-input`).value.trim();
+    if (!path) { showNotification(`${type.charAt(0).toUpperCase() + type.slice(1)} path cannot be empty`, 'error'); return; }
     try {
-        await apiRequest('/import/settings/path', { method: 'PUT', body: { import_path: path } });
-        _importPathBackup = path;
-        _importBrowsePath = path;
-        toggleImportPathEdit(false);
-        showNotification('Import path updated', 'success');
+        const endpoint = type === 'import' ? '/import/settings/path' : '/import/settings/export-path';
+        const body = type === 'import' ? { import_path: path } : { export_path: path };
+        await apiRequest(endpoint, { method: 'PUT', body });
+        _pathBackups[type] = path;
+        if (type === 'import') _importBrowsePath = path;
+        togglePathEdit(type, false);
+        showNotification(`${type.charAt(0).toUpperCase() + type.slice(1)} path updated`, 'success');
     } catch (error) {
-        showNotification(error.message || 'Failed to update import path', 'error');
+        showNotification(error.message || `Failed to update ${type} path`, 'error');
     }
 }
 
@@ -5200,7 +5205,7 @@ async function loadSettings() {
     loadWebhookSettings();
     loadTagManager();
     loadSharedVideosList();
-    loadImportPath();
+    loadServerPaths();
     
     // Load version
     try {

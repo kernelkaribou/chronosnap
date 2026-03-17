@@ -316,21 +316,39 @@
                         </div>
                     </div>
 
-                    <!-- Import Path Section -->
+                    <!-- Server Paths Section -->
                     <div class="settings-section">
-                        <h3>Import Path</h3>
-                        <p class="settings-description">Server-side directory the container uses to find files for import. Must be mounted as a Docker volume.</p>
-                        <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.75rem;">
-                            <input type="text" id="import-path-input" class="form-control" style="flex:1;opacity:0.6;" readonly>
-                            <button class="btn-icon" id="import-path-edit-btn" onclick="toggleImportPathEdit(true)" title="Edit">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            </button>
-                            <button class="btn-icon" id="import-path-save-btn" onclick="saveImportPath()" title="Save" style="display:none;color:var(--success);">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                            </button>
-                            <button class="btn-icon" id="import-path-cancel-btn" onclick="toggleImportPathEdit(false)" title="Cancel" style="display:none;color:var(--danger);">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                            </button>
+                        <h3>Server Paths</h3>
+                        <p class="settings-description">Server-side directories the container uses for importing and exporting. Must be mounted as Docker volumes.</p>
+                        <div style="margin-top:0.75rem;">
+                            <label style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Import Path</label>
+                            <div style="display:flex;gap:0.5rem;align-items:center;">
+                                <input type="text" id="import-path-input" class="form-control" style="flex:1;opacity:0.6;" readonly>
+                                <button class="btn-icon" id="import-path-edit-btn" onclick="togglePathEdit('import', true)" title="Edit">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                </button>
+                                <button class="btn-icon" id="import-path-save-btn" onclick="saveServerPath('import')" title="Save" style="display:none;color:var(--success);">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                </button>
+                                <button class="btn-icon" id="import-path-cancel-btn" onclick="togglePathEdit('import', false)" title="Cancel" style="display:none;color:var(--danger);">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div style="margin-top:0.75rem;">
+                            <label style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Export Path</label>
+                            <div style="display:flex;gap:0.5rem;align-items:center;">
+                                <input type="text" id="export-path-input" class="form-control" style="flex:1;opacity:0.6;" readonly>
+                                <button class="btn-icon" id="export-path-edit-btn" onclick="togglePathEdit('export', true)" title="Edit">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                </button>
+                                <button class="btn-icon" id="export-path-save-btn" onclick="saveServerPath('export')" title="Save" style="display:none;color:var(--success);">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                </button>
+                                <button class="btn-icon" id="export-path-cancel-btn" onclick="togglePathEdit('export', false)" title="Cancel" style="display:none;color:var(--danger);">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
 

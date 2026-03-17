@@ -20,6 +20,7 @@ from ..services.capture_scheduler import get_scheduler
 from ..services.maintenance import scan_job_files, cleanup_missing_captures, import_orphaned_files, scan_directory
 from ..services.job_state import calculate_job_state
 from ..services.auto_builder import get_next_auto_build_at
+from ..services.import_service import get_export_path
 from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware
 from ..helpers.db_helpers import get_or_404, fetch_tags_for_jobs, set_job_tags
 from ..helpers.file_helpers import validate_writable_directory
@@ -748,7 +749,7 @@ async def export_job(job_id: int):
         )
     else:
         # Build to disk for large exports
-        export_path = os.path.join(config.DEFAULT_EXPORTS_PATH, zip_name)
+        export_path = os.path.join(get_export_path(), zip_name)
         
         try:
             with zipfile.ZipFile(export_path, 'w', zipfile.ZIP_STORED) as zf:
@@ -781,7 +782,7 @@ async def download_export(job_id: int, file_name: str):
     if '/' in file_name or '\\' in file_name or '..' in file_name:
         raise HTTPException(status_code=400, detail="Invalid file name")
     
-    export_path = os.path.join(config.DEFAULT_EXPORTS_PATH, file_name)
+    export_path = os.path.join(get_export_path(), file_name)
     
     if not os.path.isfile(export_path):
         raise HTTPException(status_code=404, detail="Export file not found")
@@ -800,7 +801,7 @@ async def download_export(job_id: int, file_name: str):
 @router.get("/exports/list")
 async def list_exports():
     """List available export archives in /exports."""
-    exports_dir = config.DEFAULT_EXPORTS_PATH
+    exports_dir = get_export_path()
     if not os.path.isdir(exports_dir):
         return {'exports': []}
     
@@ -823,7 +824,7 @@ async def delete_export(file_name: str):
     if '/' in file_name or '\\' in file_name or '..' in file_name:
         raise HTTPException(status_code=400, detail="Invalid file name")
     
-    export_path = os.path.join(config.DEFAULT_EXPORTS_PATH, file_name)
+    export_path = os.path.join(get_export_path(), file_name)
     
     if not os.path.isfile(export_path):
         raise HTTPException(status_code=404, detail="Export file not found")

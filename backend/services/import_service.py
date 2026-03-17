@@ -60,6 +60,21 @@ def get_import_path() -> str:
     return config.DEFAULT_IMPORT_PATH
 
 
+def get_export_path() -> str:
+    """Get the configured export path from settings or default."""
+    try:
+        from ..database import get_db
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM settings WHERE key = 'export_path'")
+            row = cursor.fetchone()
+            if row and row[0]:
+                return row[0]
+    except Exception:
+        pass
+    return config.DEFAULT_EXPORTS_PATH
+
+
 def validate_path_within(path: str, allowed_prefix: str) -> str:
     """Canonicalize a path and verify it's within the allowed prefix.
     
