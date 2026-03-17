@@ -766,15 +766,35 @@ def analyze_staging(session_id: str) -> Dict[str, Any]:
     errors = []
     
     # Walk both raw and extracted directories
+    # First pass: collect all filenames per directory for thumbnail detection
+    all_files_by_dir = {}
     for search_dir in [raw_dir, extracted_dir]:
         if not os.path.isdir(search_dir):
             continue
         for root, dirs, files in os.walk(search_dir):
+            dirs[:] = [d for d in dirs if d != 'thumbs']
+            all_files_by_dir[root] = set(files)
+    
+    for search_dir in [raw_dir, extracted_dir]:
+        if not os.path.isdir(search_dir):
+            continue
+        for root, dirs, files in os.walk(search_dir):
+            dirs[:] = [d for d in dirs if d != 'thumbs']
+            dir_files = all_files_by_dir.get(root, set())
             for filename in files:
                 file_path = os.path.join(root, filename)
                 file_type = detect_file_type(file_path)
                 
                 if file_type == 'image':
+                    # Skip .webp files that are thumbnail companions of a full-size image
+                    base, ext = os.path.splitext(filename)
+                    if ext.lower() == '.webp':
+                        primary_exts = ['.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp']
+                        has_primary = any((base + pe) in dir_files for pe in primary_exts)
+                        if has_primary:
+                            logger.debug(f"Skipping thumbnail companion: {filename}")
+                            continue
+                    
                     try:
                         ts = extract_timestamp_from_file(file_path)
                         images.append({

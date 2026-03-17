@@ -273,8 +273,8 @@ async def scan_import_path(request: ScanRequest):
         elif os.path.isdir(real_path):
             # Directory — recursively copy all files to raw
             for root, dirs, files in os.walk(real_path):
-                # Skip hidden directories
-                dirs[:] = [d for d in dirs if not d.startswith('.')]
+                # Skip hidden directories and thumbnail directories
+                dirs[:] = [d for d in dirs if not d.startswith('.') and d != 'thumbs']
                 for fname in files:
                     if fname.startswith('.'):
                         continue
