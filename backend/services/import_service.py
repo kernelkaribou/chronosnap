@@ -80,6 +80,11 @@ def get_timelapses_path() -> str:
     return _get_setting_path('timelapses_path', config.DEFAULT_VIDEOS_PATH)
 
 
+def get_default_naming_pattern() -> str:
+    """Get the configured default naming pattern from settings or default."""
+    return _get_setting_path('default_naming_pattern', config.DEFAULT_CAPTURE_PATTERN)
+
+
 def cleanup_old_exports(max_age_days: int = None):
     """Remove export archives older than max_age_days. 0 = keep indefinitely."""
     if max_age_days is None:
@@ -1014,7 +1019,7 @@ def execute_image_import(
             job_name, stream_url, stream_type, first_ts, last_ts,
             interval_seconds,
             '',  # placeholder capture_path
-            config.DEFAULT_CAPTURE_PATTERN,
+            get_default_naming_pattern(),
             now, now
         ))
         job_id = cursor.lastrowid

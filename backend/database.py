@@ -74,6 +74,45 @@ def _migrate_font_size_to_percent(cursor):
         logger.info(f"Migration: converted {migrated} text overlay font_size values from pixels to percentage")
 
 
+def _seed_settings_from_env(cursor):
+    """Seed DB settings from environment variables on first run.
+    
+    Uses INSERT OR IGNORE so env vars only apply when a setting
+    doesn't already exist in the database. Once a user changes a
+    setting via the UI/API, the env var is ignored on future startups.
+    """
+    import os
+    
+    env_to_setting = {
+        'CAPTURES_PATH': 'captures_path',
+        'TIMELAPSES_PATH': 'timelapses_path',
+        'IMPORT_PATH': 'import_path',
+        'EXPORT_PATH': 'export_path',
+        'EXPORT_RETENTION_DAYS': 'export_retention_days',
+        'DEFAULT_NAMING_PATTERN': 'default_naming_pattern',
+        'WEBHOOK_URL': 'webhook_url',
+        'WEBHOOK_EVENTS': 'webhook_events',
+        'WEBHOOK_ENABLED': 'webhook_enabled',
+        'WEBHOOK_PAYLOAD_TEMPLATE': 'webhook_payload_template',
+    }
+    
+    now = to_iso(get_now())
+    seeded = []
+    
+    for env_var, setting_key in env_to_setting.items():
+        value = os.getenv(env_var)
+        if value is not None:
+            cursor.execute(
+                "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
+                (setting_key, value, now)
+            )
+            if cursor.rowcount > 0:
+                seeded.append(f"{env_var} -> {setting_key}")
+    
+    if seeded:
+        logger.info(f"Seeded {len(seeded)} setting(s) from environment: {', '.join(seeded)}")
+
+
 def init_db():
     """Initialize the database with required tables"""
     with get_db() as conn:
@@ -320,6 +359,9 @@ def init_db():
                 "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
                 ('api_key', api_key, now)
             )
+        
+        # Seed settings from environment variables (won't overwrite existing)
+        _seed_settings_from_env(cursor)
         
         conn.commit()
 

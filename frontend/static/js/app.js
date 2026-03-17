@@ -3763,6 +3763,15 @@ async function loadExportRetention() {
     }
 }
 
+async function loadNamingPattern() {
+    try {
+        const result = await apiRequest('/settings/naming-pattern');
+        document.getElementById('default-naming-pattern').value = result.naming_pattern;
+    } catch (e) {
+        document.getElementById('default-naming-pattern').value = '{job_name}_{count}_{timestamp}';
+    }
+}
+
 async function saveExportRetention() {
     const input = document.getElementById('export-retention-days');
     const days = parseInt(input.value, 10);
@@ -3775,6 +3784,21 @@ async function saveExportRetention() {
         showNotification(days === 0 ? 'Export retention: keep indefinitely' : `Export retention: ${days} day${days !== 1 ? 's' : ''}`, 'success');
     } catch (error) {
         showNotification(error.message || 'Failed to update export retention', 'error');
+    }
+}
+
+async function saveNamingPattern() {
+    const input = document.getElementById('default-naming-pattern');
+    const pattern = input.value.trim();
+    if (!pattern) {
+        showNotification('Naming pattern must not be empty', 'error');
+        return;
+    }
+    try {
+        await apiRequest('/settings/naming-pattern', { method: 'PUT', body: { naming_pattern: pattern } });
+        showNotification('Default naming pattern updated', 'success');
+    } catch (error) {
+        showNotification(error.message || 'Failed to update naming pattern', 'error');
     }
 }
 
@@ -3793,7 +3817,7 @@ function updateNamingPreview() {
     if (el) el.textContent = `Example: ${example}.jpg`;
 }
 
-function showCreateJobModal() {
+async function showCreateJobModal() {
     // Reset the form to clear any previous values
     document.getElementById('create-job-form').reset();
     
@@ -3804,8 +3828,13 @@ function showCreateJobModal() {
     // Set default datetime to now
     setDefaultStartTime();
     
-    // Set default values for naming pattern
-    document.getElementById('naming_pattern').value = '{job_name}_{count}_{timestamp}';
+    // Load default naming pattern from settings
+    try {
+        const resp = await apiRequest('/settings/naming-pattern');
+        document.getElementById('naming_pattern').value = resp.naming_pattern || '{job_name}_{count}_{timestamp}';
+    } catch {
+        document.getElementById('naming_pattern').value = '{job_name}_{count}_{timestamp}';
+    }
     updateNamingPreview();
     
     // Set initial min for end date
@@ -5249,6 +5278,7 @@ async function loadSettings() {
     loadSharedVideosList();
     loadServerPaths();
     loadExportRetention();
+    loadNamingPattern();
     
     // Load version and check for updates
     try {

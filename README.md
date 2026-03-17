@@ -137,7 +137,19 @@ Five volumes are required for persistent data:
 | `PORT` | `8080` | Port the application listens on inside the container. |
 | `LOG_LEVEL` | `INFO` | Logging verbosity. Options: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
 | `MAX_UPLOAD_SIZE` | `10737418240` | Maximum upload size in bytes (default 10 GB). |
+| `FFMPEG_TIMEOUT` | `30` | FFmpeg capture timeout in seconds. Increase for slow networks. |
 | `APP_VERSION` | Read from `VERSION` file | Override the application version string. Optional. If not set, the version is read from the `VERSION` file at the repository root. |
+| `CAPTURES_PATH` | `/captures` | Default captures storage directory. Seeds the DB setting on first run. |
+| `TIMELAPSES_PATH` | `/timelapses` | Default timelapse video storage directory. Seeds the DB setting on first run. |
+| `IMPORT_PATH` | `/imports` | Default import directory. Seeds the DB setting on first run. |
+| `EXPORT_PATH` | `/exports` | Default export directory. Seeds the DB setting on first run. |
+| `EXPORT_RETENTION_DAYS` | `7` | Days to keep export archives before auto-cleanup. 0 = keep indefinitely. Seeds the DB setting on first run. |
+| `DEFAULT_NAMING_PATTERN` | `{job_name}_{count}_{timestamp}` | Default capture file naming pattern. Seeds the DB setting on first run. |
+| `WEBHOOK_URL` | *(none)* | Webhook endpoint URL. Seeds the DB setting on first run. |
+| `WEBHOOK_ENABLED` | *(none)* | Enable webhooks (`true`/`false`). Seeds the DB setting on first run. |
+| `WEBHOOK_EVENTS` | *(none)* | Comma-separated webhook event types. Seeds the DB setting on first run. |
+
+> **Note:** Environment variables that seed DB settings (paths, retention, naming pattern, webhooks) only take effect on first startup when no value exists in the database. Once you change a setting via the UI, the env var is ignored on future restarts.
 
 ### Example docker-compose.yml
 

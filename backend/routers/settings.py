@@ -167,6 +167,36 @@ async def update_export_retention(body: dict):
         raise HTTPException(status_code=500, detail="Failed to update export retention")
 
 
+@router.get("/naming-pattern")
+async def get_naming_pattern():
+    """Get default capture naming pattern."""
+    from ..services.import_service import get_default_naming_pattern
+    return {'naming_pattern': get_default_naming_pattern()}
+
+
+@router.put("/naming-pattern")
+async def update_naming_pattern(body: dict):
+    """Update default capture naming pattern."""
+    pattern = body.get('naming_pattern', '').strip()
+    if not pattern:
+        raise HTTPException(status_code=400, detail="naming_pattern must not be empty")
+    try:
+        now = to_iso(get_now())
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+                ('default_naming_pattern', pattern, now)
+            )
+            conn.commit()
+        logger.info(f"Default naming pattern updated to: {pattern}")
+        return {'naming_pattern': pattern}
+    except Exception as e:
+        logger.error(f"Error updating naming pattern: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update naming pattern")
+
+
 @router.get("/webhook", response_model=WebhookSettings)
 async def get_webhook_settings():
     """Get webhook notification settings"""

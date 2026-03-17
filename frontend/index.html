@@ -341,6 +341,16 @@
                         </div>
                     </div>
 
+                    <!-- Default Naming Pattern Section -->
+                    <div class="settings-section">
+                        <h3>Default Naming Pattern</h3>
+                        <p class="settings-description">Default file naming pattern for new capture jobs. Available tokens: <code>{job_name}</code>, <code>{count}</code>, <code>{timestamp}</code>, <code>{num}</code></p>
+                        <div style="display:flex;gap:0.75rem;align-items:center;margin-top:0.75rem;">
+                            <input type="text" id="default-naming-pattern" class="form-control" style="max-width:20rem;" placeholder="{job_name}_{count}_{timestamp}">
+                            <button class="btn btn-sm btn-purple" onclick="saveNamingPattern()">Save</button>
+                        </div>
+                    </div>
+
                     <!-- Webhook Notifications Section -->
                     <div class="settings-section">
                         <h3>Webhook Notifications</h3>
