@@ -2564,6 +2564,8 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 /* "+New Tag" button and inline creator below tag picker */
 .tag-picker-footer {
     margin-top: 0.5rem;
+    position: relative;
+    min-height: 2rem;
 }
 .tag-create-btn {
     display: inline-flex; align-items: center; gap: 0.25rem;
@@ -2579,7 +2581,6 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .tag-create-btn:hover { opacity: 0.85; }
 .tag-inline-form {
     display: flex; align-items: center; gap: 0.5rem;
-    margin-top: 0.4rem;
     flex-wrap: wrap;
 }
 .tag-inline-form .form-control {

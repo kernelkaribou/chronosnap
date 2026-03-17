@@ -4931,33 +4931,48 @@ function renderTagPicker(containerId, selectedTagIds = [], onToggle = null) {
             ${escapeHtml(tag.name)}</span>`;
     }).join('');
 
-    // Render "+New Tag" button below the tag grid
+    // Render footer with button + hidden form (reserves full height)
     let footer = container.parentElement.querySelector('.tag-picker-footer');
     if (!footer) {
         footer = document.createElement('div');
         footer.className = 'tag-picker-footer';
         container.parentElement.appendChild(footer);
     }
-    footer.innerHTML = `<span class="tag-create-btn" onclick="showInlineTagCreate('${containerId}')" title="Create new tag">＋ New Tag</span>`;
+    const swatchesHTML = TAG_COLORS.map(c =>
+        `<span class="color-swatch${c === '#6366f1' ? ' selected' : ''}" style="background:${c};" data-color="${c}" onclick="selectSwatch(this)"></span>`
+    ).join('');
+    footer.innerHTML = `
+        <span class="tag-create-btn" onclick="showInlineTagCreate('${containerId}')" title="Create new tag">＋ New Tag</span>
+        <div class="tag-inline-form" style="visibility:hidden;position:absolute;">
+            <input type="text" class="form-control" placeholder="New tag name..." maxlength="50" tabindex="-1">
+            <div class="color-swatch-row">${swatchesHTML}</div>
+            <button class="btn btn-purple btn-sm" tabindex="-1">Add Tag</button>
+            <button class="btn btn-secondary btn-sm" tabindex="-1">Cancel</button>
+        </div>
+    `;
 }
 
 function showInlineTagCreate(containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
     const footer = container.parentElement.querySelector('.tag-picker-footer');
-    if (!footer || footer.querySelector('.tag-inline-form')) return;
+    if (!footer) return;
+    const btn = footer.querySelector('.tag-create-btn');
+    const form = footer.querySelector('.tag-inline-form');
+    if (!form || !btn) return;
 
-    footer.innerHTML = `
-        <div class="tag-inline-form">
-            <input type="text" class="form-control" placeholder="New tag name..." maxlength="50">
-            <div class="color-swatch-row">${TAG_COLORS.map(c =>
-                `<span class="color-swatch${c === '#6366f1' ? ' selected' : ''}" style="background:${c};" data-color="${c}" onclick="selectSwatch(this)"></span>`
-            ).join('')}</div>
-            <button class="btn btn-purple btn-sm" onclick="submitInlineTag('${containerId}')">Add Tag</button>
-            <button class="btn btn-secondary btn-sm" onclick="cancelInlineTagCreate('${containerId}')">Cancel</button>
-        </div>
-    `;
-    const input = footer.querySelector('.tag-inline-form input');
+    btn.style.display = 'none';
+    form.style.visibility = 'visible';
+    form.style.position = 'static';
+
+    // Wire up the buttons now that form is active
+    const input = form.querySelector('input');
+    input.removeAttribute('tabindex');
+    form.querySelectorAll('button').forEach(b => b.removeAttribute('tabindex'));
+    const addBtn = form.querySelectorAll('button')[0];
+    const cancelBtn = form.querySelectorAll('button')[1];
+    addBtn.onclick = () => submitInlineTag(containerId);
+    cancelBtn.onclick = () => cancelInlineTagCreate(containerId);
     input.focus();
     input.addEventListener('keydown', e => {
         if (e.key === 'Enter') submitInlineTag(containerId);
@@ -4967,8 +4982,16 @@ function showInlineTagCreate(containerId) {
 
 function cancelInlineTagCreate(containerId) {
     const container = document.getElementById(containerId);
-    const onToggle = container?._tagOnToggle || null;
-    renderTagPicker(containerId, getSelectedTagIds(containerId), onToggle);
+    const footer = container?.parentElement.querySelector('.tag-picker-footer');
+    if (!footer) return;
+    const btn = footer.querySelector('.tag-create-btn');
+    const form = footer.querySelector('.tag-inline-form');
+    if (btn) btn.style.display = '';
+    if (form) {
+        form.style.visibility = 'hidden';
+        form.style.position = 'absolute';
+        form.querySelector('input').value = '';
+    }
 }
 
 async function submitInlineTag(containerId) {
