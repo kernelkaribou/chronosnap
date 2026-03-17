@@ -3802,11 +3802,12 @@ async function exportJob(jobId, jobName) {
         }
         
         const desc = `${details.join(', ')} — estimated ${totalSize}`;
+        const msg = estimate.method === 'file'
+            ? `Export "${jobName}"? ${desc} (large export — saved to /exports)`
+            : `Export "${jobName}"? ${desc}`;
         
         confirmAction(
-            `Export "${jobName}"?`,
-            desc + (estimate.method === 'file' ? '\n\nLarge export — archive will be built to /exports for download.' : ''),
-            'Export',
+            msg,
             async () => {
                 showNotification('Building export...', 'info');
                 try {
