@@ -169,20 +169,31 @@ function clearValues(ids) {
 // =============================================================================
 
 // Notification system
+let _notificationTimer = null;
+
 function showNotification(message, type = 'success') {
     const toast = document.getElementById('notification-toast');
     const messageEl = document.getElementById('notification-message');
     
+    if (_notificationTimer) clearTimeout(_notificationTimer);
+    
     messageEl.textContent = message;
     toast.className = `notification-toast ${type}`;
     
-    // Show toast
     setTimeout(() => toast.classList.add('show'), 10);
     
-    // Hide after 3 seconds
-    setTimeout(() => {
+    _notificationTimer = setTimeout(() => {
         toast.classList.remove('show');
+        _notificationTimer = null;
     }, 3000);
+}
+
+function dismissNotification() {
+    if (_notificationTimer) {
+        clearTimeout(_notificationTimer);
+        _notificationTimer = null;
+    }
+    document.getElementById('notification-toast').classList.remove('show');
 }
 
 // Confirmation system
