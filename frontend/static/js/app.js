@@ -3280,6 +3280,7 @@ document.addEventListener('keydown', function(e) {
 let _importSessionId = null;
 let _importAnalysis = null;
 let _importBrowsePath = '/imports';
+let _importSourcePath = null;
 
 function showImportModal() {
     resetImportModal();
@@ -3290,6 +3291,7 @@ function showImportModal() {
 function resetImportModal() {
     _importSessionId = null;
     _importAnalysis = null;
+    _importSourcePath = null;
     document.getElementById('import-source-panels').style.display = 'flex';
     document.getElementById('import-staging-preview').style.display = 'none';
     document.getElementById('import-upload-progress').style.display = 'none';
@@ -3320,6 +3322,13 @@ function handleImportDrop(e) {
         // Fallback for browsers without webkitGetAsEntry
         if (e.dataTransfer.files.length) handleImportFiles(e.dataTransfer.files);
         return;
+    }
+    
+    // Capture root folder/file name for job name suggestion
+    if (entries.length === 1 && entries[0].isDirectory) {
+        _importSourcePath = '/upload/' + entries[0].name;
+    } else {
+        _importSourcePath = null;
     }
     
     // Recursively collect all files from entries
@@ -3476,6 +3485,7 @@ async function scanImportCurrentPath() {
             body: { path: _importBrowsePath }
         });
         _importSessionId = result.session_id;
+        _importSourcePath = result.source_path || _importBrowsePath;
         await analyzeAndShowPreview();
     } catch (error) {
         showNotification(error.message || 'Scan failed', 'error');
@@ -3512,10 +3522,13 @@ function showImportPreview() {
                 Range: ${formatDateTimeNoSeconds(a.image_first)} → ${formatDateTimeNoSeconds(a.image_last)}
             </small>
         `;
-        // Auto-suggest job name from folder name
+        // Auto-suggest job name from source folder name (not the import root)
         const nameInput = document.getElementById('import-job-name');
         if (!nameInput.value) {
-            const folderName = _importBrowsePath ? _importBrowsePath.split('/').filter(Boolean).pop() : '';
+            const srcPath = _importSourcePath || _importBrowsePath || '';
+            const parts = srcPath.split('/').filter(Boolean);
+            // If we're deeper than just the root import dir, use the last folder name
+            const folderName = parts.length > 1 ? parts[parts.length - 1] : '';
             nameInput.value = folderName || 'Imported';
         }
     } else {
