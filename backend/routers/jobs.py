@@ -52,16 +52,15 @@ async def create_job(job: JobCreate):
     with get_db() as conn:
         cursor = conn.cursor()
         
-        # Get default values from settings or config
+        # Always use the global captures path from settings
         from ..services.import_service import get_captures_path
-        if not job.capture_path:
-            job.capture_path = get_captures_path()
+        captures_base = get_captures_path()
         
         if not job.naming_pattern:
             job.naming_pattern = config.DEFAULT_CAPTURE_PATTERN
         
-        # Validate capture_path exists and is writable
-        validate_writable_directory(job.capture_path, "Capture path")
+        # Validate captures path exists and is writable
+        validate_writable_directory(captures_base, "Capture path")
         
         now = get_now()
         now_str = to_iso(now)
@@ -101,27 +100,26 @@ async def create_job(job: JobCreate):
         job_id = cursor.lastrowid
         
         # Create job directory with ID prefix
-        job_dir = os.path.join(job.capture_path, f"{job_id}_{job.name}")
+        rel_job_dir = f"{job_id}_{job.name}"
+        abs_job_dir = os.path.join(captures_base, rel_job_dir)
         try:
-            os.makedirs(job_dir, exist_ok=True)
+            os.makedirs(abs_job_dir, exist_ok=True)
         except PermissionError:
-            # Rollback the job creation
             cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
             raise HTTPException(
                 status_code=400,
-                detail=f"Permission denied creating job directory: {job_dir}"
+                detail=f"Permission denied creating job directory: {abs_job_dir}"
             )
         except Exception as e:
-            # Rollback the job creation
             cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
             raise HTTPException(
                 status_code=400,
                 detail=f"Failed to create job directory"
             )
         
-        # Update the capture_path with the relative directory
+        # Store the relative directory name
         cursor.execute("UPDATE jobs SET capture_path = ? WHERE id = ?",
-                       (make_relative(job_dir, job.capture_path), job_id))
+                       (rel_job_dir, job_id))
         
         # Get the job we just created
         cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
@@ -446,9 +444,10 @@ async def delete_job(job_id: int):
         # Delete the entire job folder from disk
         if job_info['capture_path']:
             try:
-                if os.path.exists(job_info['capture_path']) and os.path.isdir(job_info['capture_path']):
-                    shutil.rmtree(job_info['capture_path'])
-                    logger.info(f"Deleted job folder: {job_info['capture_path']}")
+                abs_job_dir = resolve_capture_path(job_info['capture_path'])
+                if os.path.exists(abs_job_dir) and os.path.isdir(abs_job_dir):
+                    shutil.rmtree(abs_job_dir)
+                    logger.info(f"Deleted job folder: {abs_job_dir}")
             except Exception as e:
                 logger.warning(f"Failed to delete job folder {job_info['capture_path']}: {e}")
         

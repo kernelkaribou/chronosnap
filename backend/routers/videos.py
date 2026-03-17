@@ -43,13 +43,9 @@ async def create_video(video: VideoCreate, background_tasks: BackgroundTasks):
             "SELECT * FROM jobs WHERE id = ?",
             (video.job_id,), "Job not found")
         
-        # Get video output path from custom path or settings
-        if video.output_path:
-            videos_path = video.output_path
-            validate_writable_directory(videos_path, "Output path")
-        else:
-            from ..services.import_service import get_timelapses_path
-            videos_path = get_timelapses_path()
+        # Always use the global timelapses path from settings
+        from ..services.import_service import get_timelapses_path
+        videos_path = get_timelapses_path()
         
         # Create job subfolder: {job_id}_{sanitized_job_name}
         import re
