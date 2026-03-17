@@ -435,7 +435,7 @@
                         <label>Stream URL *</label>
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
                             <input type="text" id="job_url" class="form-control" placeholder="http:// or rtsp://" required style="flex: 1; min-width: 0;">
-                            <button type="button" class="btn btn-secondary" onclick="testUrl()" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
+                            <button type="button" class="btn btn-secondary compare-btn" onclick="testUrl()" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                     <circle cx="12" cy="12" r="3"></circle>
@@ -629,7 +629,7 @@
                             <option value="custom">Custom</option>
                         </select>
                     </div>
-                    <div class="form-group flex-1">
+                    <div class="form-group" style="flex: 0.75;">
                         <label>Quality *</label>
                         <select id="video_quality" class="form-control" required>
                             <option value="low">Low</option>
@@ -638,11 +638,11 @@
                             <option value="lossless">Lossless</option>
                         </select>
                     </div>
-                    <div class="form-group flex-1">
+                    <div class="form-group" style="flex: 0.75;">
                         <label>Framerate (FPS) *</label>
                         <input type="number" id="video_framerate" class="form-control" min="1" value="30" required>
                     </div>
-                    <div class="form-group flex-1">
+                    <div class="form-group" style="flex: 1.5;">
                         <label>Estimated Duration</label>
                         <div class="duration-estimate" id="video-duration-estimate" style="margin-top: 0.2rem;"></div>
                     </div>
@@ -662,7 +662,7 @@
                 <div class="form-group">
                     <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
                         <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
-                            <input type="checkbox" id="use_range" style="cursor: pointer;" onchange="toggleFieldGroup('capture-range-fields', this.checked)">
+                            <input type="checkbox" id="use_range" style="cursor: pointer;" onchange="toggleFieldGroup('use_range', 'capture-range-fields')">
                             <span><strong>Custom Time Range</strong></span>
                         </label>
                         <div id="capture-range-fields" class="toggle-fields disabled" style="display: flex; align-items: center; gap: 0.5rem;">
@@ -707,7 +707,7 @@
                 </div>
 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary compare-btn" onclick="closeModal('process-video-modal')">Cancel</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('process-video-modal')">Cancel</button>
                     <button type="submit" id="create-video-btn" class="btn btn-purple">Create</button>
                 </div>
             </form>
