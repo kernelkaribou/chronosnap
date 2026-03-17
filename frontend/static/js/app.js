@@ -511,8 +511,27 @@ function setupNavigation() {
     
     // Handle browser back/forward buttons
     window.addEventListener('popstate', (e) => {
+        // If a modal is open, close the topmost one
+        const activeModals = document.querySelectorAll('.modal.active');
+        if (activeModals.length > 0) {
+            _closingFromPopstate = true;
+            _modalHistoryDepth = Math.max(0, _modalHistoryDepth - 1);
+            const topModal = activeModals[activeModals.length - 1];
+            if (topModal.id === 'video-detail-modal') {
+                closeVideoDetail();
+            } else if (topModal.id === 'comparison-modal') {
+                closeComparison();
+            } else if (topModal.id === 'confirm-modal') {
+                topModal.classList.remove('active');
+            } else {
+                closeModal(topModal.id);
+            }
+            _closingFromPopstate = false;
+            return;
+        }
+        
         if (e.state && e.state.view) {
-            switchView(e.state.view, false); // false = don't push to history
+            switchView(e.state.view, false);
         }
     });
     
@@ -554,6 +573,16 @@ async function loadJobs() {
     try {
         const jobs = await apiRequest('/jobs/');
         allJobs = jobs;
+        // Initialize status filter (once)
+        const statusWrap = document.getElementById('job-status-filter-wrap');
+        if (statusWrap && !statusWrap._statusFilterSelected) {
+            renderStatusFilter('job-status-filter-wrap', () => filterJobs());
+        }
+        // Initialize tag filter (once)
+        const tagWrap = document.getElementById('job-tag-filter-wrap');
+        if (tagWrap && !tagWrap._tagFilterSelected) {
+            renderTagFilter('job-tag-filter-wrap', () => filterJobs());
+        }
         filterJobs();
         updateJobWarningBadge(jobs);
     } catch (error) {
@@ -561,14 +590,9 @@ async function loadJobs() {
     }
 }
 
-function toggleJobStatus(btn) {
-    btn.classList.toggle('active');
-    filterJobs();
-}
-
 function filterJobs() {
     const search = (document.getElementById('job-search').value || '').toLowerCase();
-    const activeStatuses = [...document.querySelectorAll('.job-status-btn.active')].map(b => b.dataset.status);
+    const activeStatuses = getStatusFilterValues('job-status-filter-wrap');
     const sort = document.getElementById('job-sort').value;
     
     let filtered = allJobs;
@@ -584,6 +608,14 @@ function filterJobs() {
         filtered = filtered.filter(j => activeStatuses.includes(j.status));
     }
     
+    // Tag filter
+    const selectedTagIds = getTagFilterIds('job-tag-filter-wrap');
+    if (selectedTagIds.length > 0) {
+        filtered = filtered.filter(j =>
+            j.tags && j.tags.some(t => selectedTagIds.includes(t.id))
+        );
+    }
+    
     // Sort
     filtered = [...filtered];
     switch (sort) {
@@ -594,7 +626,7 @@ function filterJobs() {
         default: filtered.sort((a, b) => b.created_at.localeCompare(a.created_at)); break;
     }
     
-    const hasFilters = search || activeStatuses.length > 0 || sort !== 'created_desc';
+    const hasFilters = search || activeStatuses.length > 0 || selectedTagIds.length > 0;
     document.getElementById('job-filter-reset').style.display = hasFilters ? '' : 'none';
     
     renderJobs(filtered);
@@ -602,13 +634,15 @@ function filterJobs() {
 
 function resetJobFilters() {
     document.getElementById('job-search').value = '';
-    document.querySelectorAll('.job-status-btn.active').forEach(b => b.classList.remove('active'));
-    document.getElementById('job-sort').value = 'created_desc';
+    clearStatusFilter('job-status-filter-wrap');
+    clearTagFilter('job-tag-filter-wrap');
     filterJobs();
 }
 
 function renderJobs(jobs) {
     const container = document.getElementById('jobs-list');
+    const countEl = document.getElementById('job-count');
+    if (countEl) countEl.textContent = `${jobs.length} of ${allJobs.length} jobs`;
     
     if (jobs.length === 0) {
         container.innerHTML = `
@@ -1638,6 +1672,18 @@ function filterVideos(opts = {}) {
         filtered = filtered.filter(v => v.tags && selectedTags.every(tid => v.tags.some(t => t.id === tid)));
     }
     
+    // Sort
+    const sort = document.getElementById('video-sort')?.value || 'created_desc';
+    filtered = [...filtered];
+    switch (sort) {
+        case 'created_asc': filtered.sort((a, b) => a.created_at.localeCompare(b.created_at)); break;
+        case 'name_asc': filtered.sort((a, b) => a.name.localeCompare(b.name)); break;
+        case 'name_desc': filtered.sort((a, b) => b.name.localeCompare(a.name)); break;
+        case 'duration_desc': filtered.sort((a, b) => (b.duration_seconds || 0) - (a.duration_seconds || 0)); break;
+        case 'duration_asc': filtered.sort((a, b) => (a.duration_seconds || 0) - (b.duration_seconds || 0)); break;
+        default: filtered.sort((a, b) => b.created_at.localeCompare(a.created_at)); break;
+    }
+    
     // Show/hide reset button
     const hasFilters = search || yearFilter || monthFilter !== '' || videoFavoritesOnly || videoSharedOnly || selectedTags.length > 0;
     document.getElementById('video-filter-reset').style.display = hasFilters ? '' : 'none';
@@ -1830,7 +1876,7 @@ async function openVideoDetail(videoId) {
         }
         actions.innerHTML = actionsHtml;
         
-        modal.classList.add('active');
+        showModal('video-detail-modal');
     } catch (error) {
         console.error('Failed to load video details:', error);
     }
@@ -1838,10 +1884,16 @@ async function openVideoDetail(videoId) {
 
 function closeVideoDetail() {
     const modal = document.getElementById('video-detail-modal');
+    const wasActive = modal.classList.contains('active');
     const player = document.getElementById('video-detail-player');
     player.pause();
     player.currentTime = 0;
     modal.classList.remove('active');
+    
+    if (wasActive && _modalHistoryDepth > 0 && !_closingFromPopstate) {
+        _modalHistoryDepth--;
+        history.back();
+    }
 }
 
 async function deleteVideoFromDetail(videoId, videoName) {
@@ -2047,7 +2099,7 @@ async function openComparison() {
         playerA.addEventListener('loadedmetadata', onMeta, { once: true });
         playerB.addEventListener('loadedmetadata', onMeta, { once: true });
 
-        modal.classList.add('active');
+        showModal('comparison-modal');
     } catch (error) {
         showNotification('Failed to load videos for comparison', 'error');
     }
@@ -2055,6 +2107,7 @@ async function openComparison() {
 
 function closeComparison() {
     const modal = document.getElementById('comparison-modal');
+    const wasActive = modal.classList.contains('active');
     const { playerA, playerB, animFrame } = comparisonState;
     if (playerA) { playerA.pause(); playerA.currentTime = 0; }
     if (playerB) { playerB.pause(); playerB.currentTime = 0; }
@@ -2063,6 +2116,11 @@ function closeComparison() {
     comparisonState.animFrame = null;
     modal.classList.remove('active');
     if (compareMode.active) toggleCompareMode();
+    
+    if (wasActive && _modalHistoryDepth > 0 && !_closingFromPopstate) {
+        _modalHistoryDepth--;
+        history.back();
+    }
 }
 
 function toggleComparisonPlay() {
@@ -3079,6 +3137,8 @@ async function deleteVideo(videoId, videoName) {
 }
 
 // Modal management
+let _modalHistoryDepth = 0;
+
 function showModal(modalId) {
     const modal = document.getElementById(modalId);
     modal.classList.add('active');
@@ -3088,10 +3148,23 @@ function showModal(modalId) {
     if (modalContent) {
         modalContent.scrollTop = 0;
     }
+    
+    // Push history state so back button can close modal
+    _modalHistoryDepth++;
+    history.pushState({ modal: true, depth: _modalHistoryDepth }, '');
 }
 
+let _closingFromPopstate = false;
+
 function closeModal(modalId) {
+    const wasActive = document.getElementById(modalId).classList.contains('active');
     document.getElementById(modalId).classList.remove('active');
+    
+    // Pop history entry if we pushed one and this isn't from popstate
+    if (wasActive && _modalHistoryDepth > 0 && !_closingFromPopstate) {
+        _modalHistoryDepth--;
+        history.back();
+    }
     
     // Clear form when closing create job modal
     if (modalId === 'create-job-modal') {
@@ -3750,7 +3823,7 @@ async function performMaintenanceScan(jobId, jobName) {
             </p>
         </div>
     `;
-    modal.classList.add('active');
+    showModal('maintenance-modal');
     
     try {
         maintenanceData = await apiRequest(`/jobs/${jobId}/maintenance/scan`, { method: 'POST' });
@@ -4605,6 +4678,13 @@ async function loadSettings() {
     loadWebhookSettings();
     loadTagManager();
     loadSharedVideosList();
+    
+    // Load version
+    try {
+        const ver = await apiRequest('/settings/version');
+        const el = document.getElementById('app-version');
+        if (el) el.textContent = `Timelapse Manager v${ver.version}`;
+    } catch (e) { /* non-critical */ }
 }
 
 function updateTimeFormatButtons() {
@@ -4657,11 +4737,29 @@ async function regenerateApiKey() {
 
 // Webhook Settings Functions
 let webhookDirty = false;
+let webhookSnapshot = null;
+
+function getWebhookCurrentValues() {
+    return {
+        url: document.getElementById('webhook-url').value.trim(),
+        enabled: document.getElementById('webhook-enabled').checked,
+        template: document.getElementById('webhook-template').value.trim(),
+        events: [...document.querySelectorAll('.webhook-event-cb:checked')].map(cb => cb.value).sort().join(','),
+    };
+}
 
 function markWebhookDirty() {
-    webhookDirty = true;
+    if (webhookSnapshot) {
+        const cur = getWebhookCurrentValues();
+        webhookDirty = cur.url !== webhookSnapshot.url
+            || cur.enabled !== webhookSnapshot.enabled
+            || cur.template !== webhookSnapshot.template
+            || cur.events !== webhookSnapshot.events;
+    } else {
+        webhookDirty = true;
+    }
     const btn = document.getElementById('webhook-save-btn');
-    if (btn) btn.disabled = false;
+    if (btn) btn.disabled = !webhookDirty;
     updateWebhookToggleState();
 }
 
@@ -4688,6 +4786,7 @@ async function loadWebhookSettings() {
             cb.checked = events.length === 0 || events.includes(cb.value);
         });
         updateWebhookToggleState();
+        webhookSnapshot = getWebhookCurrentValues();
         webhookDirty = false;
         const btn = document.getElementById('webhook-save-btn');
         if (btn) btn.disabled = true;
@@ -4733,6 +4832,7 @@ async function saveWebhookSettings() {
             method: 'PUT',
             body: settings
         });
+        webhookSnapshot = getWebhookCurrentValues();
         webhookDirty = false;
         const btn = document.getElementById('webhook-save-btn');
         if (btn) btn.disabled = true;
@@ -5155,6 +5255,110 @@ function clearTagFilter(wrapId) {
     updateTagFilterTrigger(wrapId);
 }
 
+// ── Status Filter Dropdown ─────────────────────────────────────────────
+
+const JOB_STATUSES = [
+    { value: 'active', label: 'Active', color: 'var(--success-color)' },
+    { value: 'sleeping', label: 'Sleeping', color: 'var(--primary-color)' },
+    { value: 'warning', label: 'Warning', color: 'var(--warning-color)' },
+    { value: 'completed', label: 'Completed', color: 'var(--text-secondary)' },
+    { value: 'disabled', label: 'Disabled', color: 'var(--text-muted, #666)' },
+];
+
+function renderStatusFilter(wrapId, onChange) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    
+    wrap._statusFilterSelected = new Set();
+    wrap._statusFilterOnChange = onChange;
+
+    wrap.innerHTML = `
+        <div class="tag-filter-trigger" onclick="toggleStatusFilterDropdown('${wrapId}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            <span class="tag-filter-label">Status</span>
+        </div>
+        <div class="tag-filter-dropdown" id="${wrapId}-dropdown">
+            <div class="tag-filter-list" id="${wrapId}-list">
+                ${JOB_STATUSES.map(s => `
+                    <div class="tag-filter-item" data-status="${s.value}"
+                         onclick="toggleStatusFilter('${wrapId}', '${s.value}')">
+                        <span class="tag-filter-check"></span>
+                        <span class="tag-filter-dot" style="background:${s.color};"></span>
+                        <span>${s.label}</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+
+    document.addEventListener('click', (e) => {
+        if (!wrap.contains(e.target)) {
+            const dd = document.getElementById(`${wrapId}-dropdown`);
+            if (dd) dd.classList.remove('open');
+            const trigger = wrap.querySelector('.tag-filter-trigger');
+            if (trigger) trigger.classList.remove('active');
+        }
+    });
+}
+
+function toggleStatusFilterDropdown(wrapId) {
+    const dd = document.getElementById(`${wrapId}-dropdown`);
+    const trigger = document.querySelector(`#${wrapId} .tag-filter-trigger`);
+    if (!dd) return;
+    const isOpen = dd.classList.toggle('open');
+    if (trigger) trigger.classList.toggle('active', isOpen);
+}
+
+function toggleStatusFilter(wrapId, status) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    const selected = wrap._statusFilterSelected;
+    if (selected.has(status)) selected.delete(status);
+    else selected.add(status);
+
+    const item = document.querySelector(`#${wrapId}-list .tag-filter-item[data-status="${status}"]`);
+    if (item) item.classList.toggle('selected', selected.has(status));
+
+    updateStatusFilterTrigger(wrapId);
+    if (wrap._statusFilterOnChange) wrap._statusFilterOnChange();
+}
+
+function updateStatusFilterTrigger(wrapId) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    const selected = wrap._statusFilterSelected;
+    const label = wrap.querySelector('.tag-filter-label');
+    if (!label) return;
+    const trigger = wrap.querySelector('.tag-filter-trigger');
+
+    if (selected.size === 0) {
+        label.textContent = 'Status';
+        if (trigger) trigger.classList.remove('active');
+    } else if (selected.size <= 2) {
+        const names = JOB_STATUSES.filter(s => selected.has(s.value)).map(s => s.label);
+        label.textContent = names.join(', ');
+        if (trigger) trigger.classList.add('active');
+    } else {
+        label.innerHTML = `Status <span class="tag-filter-count">${selected.size}</span>`;
+        if (trigger) trigger.classList.add('active');
+    }
+}
+
+function getStatusFilterValues(wrapId) {
+    const wrap = document.getElementById(wrapId);
+    return wrap?._statusFilterSelected ? [...wrap._statusFilterSelected] : [];
+}
+
+function clearStatusFilter(wrapId) {
+    const wrap = document.getElementById(wrapId);
+    if (wrap?._statusFilterSelected) {
+        wrap._statusFilterSelected.clear();
+        const items = document.querySelectorAll(`#${wrapId}-list .tag-filter-item`);
+        items.forEach(i => i.classList.remove('selected'));
+    }
+    updateStatusFilterTrigger(wrapId);
+}
+
 // Nav Warning Badge
 function updateJobWarningBadge(jobs) {
     const jobsLink = document.querySelector('.nav-link[data-view="jobs"]');
@@ -5246,7 +5450,7 @@ async function scanOrphanedCaptures() {
             </p>
         </div>
     `;
-    modal.classList.add('active');
+    showModal('maintenance-modal');
     
     try {
         const data = await apiRequest('/captures/orphaned');
@@ -5588,7 +5792,7 @@ async function showCapturePreview(captureId) {
         document.getElementById('capture-detail-size').textContent = formatBytes(capture.file_size);
         document.getElementById('capture-detail-path').textContent = capture.file_path;
         
-        document.getElementById('capture-preview-modal').classList.add('active');
+        showModal('capture-preview-modal');
     } catch (error) {
         console.error('Failed to load capture preview:', error);
         showNotification(`Failed to load capture preview: ${error.message}`, 'error');

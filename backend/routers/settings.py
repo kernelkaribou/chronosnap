@@ -1,7 +1,7 @@
 """
 Settings API endpoints
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, List
 import logging
@@ -57,6 +57,12 @@ async def get_api_key():
     except Exception as e:
         logger.error(f"Error retrieving API key: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve API key")
+
+
+@router.get("/version")
+async def get_version(request: Request):
+    """Get the application version"""
+    return {"version": request.app.version}
 
 
 @router.post("/api-key/regenerate", response_model=RegenerateResponse)
