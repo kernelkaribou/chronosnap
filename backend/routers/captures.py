@@ -14,7 +14,7 @@ from ..models import CaptureResponse, CaptureListResponse, CaptureDeleteRequest
 from ..database import get_db, dict_from_row
 from ..utils import get_now, to_iso, parse_iso
 from ..helpers.db_helpers import get_or_404, fetch_one, enrich_capture, decrement_job_stats, fetch_tags_for_jobs
-from ..helpers.file_helpers import delete_capture_file
+from ..helpers.file_helpers import delete_capture_file, resolve_capture_path
 from ..services.thumbnail_generator import get_thumbnail_path, has_thumbnail, delete_thumbnail
 from .. import config
 
@@ -328,10 +328,10 @@ async def cleanup_orphaned_captures(request: OrphanedCleanupRequest):
                 
                 for fp in file_paths:
                     try:
-                        if os.path.exists(fp):
-                            os.remove(fp)
-                            # Also delete thumbnail
-                            delete_thumbnail(fp)
+                        abs_fp = resolve_capture_path(fp)
+                        if os.path.exists(abs_fp):
+                            os.remove(abs_fp)
+                            delete_thumbnail(abs_fp)
                     except OSError:
                         pass
                 
@@ -381,7 +381,7 @@ async def delete_capture(capture_id: int):
         
         # Delete the image file
         try:
-            delete_capture_file(cap['file_path'], delete_thumbnail)
+            delete_capture_file(resolve_capture_path(cap['file_path']), delete_thumbnail)
         except Exception as e:
             logger.error(f"Failed to delete capture file {cap['file_path']}: {e}")
         
@@ -417,7 +417,7 @@ async def delete_multiple_captures(request: CaptureDeleteRequest):
                 
                 # Delete files
                 try:
-                    delete_capture_file(cap['file_path'], delete_thumbnail)
+                    delete_capture_file(resolve_capture_path(cap['file_path']), delete_thumbnail)
                 except Exception as e:
                     logger.error(f"Failed to delete files for capture {capture_id}: {e}")
                 
@@ -568,7 +568,7 @@ async def get_capture_image(capture_id: int):
             "SELECT file_path FROM captures WHERE id = ?",
             (capture_id,), "Capture not found")
         
-        file_path = cap['file_path']
+        file_path = resolve_capture_path(cap['file_path'])
         
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail="Capture file not found on disk")
@@ -588,7 +588,7 @@ async def get_capture_thumbnail(capture_id: int):
             "SELECT file_path FROM captures WHERE id = ?",
             (capture_id,), "Capture not found")
         
-        file_path = cap['file_path']
+        file_path = resolve_capture_path(cap['file_path'])
         thumbnail_path = get_thumbnail_path(file_path)
         
         if not os.path.exists(thumbnail_path):

@@ -111,7 +111,8 @@ async def get_storage_stats():
     jobs.sort(key=lambda j: j.total_size, reverse=True)
 
     # Disk usage from captures path (primary storage volume)
-    disk = _safe_disk_usage(config.DEFAULT_CAPTURES_PATH)
+    from ..services.import_service import get_captures_path
+    disk = _safe_disk_usage(get_captures_path())
 
     return StorageStats(
         captures_total_size=captures_total_size,

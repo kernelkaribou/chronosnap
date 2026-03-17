@@ -120,11 +120,13 @@ def _run_auto_build(job: dict, now: datetime):
         video_name = f"{sanitized_name}_auto_{date_str}"
 
         from .import_service import get_timelapses_path
+        from ..helpers.file_helpers import make_relative
         videos_path = get_timelapses_path()
         job_folder = f"{job_id}_{sanitized_name}"
         job_dir = os.path.join(videos_path, job_folder)
         os.makedirs(job_dir, exist_ok=True)
         output_path = os.path.join(job_dir, f"{video_name}.mp4")
+        rel_output = make_relative(output_path, videos_path)
 
         now_str = to_iso(now)
         with get_db() as conn:
@@ -136,7 +138,7 @@ def _run_auto_build(job: dict, now: datetime):
                     total_frames, duration_seconds, status, build_source, created_at
                 ) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 0, 0, 'processing', 'auto', ?)
             """, (
-                job_id, job_name, video_name, output_path,
+                job_id, job_name, video_name, rel_output,
                 job.get('auto_build_resolution', '1920x1080'),
                 job.get('auto_build_fps', 30),
                 job.get('auto_build_quality', 'medium'),

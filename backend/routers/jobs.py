@@ -25,7 +25,7 @@ from ..services.auto_builder import get_next_auto_build_at
 from ..services.import_service import get_export_path
 from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware
 from ..helpers.db_helpers import get_or_404, fetch_tags_for_jobs, set_job_tags
-from ..helpers.file_helpers import validate_writable_directory
+from ..helpers.file_helpers import validate_writable_directory, make_relative, resolve_capture_path
 from .. import config
 
 router = APIRouter()
@@ -119,8 +119,9 @@ async def create_job(job: JobCreate):
                 detail=f"Failed to create job directory"
             )
         
-        # Update the capture_path with the actual directory
-        cursor.execute("UPDATE jobs SET capture_path = ? WHERE id = ?", (job_dir, job_id))
+        # Update the capture_path with the relative directory
+        cursor.execute("UPDATE jobs SET capture_path = ? WHERE id = ?",
+                       (make_relative(job_dir, job.capture_path), job_id))
         
         # Get the job we just created
         cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
@@ -621,15 +622,15 @@ def _get_export_files(job_id: int, job_name: str):
     total_size = 0
     
     # Captures — preserve directory structure relative to job folder
-    job_dir = job_dict.get('capture_path') or os.path.join(config.DEFAULT_CAPTURES_PATH,
-                                                            f"{job_id}_{job_name}")
+    job_dir = job_dict.get('capture_path') or f"{job_id}_{job_name}"
+    abs_job_dir = resolve_capture_path(job_dir)
     for row in captures:
-        disk_path = row[0]
+        disk_path = resolve_capture_path(row[0])
         if os.path.islink(disk_path) or not os.path.isfile(disk_path):
             continue
         # Relative path from job dir (e.g., 2026/01/15/14/image.jpg)
-        if disk_path.startswith(job_dir):
-            rel = os.path.relpath(disk_path, job_dir)
+        if disk_path.startswith(abs_job_dir):
+            rel = os.path.relpath(disk_path, abs_job_dir)
         else:
             rel = os.path.basename(disk_path)
         archive_path = f"{prefix}/captures/{rel}"
@@ -637,8 +638,9 @@ def _get_export_files(job_id: int, job_name: str):
         total_size += row[1] or os.path.getsize(disk_path)
     
     # Videos + thumbnails
+    from ..helpers.file_helpers import resolve_video_path
     for row in videos:
-        disk_path = row[0]
+        disk_path = resolve_video_path(row[0])
         if os.path.islink(disk_path) or not os.path.isfile(disk_path):
             continue
         archive_path = f"{prefix}/videos/{os.path.basename(disk_path)}"
@@ -646,7 +648,7 @@ def _get_export_files(job_id: int, job_name: str):
         total_size += row[1] or os.path.getsize(disk_path)
         
         # Include thumbnail if exists
-        thumb_path = row[2]
+        thumb_path = resolve_video_path(row[2]) if row[2] else None
         if thumb_path and not os.path.islink(thumb_path) and os.path.isfile(thumb_path):
             archive_path = f"{prefix}/videos/{os.path.basename(thumb_path)}"
             files.append((archive_path, thumb_path))

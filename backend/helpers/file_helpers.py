@@ -7,6 +7,36 @@ from fastapi import HTTPException
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Path resolution: DB stores relative paths, filesystem needs absolute
+# ---------------------------------------------------------------------------
+
+def resolve_path(relative_path: str, base_path: str) -> str:
+    """Resolve a relative DB path to an absolute filesystem path."""
+    if not relative_path:
+        return base_path
+    if os.path.isabs(relative_path):
+        return relative_path
+    return os.path.join(base_path, relative_path)
+
+
+def make_relative(absolute_path: str, base_path: str) -> str:
+    """Convert an absolute filesystem path to a path relative to the base."""
+    return os.path.relpath(absolute_path, base_path)
+
+
+def resolve_capture_path(relative_path: str) -> str:
+    """Resolve a capture-relative DB path to absolute."""
+    from ..services.import_service import get_captures_path
+    return resolve_path(relative_path, get_captures_path())
+
+
+def resolve_video_path(relative_path: str) -> str:
+    """Resolve a video/timelapse-relative DB path to absolute."""
+    from ..services.import_service import get_timelapses_path
+    return resolve_path(relative_path, get_timelapses_path())
+
+
 def validate_writable_directory(path: str, label: str = "Path"):
     """Validate that a path exists, is a directory, and is writable. Raises HTTPException on failure."""
     if not os.path.exists(path):

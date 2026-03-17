@@ -139,8 +139,10 @@ def process_video(
                     f.write(f"file '{path}'\n")
                     f.write(f"duration {1/framerate}\n")
             else:
+                from ..helpers.file_helpers import resolve_capture_path
                 for capture in captures:
-                    f.write(f"file '{capture[2]}'\n")  # capture[2] is file_path
+                    abs_fp = resolve_capture_path(capture[2])  # capture[2] is file_path
+                    f.write(f"file '{abs_fp}'\n")
                     f.write(f"duration {1/framerate}\n")
         
         try:
@@ -282,12 +284,13 @@ def _update_video_status(video_id: int, status: str, progress: float, message: s
 def _update_video_completed(video_id: int, file_size: int, total_frames: int, duration_seconds: float):
     """Mark video as completed with final metadata"""
     from .state_manager import update_video_state
+    from ..helpers.file_helpers import resolve_video_path
     
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT name, file_path FROM processed_videos WHERE id = ?", (video_id,))
         row = cursor.fetchone()
-        video_name, video_path = row[0], row[1]
+        video_name, video_path = row[0], resolve_video_path(row[1])
     
     update_video_state(
         video_id,
@@ -305,7 +308,8 @@ def _update_video_completed(video_id: int, file_size: int, total_frames: int, du
 
 
 def generate_thumbnail(video_id: int, video_path: str):
-    """Extract a thumbnail frame from a completed video"""
+    """Extract a thumbnail frame from a completed video.
+    video_path must be an absolute filesystem path."""
     if not os.path.exists(video_path):
         logger.warning(f"Cannot generate thumbnail: video file not found at {video_path}")
         return
@@ -324,10 +328,13 @@ def generate_thumbnail(video_id: int, video_path: str):
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         
         if result.returncode == 0 and os.path.exists(thumb_path):
+            from ..helpers.file_helpers import make_relative
+            from .import_service import get_timelapses_path
+            rel_thumb = make_relative(thumb_path, get_timelapses_path())
             with get_db() as conn:
                 conn.execute(
                     "UPDATE processed_videos SET thumbnail_path = ? WHERE id = ?",
-                    (thumb_path, video_id)
+                    (rel_thumb, video_id)
                 )
             logger.info(f"Generated thumbnail for video {video_id}: {thumb_path}")
         else:
@@ -350,5 +357,6 @@ def backfill_thumbnails():
         return
     
     logger.info(f"Backfilling thumbnails for {len(rows)} videos")
+    from ..helpers.file_helpers import resolve_video_path
     for row in rows:
-        generate_thumbnail(row[0], row[1])
+        generate_thumbnail(row[0], resolve_video_path(row[1]))

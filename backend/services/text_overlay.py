@@ -288,12 +288,13 @@ def process_frames_with_overlay(
         List of paths to processed frame images in order
     """
     from ..utils import parse_iso
+    from ..helpers.file_helpers import resolve_capture_path
 
     output_paths = []
     has_dynamic = _has_dynamic_variables(config.get('text', ''))
 
     for i, capture in enumerate(captures):
-        file_path = capture[2]  # file_path column
+        file_path = resolve_capture_path(capture[2])  # file_path column
         captured_at = capture[4]  # captured_at column
 
         if not os.path.isfile(file_path):

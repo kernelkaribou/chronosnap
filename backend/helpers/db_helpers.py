@@ -50,9 +50,11 @@ def decrement_job_stats(cursor, job_id: int, file_size: int, now_iso: str):
 
 def enrich_capture(capture_dict: dict, has_thumbnail_fn, get_thumbnail_path_fn) -> dict:
     """Add thumbnail and favorite fields to a capture dict."""
-    capture_dict['has_thumbnail'] = has_thumbnail_fn(capture_dict['file_path'])
+    from .file_helpers import resolve_capture_path
+    resolved_fp = resolve_capture_path(capture_dict['file_path'])
+    capture_dict['has_thumbnail'] = has_thumbnail_fn(resolved_fp)
     capture_dict['thumbnail_path'] = (
-        get_thumbnail_path_fn(capture_dict['file_path']) 
+        get_thumbnail_path_fn(resolved_fp) 
         if capture_dict['has_thumbnail'] else None
     )
     capture_dict['is_favorite'] = bool(capture_dict.get('is_favorite', 0))

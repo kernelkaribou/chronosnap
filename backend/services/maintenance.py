@@ -9,6 +9,7 @@ from typing import Dict, List, Any
 from PIL import Image
 from ..database import get_db, dict_from_row
 from ..utils import get_now, to_iso, ensure_timezone_aware
+from ..helpers.file_helpers import resolve_capture_path, make_relative
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ def scan_job_files(job_id: int) -> Dict[str, Any]:
             raise ValueError(f"Job {job_id} not found")
         
         job = dict_from_row(job_row)
-        capture_path = job['capture_path']
+        abs_capture_path = resolve_capture_path(job['capture_path'])
         
         # Get all captures for this job from database
         cursor.execute("""
@@ -95,7 +96,7 @@ def scan_job_files(job_id: int) -> Dict[str, Any]:
         
         captures = cursor.fetchall()
         
-        # Build a set of known file paths for quick lookup
+        # Build a set of known file paths (resolved absolute) for quick lookup
         known_files = set()
         missing_files = []
         existing_count = 0
@@ -103,13 +104,13 @@ def scan_job_files(job_id: int) -> Dict[str, Any]:
         
         for capture in captures:
             capture_dict = dict_from_row(capture)
-            file_path = capture_dict['file_path']
-            known_files.add(file_path)
+            abs_file_path = resolve_capture_path(capture_dict['file_path'])
+            known_files.add(abs_file_path)
             
-            if not os.path.exists(file_path):
+            if not os.path.exists(abs_file_path):
                 missing_files.append({
                     'id': capture_dict['id'],
-                    'file_path': file_path,
+                    'file_path': capture_dict['file_path'],
                     'file_size': capture_dict['file_size'],
                     'captured_at': capture_dict['captured_at']
                 })
@@ -119,8 +120,8 @@ def scan_job_files(job_id: int) -> Dict[str, Any]:
         
         # Now scan the file system for orphaned files
         orphaned_files = []
-        if os.path.exists(capture_path):
-            for root, dirs, files in os.walk(capture_path):
+        if os.path.exists(abs_capture_path):
+            for root, dirs, files in os.walk(abs_capture_path):
                 for filename in files:
                     # Only consider image files
                     if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
@@ -258,16 +259,21 @@ def import_orphaned_files(job_id: int, orphaned_files: List[Dict[str, Any]]) -> 
         
         for file_info in orphaned_files:
             try:
-                # Verify file still exists
-                if not os.path.exists(file_info['file_path']):
-                    logger.warning(f"Orphaned file no longer exists: {file_info['file_path']}")
+                # file_path from scan is already absolute
+                abs_fp = file_info['file_path']
+                if not os.path.exists(abs_fp):
+                    logger.warning(f"Orphaned file no longer exists: {abs_fp}")
                     continue
+                
+                # Store relative path in DB
+                from .import_service import get_captures_path
+                rel_fp = make_relative(abs_fp, get_captures_path())
                 
                 # Insert capture record
                 cursor.execute("""
                     INSERT INTO captures (job_id, file_path, file_size, captured_at)
                     VALUES (?, ?, ?, ?)
-                """, (job_id, file_info['file_path'], file_info['file_size'], file_info['captured_at']))
+                """, (job_id, rel_fp, file_info['file_size'], file_info['captured_at']))
                 
                 imported_count += 1
                 total_size += file_info['file_size']
