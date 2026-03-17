@@ -79,11 +79,14 @@ async def lifespan(app: FastAPI):
     # Startup
     init_db()
     
-    # Ensure required directories exist
+    # Ensure required directories exist (use DB settings with config fallbacks)
     import os
-    os.makedirs(config.DEFAULT_IMPORT_PATH, exist_ok=True)
-    os.makedirs(config.DEFAULT_EXPORTS_PATH, exist_ok=True)
-    os.makedirs(config.IMPORT_STAGING_DIR, exist_ok=True)
+    from .services.import_service import get_import_path, get_export_path
+    for path_name, path_val in [("import", get_import_path()), ("export", get_export_path()), ("staging", config.IMPORT_STAGING_DIR)]:
+        try:
+            os.makedirs(path_val, exist_ok=True)
+        except PermissionError:
+            logger.warning(f"Cannot create {path_name} directory: {path_val} (permission denied, skipping)")
     
     # Clean stale import staging directories (>2h old)
     from .services.import_service import cleanup_stale_staging, cleanup_old_exports
