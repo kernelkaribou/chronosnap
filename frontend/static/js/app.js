@@ -2479,6 +2479,9 @@ function displayDurationEstimate(captureCount, framerate) {
     const useRange = document.getElementById('use_range')?.checked;
     
     // Validate custom time range against available captures
+    const rangeInfo = document.getElementById('available-range-info');
+    let rangeWarning = false;
+    
     if (useRange && window.firstCaptureTime && window.lastCaptureTime) {
         const startTimeInput = document.getElementById('video_start_datetime');
         const endTimeInput = document.getElementById('video_end_datetime');
@@ -2488,30 +2491,36 @@ function displayDurationEstimate(captureCount, framerate) {
             const customEnd = new Date(endTimeInput.value);
             
             if (customEnd < window.firstCaptureTime || customStart > window.lastCaptureTime) {
-                document.getElementById('video-duration-estimate').innerHTML = 
-                    '<p style="color: var(--danger-color); font-weight: 600;"><strong>Warning:</strong> Selected time range is outside available captures!</p>' +
-                    '<p style="color: var(--danger-color); font-size: 0.875rem;">Available: ' + 
-                    formatDateTime(window.firstCaptureTime.toISOString()) + ' - ' + 
-                    formatDateTime(window.lastCaptureTime.toISOString()) + '</p>';
-                
-                if (createBtn) {
-                    setButtonState(createBtn, true);
+                rangeWarning = true;
+                if (rangeInfo) {
+                    rangeInfo.style.display = '';
+                    rangeInfo.style.borderLeftColor = 'var(--danger-color)';
+                    rangeInfo.style.color = 'var(--danger-color)';
+                    rangeInfo.innerHTML = `<strong>Warning:</strong> Selected range is outside available captures! Available: ${formatDateTime(window.firstCaptureTime.toISOString())} – ${formatDateTime(window.lastCaptureTime.toISOString())}`;
                 }
-                return;
+                captureCount = 0;
             }
         }
     }
     
-    if (captureCount === 0) {
-        const message = useRange 
-            ? '<p style="color: var(--danger-color); font-weight: 600;"><strong>Warning:</strong> No captures in selected time range!</p>'
-            : '<p style="color: var(--text-secondary);">No captures available for this job yet.</p>';
-        document.getElementById('video-duration-estimate').innerHTML = message;
-        
-        // Disable create button when no captures
-        if (createBtn) {
-            setButtonState(createBtn, true);
+    if (captureCount === 0 && !rangeWarning && useRange) {
+        if (rangeInfo) {
+            rangeInfo.style.display = '';
+            rangeInfo.style.borderLeftColor = 'var(--danger-color)';
+            rangeInfo.style.color = 'var(--danger-color)';
+            rangeInfo.innerHTML = `<strong>Warning:</strong> No captures in selected time range!`;
         }
+    } else if (!rangeWarning && rangeInfo) {
+        rangeInfo.style.borderLeftColor = '';
+        rangeInfo.style.color = '';
+    }
+    
+    if (captureCount === 0) {
+        document.getElementById('video-duration-estimate').innerHTML = `
+            <span style="font-weight: 600;">0s</span>
+            <span style="color: var(--text-secondary); font-size: 0.85rem;"> · 0 captures @ ${framerate} FPS</span>
+        `;
+        if (createBtn) setButtonState(createBtn, true);
         return;
     }
     
