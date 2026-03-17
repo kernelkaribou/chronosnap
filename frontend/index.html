@@ -958,8 +958,7 @@
                                 <p style="color:var(--text-secondary);font-size:0.85rem;margin:0;">Drop files or folders here</p>
                                 <p style="color:var(--text-secondary);font-size:0.75rem;margin:0.25rem 0 0.75rem;">Images, videos, or archives</p>
                                 <div style="display:flex;gap:0.5rem;justify-content:center;">
-                                    <button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-file-input').click()">Files</button>
-                                    <button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-folder-input').click()">Folder</button>
+                                    <button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-folder-input').click()">Browse</button>
                                 </div>
                                 <input type="file" id="import-file-input" multiple accept="image/*,video/*,.zip,.tar,.gz,.tgz,.rar,.7z" style="display:none" onchange="handleImportFiles(this.files)">
                                 <input type="file" id="import-folder-input" webkitdirectory style="display:none" onchange="handleImportFiles(this.files)">
