@@ -581,7 +581,11 @@ function filterJobs() {
     }
     
     if (activeStatuses.length > 0) {
-        filtered = filtered.filter(j => activeStatuses.includes(j.status));
+        filtered = filtered.filter(j => {
+            const isWarning = j.warning_message && j.status !== 'disabled' && j.status !== 'completed';
+            const displayStatus = isWarning ? 'warning' : j.status;
+            return activeStatuses.includes(displayStatus);
+        });
     }
     
     // Sort
