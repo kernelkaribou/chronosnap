@@ -704,7 +704,18 @@
 
                 <div class="form-group">
                     <label>Output Path *</label>
-                    <input type="text" id="video_output_path" class="form-control" required>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="text" id="video_output_path" class="form-control" required readonly style="flex: 1; opacity: 0.6;">
+                        <button type="button" class="btn-icon" id="output-path-edit-btn" onclick="toggleOutputPathEdit(true)" title="Edit" style="padding: 0.4rem;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button type="button" class="btn-icon" id="output-path-save-btn" onclick="toggleOutputPathEdit(false)" title="Save" style="padding: 0.4rem; display: none; color: var(--success-color);">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </button>
+                        <button type="button" class="btn-icon" id="output-path-cancel-btn" onclick="cancelOutputPathEdit()" title="Cancel" style="padding: 0.4rem; display: none; color: var(--danger-color);">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
                     <small>Directory where the video file will be saved</small>
                 </div>
 

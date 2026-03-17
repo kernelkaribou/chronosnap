@@ -2225,6 +2225,7 @@ async function showProcessVideoModal(jobId, jobName) {
             document.getElementById('process_job_id').value = '';
             document.querySelector('#process-video-modal .modal-header h3').textContent = 'Build Timelapse';
             document.getElementById('video_output_path').value = '/timelapses';
+            toggleOutputPathEdit(false);
             
             // Populate job dropdown
             await populateJobSelector();
@@ -2358,6 +2359,7 @@ async function populateVideoFormFromJob(jobId, jobName) {
     document.getElementById('video_name').value = `${jobName}_${timestamp}`;
     document.getElementById('video_framerate').value = job.framerate;
     document.getElementById('video_output_path').value = '/timelapses';
+    toggleOutputPathEdit(false);
     
     // Add native resolution option if available
     const resSelect = document.getElementById('video_resolution');
@@ -3074,6 +3076,36 @@ async function updateGenericOverlayPreview(prefix, job) {
         img._overlayUrl = url;
         img.src = url;
     } catch (e) { console.error('Edit overlay preview error:', e); }
+}
+
+let _outputPathBackup = '';
+
+function toggleOutputPathEdit(editing) {
+    const input = document.getElementById('video_output_path');
+    const editBtn = document.getElementById('output-path-edit-btn');
+    const saveBtn = document.getElementById('output-path-save-btn');
+    const cancelBtn = document.getElementById('output-path-cancel-btn');
+    if (editing) {
+        _outputPathBackup = input.value;
+        input.readOnly = false;
+        input.style.opacity = '1';
+        input.focus();
+        editBtn.style.display = 'none';
+        saveBtn.style.display = '';
+        cancelBtn.style.display = '';
+    } else {
+        input.readOnly = true;
+        input.style.opacity = '0.6';
+        editBtn.style.display = '';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+    }
+}
+
+function cancelOutputPathEdit() {
+    const input = document.getElementById('video_output_path');
+    input.value = _outputPathBackup;
+    toggleOutputPathEdit(false);
 }
 
 async function processVideo(event) {
