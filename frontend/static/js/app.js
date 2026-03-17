@@ -5303,11 +5303,19 @@ async function loadSettings() {
     loadServerPaths();
     loadExportRetention();
     
-    // Load version
+    // Load version and check for updates
     try {
         const ver = await apiRequest('/settings/version');
         const el = document.getElementById('app-version');
         if (el) el.textContent = `Timelapse Manager v${ver.version}`;
+        if (ver.update_available && ver.latest) {
+            const badge = document.getElementById('update-badge');
+            if (badge) {
+                badge.textContent = `v${ver.latest} available`;
+                badge.href = ver.release_url || 'https://github.com/kernelkaribou/timelapse-manager/releases';
+                badge.style.display = '';
+            }
+        }
     } catch (e) { /* non-critical */ }
 }
 

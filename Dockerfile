@@ -24,6 +24,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
+COPY VERSION ./VERSION
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
 COPY entrypoint.sh /entrypoint.sh
@@ -39,10 +40,12 @@ RUN mkdir -p /app/data /captures /timelapses /imports /exports && \
 LABEL org.opencontainers.image.title="Timelapse Manager" \
       org.opencontainers.image.description="Configuration and management tool for timelapse videos" \
       org.opencontainers.image.vendor="kernelkaribou" \
-      org.opencontainers.image.source="https://github.com/kernelkaribou/timelapse-manager"
+      org.opencontainers.image.source="https://github.com/kernelkaribou/timelapse-manager" \
+      org.opencontainers.image.version="2.0.0"
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
+ENV APP_VERSION=""
 ENV TZ=Etc/UTC
 ENV PORT=8080
 ENV LOG_LEVEL=INFO

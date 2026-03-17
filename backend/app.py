@@ -9,12 +9,28 @@ from contextlib import asynccontextmanager
 import uvicorn
 import logging
 import sys
+import os
 
 from .database import init_db
 from .routers import jobs, captures, videos, settings, storage, tags, shared
 from .services.capture_scheduler import CaptureScheduler
 from .auth import verify_api_key
 from . import config
+
+
+def get_app_version() -> str:
+    """Read version from APP_VERSION env var, or VERSION file, or fallback."""
+    env_ver = os.getenv("APP_VERSION", "").strip()
+    if env_ver:
+        return env_ver
+    # Try reading VERSION file from project root
+    for path in ["VERSION", "/app/VERSION"]:
+        try:
+            with open(path) as f:
+                return f.read().strip()
+        except FileNotFoundError:
+            continue
+    return "0.0.0"
 
 # Configure logging
 logging.basicConfig(
@@ -96,7 +112,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Timelapse Manager",
     description="Configuration and management tool for timelapse videos",
-    version="1.0.0",
+    version=get_app_version(),
     lifespan=lifespan,
     redirect_slashes=False,
     redoc_url=None  # Disable ReDoc, use Swagger UI only
@@ -138,8 +154,11 @@ app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
 
 @app.get("/")
 async def read_root():
-    """Serve the main frontend page"""
-    return FileResponse("frontend/index.html")
+    """Serve the main frontend page with version-based cache busting"""
+    from fastapi.responses import HTMLResponse
+    with open("frontend/index.html") as f:
+        html = f.read().replace("__APP_VERSION__", app.version)
+    return HTMLResponse(html)
 
 
 @app.get("/health")

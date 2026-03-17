@@ -62,8 +62,40 @@ async def get_api_key():
 
 @router.get("/version")
 async def get_version(request: Request):
-    """Get the application version"""
-    return {"version": request.app.version}
+    """Get the application version and check for updates."""
+    current = request.app.version
+    result = {"version": current, "latest": None, "update_available": False}
+
+    # Check GitHub for latest release (non-blocking, best-effort)
+    try:
+        import urllib.request
+        import json
+
+        req = urllib.request.Request(
+            "https://api.github.com/repos/kernelkaribou/timelapse-manager/releases/latest",
+            headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "timelapse-manager"}
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+            latest_tag = data.get("tag_name", "").lstrip("v")
+            if latest_tag:
+                result["latest"] = latest_tag
+                result["update_available"] = _is_newer(latest_tag, current)
+                result["release_url"] = data.get("html_url", "")
+    except Exception:
+        pass  # Network unavailable, no releases yet, etc.
+
+    return result
+
+
+def _is_newer(latest: str, current: str) -> bool:
+    """Compare semver strings. Returns True if latest > current."""
+    try:
+        latest_parts = [int(x) for x in latest.split(".")]
+        current_parts = [int(x) for x in current.split(".")]
+        return latest_parts > current_parts
+    except (ValueError, AttributeError):
+        return False
 
 
 @router.post("/api-key/regenerate", response_model=RegenerateResponse)
