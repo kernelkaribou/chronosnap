@@ -2529,11 +2529,11 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    padding: 0.15rem 0.5rem;
+    padding: 0.2rem 0.5rem;
     border-radius: 999px;
     font-size: 0.7rem;
     font-weight: 500;
-    line-height: 1.4;
+    line-height: 1;
     white-space: nowrap;
 }
 
@@ -2569,9 +2569,9 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .tag-create-btn {
     position: absolute; top: 0; left: 0; z-index: 1;
     display: inline-flex; align-items: center; gap: 0.25rem;
-    padding: 0.2rem 0.65rem;
+    padding: 0.3rem 0.75rem;
     border-radius: 999px;
-    font-size: 0.75rem; font-weight: 500;
+    font-size: 0.85rem; font-weight: 500;
     cursor: pointer;
     background: var(--accent-purple);
     color: #fff;
