@@ -601,7 +601,15 @@ async def scan_import_directory(request: DirectoryScanRequest):
 
 @router.post("/import", response_model=JobResponse)
 async def import_directory(request: DirectoryImportRequest):
-    """Import a directory of images as a new job with pre-populated captures."""
+    """Import a directory of images as a new job with pre-populated captures.
+    
+    Files are moved from the source directory into the standard job folder
+    structure: {DEFAULT_CAPTURES_PATH}/{job_id}_{name}/YYYY/MM/DD/HH/
+    """
+    import shutil
+    from datetime import datetime
+    from .. import config
+    
     try:
         scan = scan_directory(request.directory)
         if scan['count'] == 0:
@@ -619,7 +627,7 @@ async def import_directory(request: DirectoryImportRequest):
                     name, url, stream_type, start_datetime, end_datetime,
                     interval_seconds, framerate, status, capture_path,
                     naming_pattern, capture_count, storage_size, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, 30, 'completed', ?, 'capture_%Y%m%d_%H%M%S', 0, 0, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, 30, 'completed', ?, ?, 0, 0, ?, ?)
             """, (
                 request.name,
                 request.url or '',
@@ -627,31 +635,83 @@ async def import_directory(request: DirectoryImportRequest):
                 first_ts,
                 last_ts,
                 request.interval_seconds,
-                request.directory,
+                '',  # Placeholder — updated after directory creation
+                config.DEFAULT_CAPTURE_PATTERN,
                 now, now
             ))
             job_id = cursor.lastrowid
             
-            # Bulk insert captures
+            # Create standard job directory
+            job_dir = os.path.join(config.DEFAULT_CAPTURES_PATH, f"{job_id}_{request.name}")
+            try:
+                os.makedirs(job_dir, exist_ok=True)
+            except Exception as e:
+                cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Failed to create job directory: {e}"
+                )
+            
+            cursor.execute("UPDATE jobs SET capture_path = ? WHERE id = ?", (job_dir, job_id))
+            
+            # Move files into hierarchical structure and insert capture records
+            moved_count = 0
+            total_size = 0
             for f in scan['files']:
+                src_path = f['file_path']
+                ts = datetime.fromisoformat(f['captured_at'])
+                
+                # Build destination path: job_dir/YYYY/MM/DD/HH/filename
+                date_dir = os.path.join(
+                    job_dir,
+                    str(ts.year),
+                    f"{ts.month:02d}",
+                    f"{ts.day:02d}",
+                    f"{ts.hour:02d}"
+                )
+                os.makedirs(date_dir, exist_ok=True)
+                dest_path = os.path.join(date_dir, os.path.basename(src_path))
+                
+                # Handle name collision in destination
+                if os.path.exists(dest_path):
+                    base, ext = os.path.splitext(os.path.basename(src_path))
+                    counter = 1
+                    while os.path.exists(dest_path):
+                        dest_path = os.path.join(date_dir, f"{base}_{counter}{ext}")
+                        counter += 1
+                
+                try:
+                    shutil.move(src_path, dest_path)
+                except Exception as e:
+                    logger.warning(f"Failed to move {src_path}: {e}, skipping")
+                    continue
+                
                 cursor.execute(
                     "INSERT INTO captures (job_id, file_path, file_size, captured_at) VALUES (?, ?, ?, ?)",
-                    (job_id, f['file_path'], f['file_size'], f['captured_at'])
+                    (job_id, dest_path, f['file_size'], f['captured_at'])
                 )
+                moved_count += 1
+                total_size += f['file_size']
+            
+            if moved_count == 0:
+                # Clean up if nothing was moved
+                cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+                shutil.rmtree(job_dir, ignore_errors=True)
+                raise HTTPException(status_code=400, detail="Failed to move any files")
             
             # Update job stats
             cursor.execute("""
                 UPDATE jobs SET capture_count = ?, storage_size = ? WHERE id = ?
-            """, (scan['count'], scan['total_size'], job_id))
+            """, (moved_count, total_size, job_id))
             
             logger.info(f"Imported directory '{request.directory}' as job '{request.name}' "
-                       f"(ID: {job_id}): {scan['count']} captures, {scan['total_size']} bytes")
+                       f"(ID: {job_id}): {moved_count} captures moved, {total_size} bytes")
             
             # Return the created job
             job = get_or_404(cursor, "SELECT * FROM jobs WHERE id = ?", (job_id,), "Job not found")
             job['latest_capture'] = None
             job['tags'] = []
-            if scan['count'] > 0:
+            if moved_count > 0:
                 cursor.execute(
                     "SELECT * FROM captures WHERE job_id = ? ORDER BY captured_at DESC LIMIT 1",
                     (job_id,)
