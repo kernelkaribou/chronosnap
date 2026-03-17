@@ -30,7 +30,7 @@ if [ "$CURRENT_UID" != "$PUID" ] || [ "$CURRENT_GID" != "$PGID" ]; then
 fi
 
 # Set ownership of directories (ignore errors for NFS/read-only mounts)
-chown -R "$PUID:$PGID" /app/data /captures /timelapses /imports 2>/dev/null || true
+chown -R "$PUID:$PGID" /app/data /captures /timelapses /imports /exports 2>/dev/null || true
 
 # Switch to app user and execute the command
 exec gosu "$PUID:$PGID" "$@"

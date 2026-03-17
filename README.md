@@ -50,6 +50,14 @@ The import feature allows bringing in existing images and videos from outside th
 
 After a successful import, source files are removed from the import directory to prevent accidental re-imports.
 
+### Exporting
+
+Export a job as a ZIP archive containing all of its captures (with the original date-based directory structure), generated videos with thumbnails, and a `job.json` metadata file. The metadata includes the job configuration and capture/video counts for reference or potential future re-import.
+
+**Small exports** (under 1 GB) are streamed directly as a browser download. **Large exports** (1 GB or more) are built to the `/exports` directory on disk, then downloaded from there. You can manage saved exports from the API — list, download, or delete them.
+
+The export button appears in the job details modal (the download arrow icon next to edit/duplicate).
+
 ### Management
 
 - Web interface with light and dark themes
@@ -98,6 +106,7 @@ Four volumes are required for persistent data:
 | `./timelapses` | `/timelapses` | Processed timelapse videos |
 | `./data` | `/app/data` | SQLite database and import staging area |
 | `./imports` | `/imports` | Drop zone for server-side file imports |
+| `./exports` | `/exports` | Staging area for large job exports |
 
 ### Environment Variables
 
@@ -128,6 +137,7 @@ services:
       - ./timelapses:/timelapses
       - ./data:/app/data
       - ./imports:/imports
+      - ./exports:/exports
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -212,7 +222,7 @@ Interactive API documentation is available at `/docs` (Swagger UI) when the appl
 | Prefix | Purpose |
 |--------|---------|
 | `GET /health` | Health check (no authentication required) |
-| `/api/jobs` | Create, list, update, and delete capture jobs. Trigger manual captures. Run capture sync scans. |
+| `/api/jobs` | Create, list, update, and delete capture jobs. Trigger manual captures. Run capture sync scans. Export jobs as ZIP archives. |
 | `/api/captures` | List, filter, download, and delete captures. Detect and clean up orphaned files. |
 | `/api/videos` | Create timelapse videos, track processing progress, download and delete videos. |
 | `/api/import` | Import images and videos from server paths or browser uploads. Browse directories, analyze staged files, execute imports. |
@@ -242,6 +252,8 @@ To fully back up an instance, preserve these paths:
 - `/timelapses/` (videos)
 
 The `/imports/` directory does not need to be backed up — it is a temporary drop zone for files being imported. After a successful import, files are moved out of this directory automatically.
+
+The `/exports/` directory contains saved export archives for large jobs. These can be re-downloaded or deleted from the API and do not need to be backed up unless you want to preserve them separately.
 
 The database contains all job configurations, capture metadata, and video records. Without it, the application cannot associate images with their jobs.
 

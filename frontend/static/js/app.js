@@ -1029,6 +1029,11 @@ async function showJobDetails(jobId) {
                                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                             </svg>
                         </button>
+                        <button class="btn-icon" onclick="exportJob(${job.id}, '${escapeHtml(job.name)}')" title="Export Job" style="padding: 0.5rem;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                        </button>
                         <button class="btn-icon" onclick="deleteJob(${job.id}, '${escapeHtml(job.name)}')" title="Delete Job" style="padding: 0.5rem;">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="3 6 5 6 21 6"></polyline>
@@ -3775,6 +3780,72 @@ function showCreateJobModal() {
     setTimeout(() => {
         updateDurationEstimate();
     }, 100);
+}
+
+async function exportJob(jobId, jobName) {
+    try {
+        // Get estimate first
+        const estimate = await apiRequest(`/jobs/${jobId}/export/estimate`);
+        const totalSize = formatBytes(estimate.total_size);
+        const details = [];
+        if (estimate.capture_count > 0) details.push(`${estimate.capture_count} captures (${formatBytes(estimate.capture_size)})`);
+        if (estimate.video_count > 0) details.push(`${estimate.video_count} video(s) (${formatBytes(estimate.video_size)})`);
+        
+        if (!details.length) {
+            showNotification('No files to export for this job', 'error');
+            return;
+        }
+        
+        const desc = `${details.join(', ')} — estimated ${totalSize}`;
+        
+        confirmAction(
+            `Export "${jobName}"?`,
+            desc + (estimate.method === 'file' ? '\n\nLarge export — archive will be built to /exports for download.' : ''),
+            'Export',
+            async () => {
+                showNotification('Building export...', 'info');
+                try {
+                    if (estimate.method === 'stream') {
+                        // Small export — stream directly
+                        const response = await fetch(`${API_BASE}/jobs/${jobId}/export`, {
+                            method: 'POST',
+                            headers: { 'X-API-Key': API_KEY },
+                        });
+                        if (!response.ok) {
+                            const err = await response.json().catch(() => ({ detail: 'Export failed' }));
+                            throw new Error(err.detail || 'Export failed');
+                        }
+                        const blob = await response.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = response.headers.get('content-disposition')?.match(/filename="(.+)"/)?.[1] || `${jobId}_export.zip`;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        URL.revokeObjectURL(url);
+                        showNotification('Export downloaded', 'success');
+                    } else {
+                        // Large export — built to disk
+                        const result = await apiRequest(`/jobs/${jobId}/export`, { method: 'POST' });
+                        // Trigger download from the file URL
+                        const a = document.createElement('a');
+                        a.href = `${API_BASE}${result.download_url}?api_key=${API_KEY}`;
+                        a.download = result.file_name;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        showNotification(`Export ready: ${result.file_name} (${formatBytes(result.file_size)})`, 'success');
+                    }
+                } catch (error) {
+                    showNotification(error.message || 'Export failed', 'error');
+                }
+            },
+            { closeModalId: null }
+        );
+    } catch (error) {
+        showNotification(error.message || 'Failed to estimate export', 'error');
+    }
 }
 
 async function duplicateJob(jobId) {

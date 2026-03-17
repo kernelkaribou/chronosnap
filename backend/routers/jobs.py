@@ -2,9 +2,14 @@
 Jobs API endpoints
 """
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse, StreamingResponse
 from typing import List, Optional
 import os
+import re
+import json
+import zipfile
 import logging
+from datetime import datetime
 
 from ..models import JobCreate, JobUpdate, JobResponse, TestUrlResponse, DurationEstimate, DurationCalculation, MaintenanceResult, MaintenanceCleanup, MaintenanceImport, DirectoryScanRequest, DirectoryImportRequest
 from ..database import get_db, dict_from_row
@@ -18,6 +23,7 @@ from ..services.auto_builder import get_next_auto_build_at
 from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware
 from ..helpers.db_helpers import get_or_404, fetch_tags_for_jobs, set_job_tags
 from ..helpers.file_helpers import validate_writable_directory
+from .. import config
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -576,6 +582,255 @@ async def import_job_maintenance(job_id: int, import_data: MaintenanceImport):
     except Exception as e:
         logger.error(f"Error during maintenance import for job {job_id}: {str(e)}")
         raise HTTPException(status_code=500, detail="Maintenance import failed")
+
+
+# ── Job Export ───────────────────────────────────────────────────────────
+
+def _get_export_files(job_id: int, job_name: str):
+    """Gather all files for a job export: captures, videos, and job metadata.
+    
+    Returns (files, total_size, job_dict) where files is a list of
+    (archive_path, disk_path) tuples.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+        job = get_or_404(cursor, "SELECT * FROM jobs WHERE id = ?", (job_id,), "Job not found")
+        job_dict = dict(job)
+        
+        # Get all captures
+        cursor.execute(
+            "SELECT file_path, file_size FROM captures WHERE job_id = ? ORDER BY captured_at",
+            (job_id,)
+        )
+        captures = cursor.fetchall()
+        
+        # Get all completed videos
+        cursor.execute(
+            "SELECT file_path, file_size, thumbnail_path FROM processed_videos WHERE job_id = ? AND status = 'completed'",
+            (job_id,)
+        )
+        videos = cursor.fetchall()
+    
+    sanitized = re.sub(r'[^\w\s-]', '', job_name).strip().replace(' ', '_')
+    prefix = f"{job_id}_{sanitized}"
+    
+    files = []
+    total_size = 0
+    
+    # Captures — preserve directory structure relative to job folder
+    job_dir = job_dict.get('capture_path') or os.path.join(config.DEFAULT_CAPTURES_PATH,
+                                                            f"{job_id}_{job_name}")
+    for row in captures:
+        disk_path = row[0]
+        if not os.path.isfile(disk_path):
+            continue
+        # Relative path from job dir (e.g., 2026/01/15/14/image.jpg)
+        if disk_path.startswith(job_dir):
+            rel = os.path.relpath(disk_path, job_dir)
+        else:
+            rel = os.path.basename(disk_path)
+        archive_path = f"{prefix}/captures/{rel}"
+        files.append((archive_path, disk_path))
+        total_size += row[1] or os.path.getsize(disk_path)
+    
+    # Videos + thumbnails
+    for row in videos:
+        disk_path = row[0]
+        if not os.path.isfile(disk_path):
+            continue
+        archive_path = f"{prefix}/videos/{os.path.basename(disk_path)}"
+        files.append((archive_path, disk_path))
+        total_size += row[1] or os.path.getsize(disk_path)
+        
+        # Include thumbnail if exists
+        thumb_path = row[2]
+        if thumb_path and os.path.isfile(thumb_path):
+            archive_path = f"{prefix}/videos/{os.path.basename(thumb_path)}"
+            files.append((archive_path, thumb_path))
+            total_size += os.path.getsize(thumb_path)
+    
+    return files, total_size, job_dict
+
+
+@router.get("/{job_id}/export/estimate")
+async def export_estimate(job_id: int):
+    """Get size estimate and file counts for a job export."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        job = get_or_404(cursor, "SELECT id, name FROM jobs WHERE id = ?", (job_id,), "Job not found")
+        
+        cursor.execute(
+            "SELECT COUNT(*), COALESCE(SUM(file_size), 0) FROM captures WHERE job_id = ?",
+            (job_id,)
+        )
+        cap_count, cap_size = cursor.fetchone()
+        
+        cursor.execute(
+            "SELECT COUNT(*), COALESCE(SUM(file_size), 0) FROM processed_videos WHERE job_id = ? AND status = 'completed'",
+            (job_id,)
+        )
+        vid_count, vid_size = cursor.fetchone()
+    
+    total_size = cap_size + vid_size
+    
+    return {
+        'job_id': job_id,
+        'job_name': job['name'],
+        'capture_count': cap_count,
+        'capture_size': cap_size,
+        'video_count': vid_count,
+        'video_size': vid_size,
+        'total_size': total_size,
+        'method': 'stream' if total_size < config.EXPORT_STREAM_THRESHOLD else 'file',
+    }
+
+
+@router.post("/{job_id}/export")
+async def export_job(job_id: int):
+    """Export a job as a ZIP archive.
+    
+    Small exports (<1GB) stream directly. Large exports are built to /exports
+    and return a download URL.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+        job = get_or_404(cursor, "SELECT id, name FROM jobs WHERE id = ?", (job_id,), "Job not found")
+    
+    job_name = job['name']
+    files, total_size, job_dict = _get_export_files(job_id, job_name)
+    
+    if not files:
+        raise HTTPException(status_code=404, detail="No files to export for this job")
+    
+    sanitized = re.sub(r'[^\w\s-]', '', job_name).strip().replace(' ', '_')
+    zip_name = f"{job_id}_{sanitized}_export.zip"
+    prefix = f"{job_id}_{sanitized}"
+    
+    # Build job metadata JSON
+    metadata = {
+        'job_id': job_dict['id'],
+        'name': job_dict['name'],
+        'stream_url': job_dict.get('stream_url', ''),
+        'stream_type': job_dict.get('stream_type', ''),
+        'interval_seconds': job_dict.get('interval_seconds'),
+        'start_date': job_dict.get('start_date'),
+        'end_date': job_dict.get('end_date'),
+        'time_window_start': job_dict.get('time_window_start'),
+        'time_window_end': job_dict.get('time_window_end'),
+        'created_at': job_dict.get('created_at'),
+        'capture_count': len([f for f in files if '/captures/' in f[0]]),
+        'video_count': len([f for f in files if '/videos/' in f[0] and not f[0].endswith('_thumb.jpg')]),
+        'total_size': total_size,
+        'exported_at': to_iso(get_now()),
+    }
+    metadata_json = json.dumps(metadata, indent=2)
+    
+    if total_size < config.EXPORT_STREAM_THRESHOLD:
+        # Stream directly to browser
+        import io
+        
+        def generate_zip():
+            buffer = io.BytesIO()
+            with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_STORED) as zf:
+                # Add metadata
+                zf.writestr(f"{prefix}/job.json", metadata_json)
+                
+                for archive_path, disk_path in files:
+                    zf.write(disk_path, archive_path)
+            
+            buffer.seek(0)
+            yield from iter(lambda: buffer.read(8 * 1024 * 1024), b'')
+        
+        return StreamingResponse(
+            generate_zip(),
+            media_type='application/zip',
+            headers={'Content-Disposition': f'attachment; filename="{zip_name}"'}
+        )
+    else:
+        # Build to disk for large exports
+        export_path = os.path.join(config.DEFAULT_EXPORTS_PATH, zip_name)
+        
+        try:
+            with zipfile.ZipFile(export_path, 'w', zipfile.ZIP_STORED) as zf:
+                zf.writestr(f"{prefix}/job.json", metadata_json)
+                
+                for archive_path, disk_path in files:
+                    zf.write(disk_path, archive_path)
+            
+            os.chmod(export_path, 0o644)
+            logger.info(f"Built export archive: {export_path} ({os.path.getsize(export_path)} bytes)")
+            
+            return {
+                'method': 'file',
+                'file_name': zip_name,
+                'file_size': os.path.getsize(export_path),
+                'download_url': f'/api/jobs/{job_id}/export/download/{zip_name}',
+            }
+        except Exception as e:
+            # Clean up partial file
+            if os.path.exists(export_path):
+                os.remove(export_path)
+            logger.error(f"Export failed for job {job_id}: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Export failed")
+
+
+@router.get("/{job_id}/export/download/{file_name}")
+async def download_export(job_id: int, file_name: str):
+    """Download a previously built export archive."""
+    # Sanitize file_name
+    if '/' in file_name or '\\' in file_name or '..' in file_name:
+        raise HTTPException(status_code=400, detail="Invalid file name")
+    
+    export_path = os.path.join(config.DEFAULT_EXPORTS_PATH, file_name)
+    
+    if not os.path.isfile(export_path):
+        raise HTTPException(status_code=404, detail="Export file not found")
+    
+    # Verify the file belongs to this job
+    if not file_name.startswith(f"{job_id}_"):
+        raise HTTPException(status_code=403, detail="Export does not belong to this job")
+    
+    return FileResponse(
+        export_path,
+        media_type='application/zip',
+        filename=file_name,
+    )
+
+
+@router.get("/exports/list")
+async def list_exports():
+    """List available export archives in /exports."""
+    exports_dir = config.DEFAULT_EXPORTS_PATH
+    if not os.path.isdir(exports_dir):
+        return {'exports': []}
+    
+    exports = []
+    for entry in sorted(os.scandir(exports_dir), key=lambda e: e.stat().st_mtime, reverse=True):
+        if entry.is_file() and entry.name.endswith('.zip'):
+            stat = entry.stat()
+            exports.append({
+                'file_name': entry.name,
+                'file_size': stat.st_size,
+                'created_at': to_iso(datetime.fromtimestamp(stat.st_mtime, tz=get_now().tzinfo)),
+            })
+    
+    return {'exports': exports}
+
+
+@router.delete("/exports/{file_name}")
+async def delete_export(file_name: str):
+    """Delete an export archive."""
+    if '/' in file_name or '\\' in file_name or '..' in file_name:
+        raise HTTPException(status_code=400, detail="Invalid file name")
+    
+    export_path = os.path.join(config.DEFAULT_EXPORTS_PATH, file_name)
+    
+    if not os.path.isfile(export_path):
+        raise HTTPException(status_code=404, detail="Export file not found")
+    
+    os.remove(export_path)
+    logger.info(f"Deleted export: {file_name}")
+    return {'status': 'deleted', 'file_name': file_name}
 
 
 # ── Directory Import ─────────────────────────────────────────────────────
