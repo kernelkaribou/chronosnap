@@ -354,6 +354,13 @@ body {
     transform: translateY(-1px);
 }
 
+.btn-purple:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
 .btn-sm {
     padding: 0.375rem 0.75rem;
     font-size: 0.75rem;
