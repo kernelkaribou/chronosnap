@@ -982,7 +982,7 @@ body {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 3px;
-    width: 105px;
+    width: 130px;
 }
 
 /* Overlay two-column layout → stacked: preview on top, compact controls below */
@@ -1044,7 +1044,7 @@ body {
 
 .overlay-position-grid .pos-btn {
     width: 100%;
-    aspect-ratio: 1.5;
+    aspect-ratio: 1.3;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     background: var(--bg-secondary);

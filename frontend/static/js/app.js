@@ -2548,42 +2548,40 @@ function generateOverlayHTML(prefix, opts = {}) {
         : '<option value="DejaVu Sans">DejaVu Sans</option>';
 
     const controlsHtml = `
-            <div style="display:flex; gap:0.5rem; align-items:stretch;">
-                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.4rem;">
+            <div style="display:flex; gap:0.75rem; align-items:center;">
+                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.35rem;">
                     <div style="display:flex; gap:0.5rem; align-items:flex-end;">
-                        <div style="flex: 0 0 40%; min-width:0;">
+                        <div style="flex: 0 0 35%; min-width:0;">
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Text</label>
                             <input type="text" id="${prefix}-overlay-text" class="form-control" value="{job_name}" placeholder="{job_name}"${inputEvent}>
                         </div>
-                        <div style="flex: 1 1 auto; min-width:0;">
+                        <div style="flex: 0 0 auto; max-width:130px; min-width:0;">
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Font</label>
                             <select id="${prefix}-overlay-font" class="form-control"${inputEvent}>${fontOpts}</select>
                         </div>
-                        <div style="width:55px; flex:0 0 55px;">
+                        <div style="flex:0 0 50px;">
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Size</label>
                             <input type="number" id="${prefix}-overlay-size" class="form-control" value="5" min="1" max="20" step="1"${inputEvent}>
                         </div>
-                        <div style="width:36px; flex:0 0 36px;">
+                        <div style="flex:0 0 auto; display:flex; flex-direction:column; align-items:center;">
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Bold</label>
-                            <div style="display:flex;align-items:center;height:38px;">
-                                <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr}>
-                            </div>
+                            <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr} style="margin-top:auto; margin-bottom:auto;">
                         </div>
                     </div>
-                    <small style="color: var(--text-secondary); font-size:0.6rem; margin-top:-2px;"><code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code></small>
+                    <small style="color: var(--text-secondary); font-size:0.6rem;"><code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code></small>
                     <div style="display:flex; gap:0.3rem; align-items:center;">
                         <span style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">Text:</span>
                         <input type="color" id="${prefix}-overlay-color" value="#FFFFFF" style="border:none;padding:0;height:18px;width:18px;border-radius:50%;cursor:pointer;background:none;"${inputEvent}>
-                        <input type="range" id="${prefix}-overlay-color-opacity" min="0" max="100" value="100" style="flex:1; height:14px; max-width:100px;"${inputEvent}>
+                        <input type="range" id="${prefix}-overlay-color-opacity" min="0" max="100" value="100" style="flex:1; height:14px;"${inputEvent}>
                         <span id="${prefix}-overlay-color-opacity-label" style="width:30px;text-align:right;font-size:0.75rem;color:var(--text-secondary);">100%</span>
-                        <input type="checkbox" id="${prefix}-overlay-bg" checked${onchangeAttr} style="margin:0;">
+                        <input type="checkbox" id="${prefix}-overlay-bg" checked${onchangeAttr} style="margin:0 0 0 0.25rem;">
                         <span style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">Background:</span>
                         <input type="color" id="${prefix}-overlay-bg-color" value="#000000" style="border:none;padding:0;height:18px;width:18px;border-radius:50%;cursor:pointer;background:none;"${inputEvent}>
-                        <input type="range" id="${prefix}-overlay-bg-opacity" min="0" max="100" value="50" style="flex:1; height:14px; max-width:100px;"${inputEvent}>
+                        <input type="range" id="${prefix}-overlay-bg-opacity" min="0" max="100" value="50" style="flex:1; height:14px;"${inputEvent}>
                         <span id="${prefix}-overlay-opacity-label" style="width:30px;text-align:right;font-size:0.75rem;color:var(--text-secondary);">50%</span>
                     </div>
                 </div>
-                <div style="flex:0 0 auto; display:flex; flex-direction:column; justify-content:center;">
+                <div style="flex:0 0 auto;">
                     <div class="overlay-position-grid" id="${prefix}-overlay-grid">${gridBtns}</div>
                 </div>
             </div>`;
