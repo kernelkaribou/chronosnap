@@ -31,8 +31,6 @@ services:
       - ALL
     cap_add:
       - CHOWN
-      - DAC_OVERRIDE
-      - FOWNER
       - SETUID
       - SETGID
     # Security: No new privileges
