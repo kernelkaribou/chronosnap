@@ -599,33 +599,26 @@
     <div id="process-video-modal" class="modal">
         <div class="modal-content large">
             <div class="modal-header">
-                <h3>Process Timelapse Video</h3>
+                <h3>Build Timelapse</h3>
                 <span class="close" onclick="closeModal('process-video-modal')">&times;</span>
             </div>
             <form id="process-video-form" onsubmit="processVideo(event)">
                 <input type="hidden" id="process_job_id">
-                <div class="builder-layout">
-                <div class="builder-fields">
 
-                <div class="form-group" id="job-selector-group">
-                    <label>Job *</label>
-                    <select id="process_job_select" class="form-control" required onchange="onJobSelectChange()">
-                        <option value="">Select a job...</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label>Video Name *</label>
-                    <input type="text" id="video_name" class="form-control" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Output Path *</label>
-                    <input type="text" id="video_output_path" class="form-control" required>
-                    <small>Directory where the video file will be saved</small>
+                <div class="form-row">
+                    <div class="form-group flex-1" id="job-selector-group">
+                        <label>Job *</label>
+                        <select id="process_job_select" class="form-control" required onchange="onJobSelectChange()">
+                            <option value="">Select a job...</option>
+                        </select>
+                    </div>
+                    <div class="form-group flex-1">
+                        <label>Video Name *</label>
+                        <input type="text" id="video_name" class="form-control" required>
+                    </div>
                 </div>
 
-              <div class="form-row">
+                <div class="form-row">
                     <div class="form-group flex-1">
                         <label>Resolution *</label>
                         <select id="video_resolution" class="form-control" required onchange="toggleCustomResolution()">
@@ -645,6 +638,14 @@
                             <option value="lossless">Lossless</option>
                         </select>
                     </div>
+                    <div class="form-group flex-1">
+                        <label>Framerate (FPS) *</label>
+                        <input type="number" id="video_framerate" class="form-control" min="1" value="30" required>
+                    </div>
+                    <div class="form-group flex-1">
+                        <label>Estimated Duration</label>
+                        <div class="duration-estimate" id="video-duration-estimate" style="margin-top: 0.2rem;"></div>
+                    </div>
                 </div>
 
                 <div id="custom-resolution" class="form-row" style="display: none;">
@@ -658,14 +659,18 @@
                     </div>
                 </div>
 
-                <div class="form-row">
-                    <div class="form-group flex-1">
-                        <label>Framerate (FPS) *</label>
-                        <input type="number" id="video_framerate" class="form-control" min="1" value="30" required>
-                    </div>
-                    <div class="form-group flex-1">
-                        <label>Estimated Duration</label>
-                        <div class="duration-estimate" id="video-duration-estimate" style="margin-top: 0.2rem;"></div>
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
+                            <input type="checkbox" id="use_range" style="cursor: pointer;" onchange="toggleFieldGroup('capture-range-fields', this.checked)">
+                            <span><strong>Custom Time Range</strong></span>
+                        </label>
+                        <div id="capture-range-fields" class="toggle-fields disabled" style="display: flex; align-items: center; gap: 0.5rem;">
+                            <label style="font-size: 0.8rem; margin: 0;">Start</label>
+                            <input type="datetime-local" id="video_start_datetime" class="form-control" style="padding: 0.3rem 0.5rem;">
+                            <label style="font-size: 0.8rem; margin: 0;">End</label>
+                            <input type="datetime-local" id="video_end_datetime" class="form-control" style="padding: 0.3rem 0.5rem;">
+                        </div>
                     </div>
                 </div>
 
@@ -673,27 +678,7 @@
                     <strong>Capture Range:</strong> <span id="capture-time-range"></span>
                 </div>
 
-                <div class="form-group">
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <input type="checkbox" id="use_range" onchange="toggleFieldGroup('capture-range-fields', this.checked)">
-                        <span>Use custom time range</span>
-                    </div>
-                </div>
-
-                <div id="capture-range-fields" class="toggle-fields disabled">
-                    <div class="form-group">
-                        <label>Custom Time Range</label>
-                        <div style="display: flex; gap: 0.75rem; align-items: center;">
-                            <span style="color: var(--text-secondary); font-size: 0.85rem; white-space: nowrap;">Start</span>
-                            <input type="datetime-local" id="video_start_datetime" class="form-control" style="flex: 1; min-width: 0;">
-                            <span style="color: var(--text-secondary); font-size: 0.85rem; white-space: nowrap;">End</span>
-                            <input type="datetime-local" id="video_end_datetime" class="form-control" style="flex: 1; min-width: 0;">
-                        </div>
-                    </div>
-                </div>
-
-                </div><!-- .builder-fields -->
-                <div class="builder-preview" id="builder-preview">
+                <div class="builder-preview" id="builder-preview" style="margin-bottom: 1rem;">
                     <div class="builder-preview-placeholder" id="builder-preview-placeholder">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
                             <rect x="2" y="2" width="20" height="20" rx="2"/>
@@ -707,17 +692,22 @@
                         <span id="job-preview-label"></span>
                     </div>
                 </div>
-                </div><!-- .builder-layout -->
 
-                <div id="build-overlay-container" style="margin-top: 0.75rem;"></div>
+                <div id="build-overlay-container"></div>
 
                 <div class="form-group" style="margin-top: 0.75rem;">
                     <label>Tags</label>
                     <div class="tag-picker" id="build-video-tags"></div>
                 </div>
 
+                <div class="form-group">
+                    <label>Output Path *</label>
+                    <input type="text" id="video_output_path" class="form-control" required>
+                    <small>Directory where the video file will be saved</small>
+                </div>
+
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('process-video-modal')">Cancel</button>
+                    <button type="button" class="btn btn-secondary compare-btn" onclick="closeModal('process-video-modal')">Cancel</button>
                     <button type="submit" id="create-video-btn" class="btn btn-purple">Create</button>
                 </div>
             </form>
