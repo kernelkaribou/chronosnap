@@ -3289,6 +3289,10 @@ function showImportModal() {
 }
 
 function resetImportModal() {
+    // Clean up any active staging session on the server
+    if (_importSessionId) {
+        apiRequest(`/import/${_importSessionId}`, { method: 'DELETE' }).catch(() => {});
+    }
     _importSessionId = null;
     _importAnalysis = null;
     _importSourcePath = null;
@@ -3669,6 +3673,7 @@ async function executeImport() {
         if (result.videos && result.videos.length) parts.push(`${result.videos.length} video(s)`);
         
         closeModal('import-modal');
+        _importSessionId = null; // Already cleaned by execute
         showNotification(`Imported ${parts.join(' and ')}`, 'success');
         loadJobs();
         loadVideos();

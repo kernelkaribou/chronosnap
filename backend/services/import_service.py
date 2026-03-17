@@ -60,7 +60,7 @@ MAX_SINGLE_FILE_SIZE = 50 * 1024 * 1024 * 1024  # 50GB
 EXTRACTION_TIMEOUT = 600        # 10 minutes
 MAX_FILENAME_LENGTH = 255
 MAX_CONCURRENT_SESSIONS = 5
-STALE_STAGING_HOURS = 24
+STALE_STAGING_HOURS = 2
 
 
 # ===========================================================================
