@@ -115,7 +115,12 @@ async function apiRequest(endpoint, options = {}) {
     
     if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        throw new Error(error.detail || `Request failed: ${response.status}`);
+        const message = typeof error.detail === 'string' 
+            ? error.detail 
+            : Array.isArray(error.detail) 
+                ? error.detail.map(e => e.msg || e.message || JSON.stringify(e)).join('; ')
+                : `Request failed: ${response.status}`;
+        throw new Error(message);
     }
     
     // Return parsed JSON or null for 204 responses
