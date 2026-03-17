@@ -88,7 +88,7 @@ function setValue(id, value) {
  * @param {Object} options - fetch options { method, body, query }
  */
 async function apiRequest(endpoint, options = {}) {
-    const { method = 'GET', body = null, query = null } = options;
+    const { method = 'GET', body = null, rawBody = null, query = null } = options;
     
     // Build URL with query params
     let url = `${API_BASE}${endpoint}`;
@@ -101,12 +101,13 @@ async function apiRequest(endpoint, options = {}) {
         if (queryStr) url += `?${queryStr}`;
     }
     
-    const fetchOptions = {
-        method,
-        headers: body ? { 'Content-Type': 'application/json' } : {}
-    };
+    const fetchOptions = { method, headers: {} };
     
-    if (body) {
+    if (rawBody) {
+        // FormData or other raw body — let browser set Content-Type (multipart boundary)
+        fetchOptions.body = rawBody;
+    } else if (body) {
+        fetchOptions.headers['Content-Type'] = 'application/json';
         fetchOptions.body = JSON.stringify(body);
     }
     
@@ -1625,6 +1626,7 @@ function resetVideoFilters() {
     document.getElementById('video-year-filter').value = '';
     document.getElementById('video-month-filter').value = '';
     document.getElementById('video-month-filter').disabled = true;
+    document.getElementById('video-source-filter').value = '';
     clearTagFilter('video-tag-filter-wrap');
     videoFavoritesOnly = false;
     const favBtn = document.getElementById('video-fav-filter');
@@ -1639,6 +1641,7 @@ function filterVideos(opts = {}) {
     const search = (document.getElementById('video-search').value || '').toLowerCase();
     const yearFilter = document.getElementById('video-year-filter').value;
     const monthFilter = document.getElementById('video-month-filter').value;
+    const sourceFilter = document.getElementById('video-source-filter').value;
     const selectedTags = getTagFilterIds('video-tag-filter-wrap');
     
     let filtered = allVideos;
@@ -1658,6 +1661,12 @@ function filterVideos(opts = {}) {
             const month = parseInt(monthFilter);
             filtered = filtered.filter(v => new Date(v.created_at).getMonth() === month);
         }
+    }
+    
+    if (sourceFilter === 'imported') {
+        filtered = filtered.filter(v => v.build_source === 'imported');
+    } else if (sourceFilter === 'built') {
+        filtered = filtered.filter(v => v.build_source !== 'imported');
     }
     
     if (videoFavoritesOnly) {
@@ -1685,7 +1694,7 @@ function filterVideos(opts = {}) {
     }
     
     // Show/hide reset button
-    const hasFilters = search || yearFilter || monthFilter !== '' || videoFavoritesOnly || videoSharedOnly || selectedTags.length > 0;
+    const hasFilters = search || yearFilter || monthFilter !== '' || sourceFilter || videoFavoritesOnly || videoSharedOnly || selectedTags.length > 0;
     document.getElementById('video-filter-reset').style.display = hasFilters ? '' : 'none';
     
     const countEl = document.getElementById('video-count');
@@ -1784,7 +1793,7 @@ function renderVideos(videos, isEmpty) {
             ` : ''}
             <div class="video-gallery-info">
                 <div class="video-gallery-name">${escapeHtml(video.name)}</div>
-                <div class="video-gallery-job">${video.job_name ? escapeHtml(video.job_name) : 'No job'}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}</div>
+                <div class="video-gallery-job">${video.build_source === 'imported' ? '<span class="auto-build-badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;">Imported</span>' : (video.job_name ? escapeHtml(video.job_name) : 'No job')}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}</div>
                 ${video.tags && video.tags.length ? `<div class="card-tags">${video.tags.map(t => tagChipHTML(t, true)).join('')}</div>` : ''}
             </div>
         </div>`;
@@ -1819,11 +1828,13 @@ async function openVideoDetail(videoId) {
         let metaHtml = '';
         
         // Row 1: Job, Duration, Size, Status
-        const jobVal = video.job_name
-            ? (video.job_id
-                ? `<a href="#" class="job-link" onclick="event.preventDefault(); closeVideoDetail(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a>`
-                : escapeHtml(video.job_name))
-            : 'None';
+        const jobVal = video.build_source === 'imported'
+            ? '<span class="auto-build-badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;">Imported</span>'
+            : (video.job_name
+                ? (video.job_id
+                    ? `<a href="#" class="job-link" onclick="event.preventDefault(); closeVideoDetail(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a>`
+                    : escapeHtml(video.job_name))
+                : 'None');
         const sizeVal = (video.status === 'completed' && video.file_size) ? formatBytes(video.file_size) : 'N/A';
         metaHtml += `<dt>Job</dt><dd>${jobVal}</dd><dt>Duration</dt><dd>${formatDuration(video.duration_seconds)}</dd>`;
         metaHtml += `<dt>Size</dt><dd>${sizeVal}</dd><dt>Status</dt><dd><span class="job-status ${video.status}">${video.status}</span></dd>`;
@@ -3264,65 +3275,304 @@ document.addEventListener('keydown', function(e) {
 
 // ── Directory Import ──────────────────────────────────────────────────────
 
+// ── Import modal (redesigned) ──────────────────────────
+let _importSessionId = null;
+let _importAnalysis = null;
+let _importBrowsePath = '/imports';
+
 function showImportModal() {
-    document.getElementById('import-directory').value = '';
-    document.getElementById('import-scan-result').style.display = 'none';
-    document.getElementById('import-fields').style.display = 'none';
-    document.getElementById('import-name').value = '';
-    document.getElementById('import-url').value = '';
+    resetImportModal();
     showModal('import-modal');
+    loadImportBrowse();
 }
 
-async function scanImportDirectory() {
-    const dir = document.getElementById('import-directory').value.trim();
-    if (!dir) { showNotification('Enter a directory path', 'error'); return; }
-    
+function resetImportModal() {
+    _importSessionId = null;
+    _importAnalysis = null;
+    document.getElementById('import-source-panels').style.display = 'flex';
+    document.getElementById('import-staging-preview').style.display = 'none';
+    document.getElementById('import-upload-progress').style.display = 'none';
+    document.getElementById('import-file-input').value = '';
+    document.getElementById('import-folder-input').value = '';
+}
+
+// --- Upload handling ---
+function handleImportDrop(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    const files = e.dataTransfer.files;
+    if (files.length) handleImportFiles(files);
+}
+
+async function handleImportFiles(files) {
+    if (!files || !files.length) return;
+
+    const progressWrap = document.getElementById('import-upload-progress');
+    const progressBar = document.getElementById('import-progress-bar');
+    const progressText = document.getElementById('import-progress-text');
+    progressWrap.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressText.textContent = `Uploading ${files.length} file(s)...`;
+
     try {
-        const result = await apiRequest('/jobs/import/scan', { method: 'POST', body: { directory: dir } });
-        const info = document.getElementById('import-scan-info');
-        
-        if (result.count === 0) {
-            info.innerHTML = '<strong>No images found</strong> in this directory.';
-            document.getElementById('import-scan-result').style.display = 'block';
-            document.getElementById('import-fields').style.display = 'none';
-            return;
+        let result;
+        if (files.length === 1) {
+            const formData = new FormData();
+            formData.append('file', files[0]);
+            result = await apiRequest('/import/upload', { method: 'POST', rawBody: formData });
+        } else {
+            const formData = new FormData();
+            for (const f of files) formData.append('files', f);
+            result = await apiRequest('/import/upload-batch', { method: 'POST', rawBody: formData });
         }
-        
-        info.innerHTML = `
-            <strong>${result.count.toLocaleString()} images</strong> found · ${formatBytes(result.total_size)}<br>
-            <small style="color:var(--text-secondary);">
-                Range: ${formatDateTimeNoSeconds(result.first_capture)} → ${formatDateTimeNoSeconds(result.last_capture)}
-            </small>
-        `;
-        document.getElementById('import-scan-result').style.display = 'block';
-        document.getElementById('import-fields').style.display = 'block';
-        
-        // Auto-suggest name from directory
-        const dirName = dir.split('/').filter(Boolean).pop() || 'Imported';
-        document.getElementById('import-name').value = dirName;
+
+        progressBar.style.width = '100%';
+        progressText.textContent = 'Upload complete. Analyzing...';
+        _importSessionId = result.session_id;
+        await analyzeAndShowPreview();
     } catch (error) {
-        showNotification(error.message || 'Failed to scan directory', 'error');
+        progressText.textContent = 'Upload failed';
+        showNotification(error.message || 'Upload failed', 'error');
     }
 }
 
-async function performDirectoryImport() {
-    const dir = document.getElementById('import-directory').value.trim();
-    const name = document.getElementById('import-name').value.trim();
-    const url = document.getElementById('import-url').value.trim();
-    
-    if (!name) { showNotification('Enter a job name', 'error'); return; }
+// --- Server path browser ---
+async function loadImportBrowse(path) {
+    if (path) _importBrowsePath = path;
     
     try {
-        showNotification('Importing...', 'info');
-        const job = await apiRequest('/jobs/import', {
+        const result = await apiRequest(`/import/browse?path=${encodeURIComponent(_importBrowsePath)}`);
+        _importBrowsePath = result.path;
+        document.getElementById('import-browse-path').textContent = _importBrowsePath;
+
+        const list = document.getElementById('import-browse-list');
+        if (!result.entries.length) {
+            list.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">Empty directory</div>';
+            return;
+        }
+
+        list.innerHTML = result.entries.map(e => {
+            const icon = e.type === 'folder' ? '📁' :
+                         e.type === 'image' ? '🖼️' :
+                         e.type === 'video' ? '🎬' :
+                         e.type === 'archive' ? '📦' : '📄';
+            const sizeStr = e.type === 'folder' ? '' : formatBytes(e.size);
+            const clickAction = e.type === 'folder'
+                ? `loadImportBrowse('${escapeHtml(_importBrowsePath + '/' + e.name)}')`
+                : '';
+            return `<div class="import-browse-item" ${clickAction ? `onclick="${clickAction}"` : ''}>
+                <span class="browse-icon">${icon}</span>
+                <span class="browse-name">${escapeHtml(e.name)}</span>
+                <span class="browse-size">${sizeStr}</span>
+            </div>`;
+        }).join('');
+    } catch (error) {
+        document.getElementById('import-browse-list').innerHTML =
+            `<div style="padding:1rem;text-align:center;color:var(--danger);font-size:0.85rem;">${escapeHtml(error.message || 'Failed to browse')}</div>`;
+    }
+}
+
+function browseImportParent() {
+    const parts = _importBrowsePath.split('/').filter(Boolean);
+    if (parts.length <= 1) return; // Already at root
+    parts.pop();
+    loadImportBrowse('/' + parts.join('/'));
+}
+
+async function scanImportCurrentPath() {
+    try {
+        showNotification('Scanning...', 'info');
+        const result = await apiRequest('/import/scan', {
             method: 'POST',
-            body: { name, directory: dir, url: url || null }
+            body: { path: _importBrowsePath }
         });
+        _importSessionId = result.session_id;
+        await analyzeAndShowPreview();
+    } catch (error) {
+        showNotification(error.message || 'Scan failed', 'error');
+    }
+}
+
+// --- Analysis & Preview ---
+async function analyzeAndShowPreview() {
+    if (!_importSessionId) return;
+
+    try {
+        _importAnalysis = await apiRequest(`/import/${_importSessionId}/analyze`);
+        showImportPreview();
+    } catch (error) {
+        showNotification(error.message || 'Analysis failed', 'error');
+    }
+}
+
+function showImportPreview() {
+    const a = _importAnalysis;
+    if (!a) return;
+
+    // Hide source panels, show preview
+    document.getElementById('import-source-panels').style.display = 'none';
+    document.getElementById('import-staging-preview').style.display = 'block';
+
+    // Images
+    const imgSection = document.getElementById('import-preview-images');
+    if (a.image_count > 0) {
+        imgSection.style.display = 'block';
+        document.getElementById('import-images-info').innerHTML = `
+            <strong>${a.image_count.toLocaleString()} images</strong> · ${formatBytes(a.image_total_size)}<br>
+            <small style="color:var(--text-secondary);">
+                Range: ${formatDateTimeNoSeconds(a.image_first)} → ${formatDateTimeNoSeconds(a.image_last)}
+            </small>
+        `;
+        // Auto-suggest job name
+        const nameInput = document.getElementById('import-job-name');
+        if (!nameInput.value) nameInput.value = 'Imported';
+    } else {
+        imgSection.style.display = 'none';
+    }
+
+    // Videos
+    const vidSection = document.getElementById('import-preview-videos');
+    if (a.video_count > 0) {
+        vidSection.style.display = 'block';
+        const dupes = a.video_duplicates || {};
+        document.getElementById('import-videos-list').innerHTML = `
+            <div class="info-box" style="margin-bottom:0.75rem;">
+                <strong>${a.video_count} video(s)</strong> · ${formatBytes(a.video_total_size)}
+            </div>
+            ${a.videos.map(v => {
+                const baseName = v.file_name.replace(/\.[^.]+$/, '');
+                const dupe = dupes[v.file_name];
+                const res = v.width && v.height ? `${v.width}×${v.height}` : '';
+                const dur = v.duration ? formatDuration(v.duration) : '';
+                return `<div class="import-video-card">
+                    <span style="font-size:1.5rem;">🎬</span>
+                    <div class="video-meta">
+                        <input type="text" class="form-control" value="${escapeHtml(baseName)}" data-file="${escapeHtml(v.file_name)}" style="font-size:0.85rem;padding:0.25rem 0.5rem;margin-bottom:0.25rem;">
+                        <small>${[res, dur, formatBytes(v.file_size), v.codec].filter(Boolean).join(' · ')}</small>
+                    </div>
+                    ${dupe ? `<span class="duplicate-badge">⚠ Possible duplicate</span>` : ''}
+                </div>`;
+            }).join('')}
+        `;
+    } else {
+        vidSection.style.display = 'none';
+    }
+
+    // Errors
+    const errSection = document.getElementById('import-preview-errors');
+    if (a.error_count > 0) {
+        errSection.style.display = 'block';
+        document.getElementById('import-errors-info').innerHTML = `
+            <strong>${a.error_count} skipped</strong><br>
+            <small style="color:var(--text-secondary);">
+                ${a.errors.slice(0, 5).map(e => `${escapeHtml(e.file_name)}: ${escapeHtml(e.reason)}`).join('<br>')}
+                ${a.error_count > 5 ? `<br>...and ${a.error_count - 5} more` : ''}
+            </small>
+        `;
+    } else {
+        errSection.style.display = 'none';
+    }
+
+    // Disable execute if nothing to import
+    document.getElementById('import-execute-btn').disabled = (a.image_count === 0 && a.video_count === 0);
+}
+
+// --- Execute import ---
+async function executeImport() {
+    if (!_importSessionId || !_importAnalysis) return;
+
+    const body = {};
+
+    // Image config
+    if (_importAnalysis.image_count > 0) {
+        const jobName = document.getElementById('import-job-name').value.trim();
+        if (!jobName) { showNotification('Enter a job name for images', 'error'); return; }
+        body.image_job_name = jobName;
+    }
+
+    // Video configs
+    if (_importAnalysis.video_count > 0) {
+        const videoCards = document.querySelectorAll('.import-video-card input[data-file]');
+        body.videos = Array.from(videoCards).map(input => ({
+            file_name: input.dataset.file,
+            name: input.value.trim() || input.dataset.file.replace(/\.[^.]+$/, ''),
+        }));
+    }
+
+    try {
+        document.getElementById('import-execute-btn').disabled = true;
+        document.getElementById('import-execute-btn').textContent = 'Importing...';
+        showNotification('Importing...', 'info');
+
+        const result = await apiRequest(`/import/${_importSessionId}/execute`, {
+            method: 'POST',
+            body
+        });
+
+        const parts = [];
+        if (result.images) parts.push(`${result.images.imported_count} images as "${result.images.job_name}"`);
+        if (result.videos && result.videos.length) parts.push(`${result.videos.length} video(s)`);
+        
         closeModal('import-modal');
-        showNotification(`Imported ${job.capture_count} captures as "${job.name}"`, 'success');
+        showNotification(`Imported ${parts.join(' and ')}`, 'success');
         loadJobs();
+        loadVideos();
     } catch (error) {
         showNotification(error.message || 'Import failed', 'error');
+        document.getElementById('import-execute-btn').disabled = false;
+        document.getElementById('import-execute-btn').textContent = 'Import';
+    }
+}
+
+// --- Import path settings ---
+let _importPathBackup = '';
+
+async function loadImportPath() {
+    try {
+        const result = await apiRequest('/import/settings/path');
+        document.getElementById('import-path-input').value = result.import_path;
+        _importPathBackup = result.import_path;
+        _importBrowsePath = result.import_path;
+    } catch (e) {
+        document.getElementById('import-path-input').value = '/imports';
+        _importBrowsePath = '/imports';
+    }
+}
+
+function toggleImportPathEdit(editing) {
+    const input = document.getElementById('import-path-input');
+    const editBtn = document.getElementById('import-path-edit-btn');
+    const saveBtn = document.getElementById('import-path-save-btn');
+    const cancelBtn = document.getElementById('import-path-cancel-btn');
+    if (editing) {
+        _importPathBackup = input.value;
+        input.removeAttribute('readonly');
+        input.style.opacity = '1';
+        editBtn.style.display = 'none';
+        saveBtn.style.display = '';
+        cancelBtn.style.display = '';
+        input.focus();
+    } else {
+        input.value = _importPathBackup;
+        input.setAttribute('readonly', '');
+        input.style.opacity = '0.6';
+        editBtn.style.display = '';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+    }
+}
+
+async function saveImportPath() {
+    const path = document.getElementById('import-path-input').value.trim();
+    if (!path) { showNotification('Import path cannot be empty', 'error'); return; }
+    try {
+        await apiRequest('/import/settings/path', { method: 'PUT', body: { import_path: path } });
+        _importPathBackup = path;
+        _importBrowsePath = path;
+        toggleImportPathEdit(false);
+        showNotification('Import path updated', 'success');
+    } catch (error) {
+        showNotification(error.message || 'Failed to update import path', 'error');
     }
 }
 
@@ -4715,6 +4965,7 @@ async function loadSettings() {
     loadWebhookSettings();
     loadTagManager();
     loadSharedVideosList();
+    loadImportPath();
     
     // Load version
     try {

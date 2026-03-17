@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# Install ffmpeg, tzdata, gosu, and curl for healthcheck
+# Install ffmpeg, tzdata, gosu, curl, and archive tools
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ffmpeg \
@@ -9,7 +9,9 @@ RUN apt-get update && \
     curl \
     ca-certificates \
     fonts-dejavu-core \
-    fonts-liberation && \
+    fonts-liberation \
+    p7zip-full \
+    unrar-free && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -30,8 +32,8 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Create necessary directories with secure permissions
-RUN mkdir -p /app/data /captures /timelapses && \
-    chmod 755 /app/data /captures /timelapses
+RUN mkdir -p /app/data /captures /timelapses /imports && \
+    chmod 755 /app/data /captures /timelapses /imports
 
 # Add build metadata
 LABEL org.opencontainers.image.title="Timelapse Manager" \
@@ -45,6 +47,7 @@ ENV TZ=Etc/UTC
 ENV PORT=8080
 ENV LOG_LEVEL=INFO
 ENV FFMPEG_TIMEOUT=10
+ENV MAX_UPLOAD_SIZE=10737418240
 
 # Expose port (can be overridden)
 EXPOSE ${PORT}

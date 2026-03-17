@@ -2860,3 +2860,80 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     min-width: 3rem;
     text-align: center;
 }
+
+/* ── Import modal ─────────────────────────────────────── */
+.import-drop-zone {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+}
+.import-drop-zone:hover {
+    border-color: var(--purple);
+}
+.import-drop-zone.drag-over {
+    border-color: var(--purple);
+    background: rgba(168, 85, 247, 0.08);
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.15);
+}
+
+.import-browse-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.15s;
+}
+.import-browse-item:hover {
+    background: var(--bg-hover);
+}
+.import-browse-item .browse-icon {
+    flex-shrink: 0;
+    width: 18px;
+    text-align: center;
+    font-size: 0.9rem;
+}
+.import-browse-item .browse-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.import-browse-item .browse-size {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+.import-video-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.import-video-card .video-meta {
+    flex: 1;
+    font-size: 0.85rem;
+}
+.import-video-card .video-meta small {
+    color: var(--text-secondary);
+}
+.import-video-card .duplicate-badge {
+    background: rgba(234, 179, 8, 0.15);
+    color: #eab308;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    white-space: nowrap;
+}

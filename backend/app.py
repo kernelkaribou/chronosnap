@@ -63,6 +63,15 @@ async def lifespan(app: FastAPI):
     # Startup
     init_db()
     
+    # Ensure required directories exist
+    import os
+    os.makedirs(config.DEFAULT_IMPORT_PATH, exist_ok=True)
+    os.makedirs(config.IMPORT_STAGING_DIR, exist_ok=True)
+    
+    # Clean stale import staging directories (>24h old)
+    from .services.import_service import cleanup_stale_staging
+    cleanup_stale_staging()
+    
     # Backfill thumbnails for existing videos
     from .services.video_processor import backfill_thumbnails
     backfill_thumbnails()
@@ -96,6 +105,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Import router (separate for upload size limit)
+from .routers import import_router
+app.include_router(
+    import_router.router,
+    prefix="/api/import",
+    tags=["import"],
+    dependencies=[Depends(verify_api_key)]
 )
 
 # Include routers

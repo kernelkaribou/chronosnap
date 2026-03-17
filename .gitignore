@@ -48,6 +48,8 @@ Thumbs.db
 /backend/data/
 /captures/
 /timelapses/
+/imports/
+/data/
 
 # Logs
 *.log
