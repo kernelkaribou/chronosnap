@@ -642,7 +642,7 @@ function resetJobFilters() {
 function renderJobs(jobs) {
     const container = document.getElementById('jobs-list');
     const countEl = document.getElementById('job-count');
-    if (countEl) countEl.textContent = `${jobs.length} of ${allJobs.length} jobs`;
+    if (countEl) countEl.textContent = `${allJobs.length} jobs`;
     
     if (jobs.length === 0) {
         container.innerHTML = `
