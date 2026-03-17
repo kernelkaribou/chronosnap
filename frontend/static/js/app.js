@@ -2950,7 +2950,7 @@ async function loadOverlayPreviewImage(prefix, job) {
         if (capsData.captures && capsData.captures.length > 0) {
             const cap = capsData.captures[0];
             img._filePath = cap.file_path;
-            img._originalSrc = `${API_BASE}/captures/${cap.id}/thumbnail`;
+            img._originalSrc = `${API_BASE}/captures/${cap.id}/image`;
             img.src = img._originalSrc;
             img.style.display = 'block';
             if (placeholder) placeholder.style.display = 'none';
