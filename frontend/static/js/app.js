@@ -4946,8 +4946,8 @@ function renderTagPicker(containerId, selectedTagIds = [], onToggle = null) {
         <div class="tag-inline-form" style="visibility:hidden;">
             <input type="text" class="form-control" placeholder="New tag name..." maxlength="50" tabindex="-1">
             <div class="color-swatch-row">${swatchesHTML}</div>
-            <button class="btn btn-purple btn-sm" tabindex="-1">Add Tag</button>
-            <button class="btn btn-secondary btn-sm" tabindex="-1">Cancel</button>
+            <button type="button" class="btn btn-purple btn-sm" tabindex="-1">Add Tag</button>
+            <button type="button" class="btn btn-secondary btn-sm" tabindex="-1">Cancel</button>
         </div>
     `;
 }
