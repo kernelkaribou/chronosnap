@@ -2326,9 +2326,9 @@ async function populateVideoFormFromJob(jobId, jobName) {
     if (previewImage && latestCaptures.captures && latestCaptures.captures.length > 0) {
         const cap = latestCaptures.captures[0];
         const img = document.getElementById('job-preview-img');
-        const thumbUrl = `${API_BASE}/captures/${cap.id}/thumbnail`;
-        img.src = thumbUrl;
-        img._originalSrc = thumbUrl;
+        const imgUrl = `${API_BASE}/captures/${cap.id}/image`;
+        img.src = imgUrl;
+        img._originalSrc = imgUrl;
         document.getElementById('job-preview-label').textContent = `Latest capture: ${formatDateTime(cap.captured_at)}`;
         previewImage.style.display = 'flex';
         if (previewPlaceholder) previewPlaceholder.style.display = 'none';
