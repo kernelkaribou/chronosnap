@@ -68,7 +68,7 @@ async def lifespan(app: FastAPI):
     os.makedirs(config.DEFAULT_IMPORT_PATH, exist_ok=True)
     os.makedirs(config.IMPORT_STAGING_DIR, exist_ok=True)
     
-    # Clean stale import staging directories (>24h old)
+    # Clean stale import staging directories (>2h old)
     from .services.import_service import cleanup_stale_staging
     cleanup_stale_staging()
     

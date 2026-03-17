@@ -6,7 +6,6 @@ import re
 import uuid
 import time
 import shutil
-import struct
 import hashlib
 import logging
 import zipfile
@@ -28,27 +27,6 @@ IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif', '.webp'}
 VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv', '.webm', '.m4v'}
 ARCHIVE_EXTENSIONS = {'.zip', '.tar', '.gz', '.tgz', '.bz2', '.rar', '.7z'}
 JUNK_NAMES = {'__MACOSX', '.DS_Store', 'Thumbs.db', 'desktop.ini', '.Spotlight-V100', '.Trashes'}
-
-# ---------------------------------------------------------------------------
-# Magic byte signatures
-# ---------------------------------------------------------------------------
-MAGIC_SIGNATURES = {
-    'jpeg': [b'\xff\xd8\xff'],
-    'png':  [b'\x89PNG\r\n\x1a\n'],
-    'bmp':  [b'BM'],
-    'tiff': [b'II\x2a\x00', b'MM\x00\x2a'],
-    'webp': [b'RIFF'],  # + 'WEBP' at offset 8
-    'zip':  [b'PK\x03\x04', b'PK\x05\x06', b'PK\x07\x08'],
-    'rar':  [b'Rar!\x1a\x07'],
-    '7z':   [b'7z\xbc\xaf\x27\x1c'],
-    'gzip': [b'\x1f\x8b'],
-    'bz2':  [b'BZ'],
-    'tar':  [],  # checked via tarfile.is_tarfile
-}
-
-# MP4/MOV have 'ftyp' at offset 4
-# AVI has 'RIFF' + 'AVI ' at offset 8
-# MKV/WEBM have 0x1A45DFA3
 
 # ---------------------------------------------------------------------------
 # Security limits
@@ -1063,13 +1041,14 @@ def execute_video_import(
     os.makedirs(video_dir, exist_ok=True)
     os.chmod(video_dir, 0o755)
     
-    dest_path = os.path.join(video_dir, f"{video_name}.mp4")
+    original_ext = os.path.splitext(video['file_name'])[1].lower() or '.mp4'
+    dest_path = os.path.join(video_dir, f"{video_name}{original_ext}")
     
     # Handle collision
     if os.path.exists(dest_path):
         counter = 1
         while os.path.exists(dest_path):
-            dest_path = os.path.join(video_dir, f"{video_name}_{counter}.mp4")
+            dest_path = os.path.join(video_dir, f"{video_name}_{counter}{original_ext}")
             counter += 1
     
     # Move the video
@@ -1090,7 +1069,9 @@ def execute_video_import(
     file_hash = video.get('file_hash', '') or compute_file_hash(dest_path)
     
     # Determine job_name for DB
-    db_job_name = job_name if job_id else 'Imported'
+    db_job_name = 'Imported'
+    if job_id:
+        db_job_name = job_name
     
     with get_db() as conn:
         cursor = conn.cursor()
@@ -1206,7 +1187,7 @@ def browse_directory(path: str) -> List[Dict[str, Any]]:
                 # If symlink, verify target is within import path
                 if entry.is_symlink():
                     try:
-                        validate_path_within(entry.path, import_path)
+                        validate_path_within(os.path.realpath(entry.path), import_path)
                     except ValueError:
                         logger.info(f"Browse: skipping symlink escaping jail: {entry.name}")
                         continue

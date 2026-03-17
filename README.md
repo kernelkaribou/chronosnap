@@ -29,6 +29,27 @@ A self-hosted web application for creating automated timelapse captures from HTT
 - Videos are preserved even if the parent job is deleted
 - **Auto-build**: per-job recurring timelapse generation (daily, weekly, monthly, etc.) — videos accumulate as a sequence with an "Auto" badge in the gallery
 
+### Importing
+
+The import feature allows bringing in existing images and videos from outside the normal capture workflow. This is useful for consolidating footage from other sources, importing archives from previous setups, or managing standalone timelapse videos.
+
+**Server Path Import**: Place files in the `/imports` directory (or any configured import path) on the host, then browse and select them from within the web interface. The default import path is configurable in Settings.
+
+**Browser Upload**: Drag and drop files or folders directly into the import modal, or use the Browse button to select a folder. Uploads support recursive folder traversal for nested directory structures.
+
+**How it works**: Each import operation goes through a staging pipeline — files are scanned, analyzed (classified as images or videos, checked for duplicates), and previewed before confirming. Once confirmed, images are moved into the standard capture directory structure and a new job is created for them. Videos are imported as standalone timelapses in the gallery.
+
+**Important**: Each import creates a single job. If you need to import images into separate jobs, perform separate imports. Videos are imported individually and do not require a job — they appear directly in the timelapse gallery with an "Imported" badge.
+
+**Supported formats**:
+- **Images**: JPEG, PNG, BMP, TIFF, WebP
+- **Videos**: MP4, AVI, MOV, MKV, WebM, M4V
+- **Archives**: ZIP, TAR, GZ, TGZ, BZ2, RAR, 7Z (automatically extracted during analysis)
+
+**Duplicate detection**: Videos are checked against existing imports using SHA-256 content hashing and file size with duration matching. Duplicates are identified during the preview stage and blocked from being imported again, even if the filename has changed.
+
+After a successful import, source files are removed from the import directory to prevent accidental re-imports.
+
 ### Management
 
 - Web interface with light and dark themes
@@ -69,13 +90,14 @@ The web interface is available at `http://<host>:8080`. On first launch, an API 
 
 ### Volumes
 
-Three volumes are required for persistent data:
+Four volumes are required for persistent data:
 
 | Host Path | Container Path | Purpose |
 |-----------|---------------|---------|
 | `./captures` | `/captures` | Captured images organized by job |
 | `./timelapses` | `/timelapses` | Processed timelapse videos |
-| `./data` | `/app/data` | SQLite database |
+| `./data` | `/app/data` | SQLite database and import staging area |
+| `./imports` | `/imports` | Drop zone for server-side file imports |
 
 ### Environment Variables
 
@@ -86,7 +108,7 @@ Three volumes are required for persistent data:
 | `TZ` | `Etc/UTC` | Timezone for scheduling and display. Must be a valid IANA timezone (for example, `America/Chicago`). This controls when time windows activate and how timestamps are displayed. |
 | `PORT` | `8080` | Port the application listens on inside the container. |
 | `LOG_LEVEL` | `INFO` | Logging verbosity. Options: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
-| `FFMPEG_TIMEOUT` | `10` | Timeout in seconds for individual FFmpeg capture operations. Increase this if your camera streams are slow to respond. |
+| `MAX_UPLOAD_SIZE` | `10737418240` | Maximum upload size in bytes (default 10 GB). |
 
 ### Example docker-compose.yml
 
@@ -105,6 +127,7 @@ services:
       - ./captures:/captures
       - ./timelapses:/timelapses
       - ./data:/app/data
+      - ./imports:/imports
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -192,7 +215,8 @@ Interactive API documentation is available at `/docs` (Swagger UI) when the appl
 | `/api/jobs` | Create, list, update, and delete capture jobs. Trigger manual captures. Run capture sync scans. |
 | `/api/captures` | List, filter, download, and delete captures. Detect and clean up orphaned files. |
 | `/api/videos` | Create timelapse videos, track processing progress, download and delete videos. |
-| `/api/settings` | View and regenerate the API key. Configure webhook notifications. |
+| `/api/import` | Import images and videos from server paths or browser uploads. Browse directories, analyze staged files, execute imports. |
+| `/api/settings` | View and regenerate the API key. Configure webhook notifications and import path. |
 | `/api/storage` | Storage statistics and disk usage. |
 
 ## Considerations
@@ -211,11 +235,13 @@ Plan your storage volumes accordingly for long-running jobs. The capture sync to
 
 ### Backup
 
-To fully back up an instance, preserve these three paths:
+To fully back up an instance, preserve these paths:
 
 - `/app/data/` (database)
 - `/captures/` (images)
 - `/timelapses/` (videos)
+
+The `/imports/` directory does not need to be backed up — it is a temporary drop zone for files being imported. After a successful import, files are moved out of this directory automatically.
 
 The database contains all job configurations, capture metadata, and video records. Without it, the application cannot associate images with their jobs.
 

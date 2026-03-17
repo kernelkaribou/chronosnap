@@ -3223,6 +3223,11 @@ function closeModal(modalId) {
         setDefaultStartTime();
     }
     
+    // Clean up import staging session when closing import modal
+    if (modalId === 'import-modal') {
+        resetImportModal();
+    }
+    
     // Clean up video modal listeners to prevent memory leaks
     if (modalId === 'process-video-modal' && window._videoModalListeners) {
         const startInput = document.getElementById('video_start_datetime');
@@ -3299,7 +3304,6 @@ function resetImportModal() {
     document.getElementById('import-source-panels').style.display = 'flex';
     document.getElementById('import-staging-preview').style.display = 'none';
     document.getElementById('import-upload-progress').style.display = 'none';
-    document.getElementById('import-file-input').value = '';
     document.getElementById('import-folder-input').value = '';
     document.getElementById('import-job-name').value = '';
     const execBtn = document.getElementById('import-execute-btn');
@@ -6327,13 +6331,6 @@ function toggleVideoSharedFilter() {
         document.getElementById('video-filter-reset').style.display = '';
     }
     loadVideos();
-}
-
-// Helper to escape HTML
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 async function viewJobCaptures(jobId) {

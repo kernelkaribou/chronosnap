@@ -967,7 +967,7 @@
                         <h4 style="margin:0 0 0.75rem;font-size:0.9rem;color:var(--text-secondary);">Upload</h4>
                         <div id="import-drop-zone" class="import-drop-zone"
                              ondragover="event.preventDefault();this.classList.add('drag-over')"
-                             ondragleave="this.classList.remove('drag-over')"
+                             ondragleave="if (!this.contains(event.relatedTarget)) this.classList.remove('drag-over')"
                              ondrop="handleImportDrop(event)">
                             <div style="text-align:center;">
                                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-secondary);margin-bottom:0.5rem;">
@@ -978,7 +978,6 @@
                                 <div style="display:flex;gap:0.5rem;justify-content:center;">
                                     <button class="compare-btn" onclick="document.getElementById('import-folder-input').click()" style="padding:0.4rem 1rem;font-size:0.85rem;">Browse</button>
                                 </div>
-                                <input type="file" id="import-file-input" multiple accept="image/*,video/*,.zip,.tar,.gz,.tgz,.rar,.7z" style="display:none" onchange="handleImportFiles(this.files)">
                                 <input type="file" id="import-folder-input" webkitdirectory style="display:none" onchange="handleImportFiles(this.files)">
                             </div>
                         </div>

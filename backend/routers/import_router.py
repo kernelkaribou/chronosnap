@@ -277,6 +277,14 @@ async def scan_import_path(request: ScanRequest):
                         continue
                     
                     src = os.path.join(root, fname)
+                    
+                    # Validate file is within import path (prevents symlink escape)
+                    try:
+                        validate_path_within(src, import_path)
+                    except ValueError:
+                        logger.warning(f"Scan: skipping file escaping jail: {fname}")
+                        continue
+                    
                     safe_name = sanitize_filename(fname)
                     dest = os.path.join(raw_dir, safe_name)
                     
