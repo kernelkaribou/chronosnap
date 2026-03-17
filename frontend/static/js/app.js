@@ -452,24 +452,11 @@ document.addEventListener('DOMContentLoaded', () => {
         intervalInput.addEventListener('change', updateEndDateMin);
     }
     
-    // Setup range checkbox
+    // Setup range checkbox — duration estimate updates
     document.getElementById('use_range').addEventListener('change', (e) => {
-        const captureRange = document.getElementById('capture-range');
-        const startInput = document.getElementById('video_start_datetime');
-        const endInput = document.getElementById('video_end_datetime');
-        
         if (e.target.checked) {
-            captureRange.style.display = 'flex';
-            startInput.disabled = false;
-            endInput.disabled = false;
-            
-            // Update duration estimate for the selected time range
             setTimeout(() => updateVideoDurationEstimate(), 100);
         } else {
-            captureRange.style.display = 'none';
-            startInput.disabled = true;
-            endInput.disabled = true;
-            // Revert to showing full duration estimate
             updateVideoDurationEstimate();
         }
     });
@@ -2154,7 +2141,7 @@ async function showProcessVideoModal(jobId, jobName) {
         // Reset form
         document.getElementById('process-video-form').reset();
         document.getElementById('use_range').checked = false;
-        document.getElementById('capture-range').style.display = 'none';
+        document.getElementById('capture-range-fields').classList.add('disabled');
         document.getElementById('video-duration-estimate').innerHTML = '';
         document.getElementById('available-range-info').style.display = 'none';
         // Reset text overlay
@@ -2389,7 +2376,7 @@ async function populateVideoFormFromJob(jobId, jobName) {
     
     // Reset the use_range checkbox
     document.getElementById('use_range').checked = false;
-    document.getElementById('capture-range').style.display = 'none';
+    document.getElementById('capture-range-fields').classList.add('disabled');
     
     // Calculate and display initial duration
     updateVideoDurationEstimate();
