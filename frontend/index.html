@@ -944,7 +944,25 @@
             <div style="padding:1.5rem;">
                 <!-- Source selection panels -->
                 <div id="import-source-panels" style="display:flex;gap:1.5rem;min-height:280px;">
-                    <!-- Left: Upload / Drag & Drop -->
+                    <!-- Left: Server Path Browser (3/4) -->
+                    <div style="flex:3;display:flex;flex-direction:column;min-width:0;">
+                        <h4 style="margin:0 0 0.75rem;font-size:0.9rem;color:var(--text-secondary);">Server Path</h4>
+                        <div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;flex:1;display:flex;flex-direction:column;overflow:hidden;">
+                            <div style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--border-color);display:flex;align-items:center;gap:0.5rem;">
+                                <button class="btn-icon" onclick="browseImportParent()" title="Up" id="import-browse-up" style="padding:2px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                                </button>
+                                <small id="import-browse-path" style="color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">/imports</small>
+                            </div>
+                            <div id="import-browse-list" style="flex:1;overflow-y:auto;padding:0.25rem 0;min-height:160px;">
+                                <!-- Populated dynamically -->
+                            </div>
+                            <div style="padding:0.5rem 0.75rem;border-top:1px solid var(--border-color);display:flex;gap:0.5rem;justify-content:flex-end;">
+                                <button class="btn btn-purple btn-sm" id="import-scan-btn" onclick="scanImportCurrentPath()" disabled>Import</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Right: Upload / Drag & Drop (1/4) -->
                     <div style="flex:1;display:flex;flex-direction:column;">
                         <h4 style="margin:0 0 0.75rem;font-size:0.9rem;color:var(--text-secondary);">Upload</h4>
                         <div id="import-drop-zone" class="import-drop-zone"
@@ -969,24 +987,6 @@
                                 <div id="import-progress-bar" style="height:100%;background:var(--purple);width:0%;transition:width 0.3s;"></div>
                             </div>
                             <small id="import-progress-text" style="color:var(--text-secondary);font-size:0.75rem;">Uploading...</small>
-                        </div>
-                    </div>
-                    <!-- Right: Server Path Browser -->
-                    <div style="flex:1;display:flex;flex-direction:column;">
-                        <h4 style="margin:0 0 0.75rem;font-size:0.9rem;color:var(--text-secondary);">Server Path</h4>
-                        <div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;flex:1;display:flex;flex-direction:column;overflow:hidden;">
-                            <div style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--border-color);display:flex;align-items:center;gap:0.5rem;">
-                                <button class="btn-icon" onclick="browseImportParent()" title="Up" id="import-browse-up" style="padding:2px;">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-                                </button>
-                                <small id="import-browse-path" style="color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">/imports</small>
-                            </div>
-                            <div id="import-browse-list" style="flex:1;overflow-y:auto;padding:0.25rem 0;min-height:160px;">
-                                <!-- Populated dynamically -->
-                            </div>
-                            <div style="padding:0.5rem 0.75rem;border-top:1px solid var(--border-color);display:flex;gap:0.5rem;justify-content:flex-end;">
-                                <button class="btn btn-purple btn-sm" id="import-scan-btn" onclick="scanImportCurrentPath()" disabled>Import</button>
-                            </div>
                         </div>
                     </div>
                 </div>
