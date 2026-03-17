@@ -642,11 +642,11 @@
                     </div>
                     <div class="form-group" style="flex: 0.75;">
                         <label>Framerate (FPS) *</label>
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <input type="number" id="video_framerate" class="form-control" min="1" value="30" required style="flex: 0 0 80px;">
-                            <span style="color: var(--text-secondary);">:</span>
-                            <span id="video-duration-estimate" style="font-weight: 600; color: var(--text-primary); white-space: nowrap;"></span>
-                        </div>
+                        <input type="number" id="video_framerate" class="form-control" min="1" value="30" required>
+                    </div>
+                    <div class="form-group" style="flex: 1.5;">
+                        <label>Estimated Duration</label>
+                        <div id="video-duration-estimate" style="margin-top: 0.2rem;"></div>
                     </div>
                 </div>
 

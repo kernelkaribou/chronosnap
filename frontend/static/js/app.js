@@ -2525,8 +2525,8 @@ function displayDurationEstimate(captureCount, framerate) {
     const seconds = Math.floor(durationSeconds % 60);
     
     document.getElementById('video-duration-estimate').innerHTML = `
-        <span style="color: var(--text-secondary); font-size: 0.85rem;">${captureCount} frames</span>
         <span style="font-weight: 600;">${minutes}m ${seconds}s</span>
+        <span style="color: var(--text-secondary); font-size: 0.85rem;"> · ${captureCount} captures @ ${framerate} FPS</span>
     `;
 }
 
