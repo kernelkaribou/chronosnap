@@ -2563,9 +2563,9 @@ function generateOverlayHTML(prefix, opts = {}) {
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Size</label>
                             <input type="number" id="${prefix}-overlay-size" class="form-control" value="5" min="1" max="20" step="1"${inputEvent}>
                         </div>
-                        <div style="flex:0 0 36px;">
+                        <div style="flex:0 0 36px; display:flex; flex-direction:column;">
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Bold</label>
-                            <div style="height:38px; display:flex; align-items:center; justify-content:center;">
+                            <div class="form-control" style="display:flex; align-items:center; justify-content:center; padding:0;">
                                 <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr}>
                             </div>
                         </div>
