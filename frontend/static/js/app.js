@@ -1689,11 +1689,7 @@ function filterVideos(opts = {}) {
     document.getElementById('video-filter-reset').style.display = hasFilters ? '' : 'none';
     
     const countEl = document.getElementById('video-count');
-    if (filtered.length !== allVideos.length) {
-        countEl.textContent = `${filtered.length} of ${allVideos.length}`;
-    } else {
-        countEl.textContent = `${allVideos.length} videos`;
-    }
+    countEl.textContent = `${filtered.length} videos`;
     
     currentFilteredVideos = filtered;
     videosDisplayed = 0;
