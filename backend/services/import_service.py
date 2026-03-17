@@ -256,6 +256,61 @@ def create_staging_session() -> str:
     return session_id
 
 
+def set_staging_source(session_id: str, source_path: str) -> None:
+    """Record the original source path for a staging session (for post-import cleanup)."""
+    staging_dir = get_staging_dir(session_id)
+    meta_file = os.path.join(staging_dir, '.source_path')
+    with open(meta_file, 'w') as f:
+        f.write(source_path)
+
+
+def get_staging_source(session_id: str) -> Optional[str]:
+    """Get the original source path recorded for a staging session."""
+    try:
+        staging_dir = get_staging_dir(session_id)
+        meta_file = os.path.join(staging_dir, '.source_path')
+        if os.path.isfile(meta_file):
+            with open(meta_file, 'r') as f:
+                return f.read().strip()
+    except (ValueError, OSError):
+        pass
+    return None
+
+
+def cleanup_import_source(session_id: str) -> None:
+    """Remove the original source files/directory after a successful import.
+    
+    Only cleans up paths within the configured import directory.
+    For directories, removes the entire directory tree.
+    For single files, removes the file.
+    """
+    source_path = get_staging_source(session_id)
+    if not source_path:
+        return
+    
+    import_path = get_import_path()
+    try:
+        real_source = validate_path_within(source_path, import_path)
+    except ValueError:
+        logger.warning(f"Source path escapes import dir, skipping cleanup: {source_path}")
+        return
+    
+    # Never delete the import root itself
+    if os.path.realpath(real_source) == os.path.realpath(import_path):
+        logger.warning("Source path is the import root, skipping cleanup")
+        return
+    
+    try:
+        if os.path.isfile(real_source):
+            os.remove(real_source)
+            logger.info(f"Cleaned up import source file: {real_source}")
+        elif os.path.isdir(real_source):
+            shutil.rmtree(real_source)
+            logger.info(f"Cleaned up import source directory: {real_source}")
+    except Exception as e:
+        logger.warning(f"Failed to clean up import source: {e}")
+
+
 def get_staging_dir(session_id: str) -> str:
     """Get and validate a staging directory path.
     

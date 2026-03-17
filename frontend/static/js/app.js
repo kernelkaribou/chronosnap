@@ -1029,7 +1029,7 @@ async function showJobDetails(jobId) {
                                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                             </svg>
                         </button>
-                        <button class="btn-icon" onclick="closeModal('job-details-modal'); deleteJob(${job.id}, '${escapeHtml(job.name)}')" title="Delete Job" style="padding: 0.5rem;">
+                        <button class="btn-icon" onclick="deleteJob(${job.id}, '${escapeHtml(job.name)}')" title="Delete Job" style="padding: 0.5rem;">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="3 6 5 6 21 6"></polyline>
                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -1495,7 +1495,8 @@ async function deleteJob(jobId, jobName) {
                 console.error('Failed to delete job:', error);
                 showNotification(`Failed to delete job "${jobName}"`, 'error');
             }
-        }
+        },
+        { closeModalId: 'job-details-modal' }
     );
 }
 
@@ -3300,8 +3301,63 @@ function resetImportModal() {
 function handleImportDrop(e) {
     e.preventDefault();
     e.currentTarget.classList.remove('drag-over');
-    const files = e.dataTransfer.files;
-    if (files.length) handleImportFiles(files);
+    
+    // Use webkitGetAsEntry for recursive folder traversal
+    const items = e.dataTransfer.items;
+    if (!items || !items.length) return;
+    
+    const entries = [];
+    for (let i = 0; i < items.length; i++) {
+        const entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
+        if (entry) entries.push(entry);
+    }
+    
+    if (entries.length === 0) {
+        // Fallback for browsers without webkitGetAsEntry
+        if (e.dataTransfer.files.length) handleImportFiles(e.dataTransfer.files);
+        return;
+    }
+    
+    // Recursively collect all files from entries
+    collectFilesFromEntries(entries).then(files => {
+        if (files.length) handleImportFiles(files);
+        else showNotification('No supported files found', 'error');
+    });
+}
+
+function collectFilesFromEntries(entries) {
+    return new Promise(resolve => {
+        const files = [];
+        let pending = entries.length;
+        if (pending === 0) { resolve(files); return; }
+        
+        function readEntry(entry) {
+            if (entry.isFile) {
+                entry.file(file => {
+                    files.push(file);
+                    if (--pending === 0) resolve(files);
+                }, () => { if (--pending === 0) resolve(files); });
+            } else if (entry.isDirectory) {
+                const reader = entry.createReader();
+                const readBatch = () => {
+                    reader.readEntries(batch => {
+                        if (batch.length === 0) {
+                            if (--pending === 0) resolve(files);
+                            return;
+                        }
+                        pending += batch.length;
+                        batch.forEach(readEntry);
+                        readBatch(); // Continue reading (batched at 100 entries)
+                    }, () => { if (--pending === 0) resolve(files); });
+                };
+                readBatch();
+            } else {
+                if (--pending === 0) resolve(files);
+            }
+        }
+        
+        entries.forEach(readEntry);
+    });
 }
 
 async function handleImportFiles(files) {
@@ -3312,18 +3368,43 @@ async function handleImportFiles(files) {
     const progressText = document.getElementById('import-progress-text');
     progressWrap.style.display = 'block';
     progressBar.style.width = '0%';
-    progressText.textContent = `Uploading ${files.length} file(s)...`;
+
+    // Convert to array (may be FileList or Array)
+    const fileArr = Array.from(files);
+    const total = fileArr.length;
+    progressText.textContent = `Uploading ${total} file(s)...`;
 
     try {
         let result;
-        if (files.length === 1) {
+        const CHUNK_SIZE = 50; // Upload in batches of 50 files
+        
+        if (total === 1) {
             const formData = new FormData();
-            formData.append('file', files[0]);
+            formData.append('file', fileArr[0]);
             result = await apiRequest('/import/upload', { method: 'POST', rawBody: formData });
-        } else {
+        } else if (total <= CHUNK_SIZE) {
             const formData = new FormData();
-            for (const f of files) formData.append('files', f);
+            for (const f of fileArr) formData.append('files', f);
             result = await apiRequest('/import/upload-batch', { method: 'POST', rawBody: formData });
+        } else {
+            // Upload in chunks, reusing the same session
+            let uploaded = 0;
+            for (let i = 0; i < total; i += CHUNK_SIZE) {
+                const chunk = fileArr.slice(i, i + CHUNK_SIZE);
+                const formData = new FormData();
+                for (const f of chunk) formData.append('files', f);
+                
+                if (result) {
+                    // Subsequent chunks: append to existing session
+                    formData.append('session_id', result.session_id);
+                }
+                result = await apiRequest('/import/upload-batch', { method: 'POST', rawBody: formData });
+                
+                uploaded += chunk.length;
+                const pct = Math.round((uploaded / total) * 100);
+                progressBar.style.width = `${pct}%`;
+                progressText.textContent = `Uploading ${uploaded}/${total} files...`;
+            }
         }
 
         progressBar.style.width = '100%';

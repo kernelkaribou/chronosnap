@@ -16,6 +16,7 @@ from ..services.import_service import (
     extract_archive, analyze_staging, browse_directory,
     execute_image_import, execute_video_import, probe_video,
     get_import_path, check_disk_space,
+    set_staging_source, cleanup_import_source,
 )
 from .. import config
 from ..utils import get_now, to_iso
@@ -113,16 +114,24 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 @router.post("/upload-batch")
-async def upload_batch(files: List[UploadFile] = File(...)):
-    """Upload multiple files (e.g., from folder picker) to a staging session."""
-    if count_active_sessions() >= MAX_CONCURRENT_SESSIONS:
-        raise HTTPException(status_code=429, detail="Too many active import sessions")
+async def upload_batch(files: List[UploadFile] = File(...), session_id: Optional[str] = Form(None)):
+    """Upload multiple files to a staging session. If session_id is provided, appends to existing session."""
+    
+    # Create new session or reuse existing
+    if session_id:
+        try:
+            staging_dir = get_staging_dir(session_id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Session not found")
+    else:
+        if count_active_sessions() >= MAX_CONCURRENT_SESSIONS:
+            raise HTTPException(status_code=429, detail="Too many active import sessions")
+        session_id = create_staging_session()
+        staging_dir = get_staging_dir(session_id)
     
     if not check_disk_space(config.IMPORT_STAGING_DIR, config.MAX_UPLOAD_SIZE):
         raise HTTPException(status_code=507, detail="Insufficient disk space")
     
-    session_id = create_staging_session()
-    staging_dir = get_staging_dir(session_id)
     raw_dir = os.path.join(staging_dir, 'raw')
     
     uploaded = []
@@ -259,23 +268,37 @@ async def scan_import_path(request: ScanRequest):
                 os.remove(dest)
         
         elif os.path.isdir(real_path):
-            # Directory — copy all files to raw (single level)
-            for entry in os.scandir(real_path):
-                if not entry.is_file():
-                    continue
-                if entry.name.startswith('.'):
-                    continue
-                
-                safe_name = sanitize_filename(entry.name)
-                dest = os.path.join(raw_dir, safe_name)
-                shutil.copy2(entry.path, dest)
-                os.chmod(dest, 0o644)
-                
-                if detect_file_type(dest) == 'archive':
-                    extract_archive(dest, extracted_dir)
-                    os.remove(dest)
+            # Directory — recursively copy all files to raw
+            for root, dirs, files in os.walk(real_path):
+                # Skip hidden directories
+                dirs[:] = [d for d in dirs if not d.startswith('.')]
+                for fname in files:
+                    if fname.startswith('.'):
+                        continue
+                    
+                    src = os.path.join(root, fname)
+                    safe_name = sanitize_filename(fname)
+                    dest = os.path.join(raw_dir, safe_name)
+                    
+                    # Handle name collision
+                    if os.path.exists(dest):
+                        base, ext = os.path.splitext(safe_name)
+                        counter = 1
+                        while os.path.exists(dest):
+                            dest = os.path.join(raw_dir, f"{base}_{counter}{ext}")
+                            counter += 1
+                    
+                    shutil.copy2(src, dest)
+                    os.chmod(dest, 0o644)
+                    
+                    if detect_file_type(dest) == 'archive':
+                        extract_archive(dest, extracted_dir)
+                        os.remove(dest)
         
         logger.info(f"Scan complete for {real_path} -> session {session_id}")
+        
+        # Record source path for post-import cleanup
+        set_staging_source(session_id, request.path)
         
         return {
             'session_id': session_id,
@@ -375,6 +398,9 @@ async def execute_import(session_id: str, request: ExecuteRequest):
             except Exception as e:
                 results['errors'].append(f"Video '{video['file_name']}' import failed: {e}")
                 logger.error(f"Video import failed for {video['file_name']}: {e}", exc_info=True)
+        
+        # Clean up source files from /imports
+        cleanup_import_source(session_id)
         
         # Clean up staging
         cleanup_staging(session_id)
