@@ -211,6 +211,7 @@ class VideoCreate(BaseModel):
     start_time: Optional[str] = None  # ISO datetime string
     end_time: Optional[str] = None  # ISO datetime string
     text_overlay: Optional[TextOverlayConfig] = None
+    tag_ids: Optional[List[int]] = None
 
 
 class VideoResponse(BaseModel):

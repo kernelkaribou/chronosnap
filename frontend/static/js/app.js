@@ -2196,6 +2196,14 @@ async function showProcessVideoModal(jobId, jobName) {
         }
         
         showModal('process-video-modal');
+        
+        // Render tag picker — pre-select job's tags when opened from job details
+        let preselectedTagIds = [];
+        if (jobId) {
+            const job = allJobs.find(j => j.id === jobId);
+            if (job?.tags) preselectedTagIds = job.tags.map(t => t.id);
+        }
+        renderTagPicker('build-video-tags', preselectedTagIds);
     } catch (error) {
         console.error('Failed to load modal data:', error);
         showNotification('Failed to load data for timelapse creation', 'error');
@@ -2393,6 +2401,10 @@ async function populateVideoFormFromJob(jobId, jobName) {
         createBtn.style.opacity = '1';
         createBtn.style.cursor = 'pointer';
     }
+    
+    // Update tag picker with job's tags
+    const jobTagIds = (job.tags || []).map(t => t.id);
+    renderTagPicker('build-video-tags', jobTagIds);
 }
 
 function updateVideoDurationEstimate() {
@@ -3044,7 +3056,8 @@ async function processVideo(event) {
         output_path: document.getElementById('video_output_path').value.trim() || null,
         start_time: useRange ? datetimeLocalToISO(document.getElementById('video_start_datetime').value) : null,
         end_time: useRange ? datetimeLocalToISO(document.getElementById('video_end_datetime').value) : null,
-        text_overlay: readOverlayConfig('build')
+        text_overlay: readOverlayConfig('build'),
+        tag_ids: getSelectedTagIds('build-video-tags')
     };
     
     try {

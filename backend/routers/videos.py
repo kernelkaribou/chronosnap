@@ -79,6 +79,10 @@ async def create_video(video: VideoCreate, background_tasks: BackgroundTasks):
         
         video_id = cursor.lastrowid
         
+        # Set tags if provided
+        if video.tag_ids:
+            set_video_tags(cursor, video_id, video.tag_ids)
+        
         logger.info(f"Started video processing for job '{job_dict['name']}' (ID: {video.job_id}) - Video: {video.name}, Resolution: {video.resolution}, FPS: {video.framerate}")
         
         # Start video processing in background
