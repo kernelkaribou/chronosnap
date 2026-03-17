@@ -137,7 +137,10 @@ Five volumes are required for persistent data:
 | `PORT` | `8080` | Port the application listens on inside the container. |
 | `LOG_LEVEL` | `INFO` | Logging verbosity. Options: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
 | `MAX_UPLOAD_SIZE` | `10737418240` | Maximum upload size in bytes (default 10 GB). |
+| `FFMPEG_TIMEOUT` | `30` | FFmpeg capture timeout in seconds. Increase for slow networks. |
 | `APP_VERSION` | Read from `VERSION` file | Override the application version string. Optional. If not set, the version is read from the `VERSION` file at the repository root. |
+
+All other application settings (storage paths, naming patterns, webhooks, export retention) are managed through the Settings page in the UI. For automated deployments, these can also be configured via the REST API after startup -- see [API Configuration](#api-configuration) below.
 
 ### Example docker-compose.yml
 
@@ -251,6 +254,34 @@ Interactive API documentation is available at `/docs` (Swagger UI) when the appl
 | `/api/import` | Import images and videos from server paths or browser uploads. Browse directories, analyze staged files, execute imports. |
 | `/api/settings` | View and regenerate the API key. Configure webhook notifications (URL, template, event filtering), server paths (captures, timelapses, import, export), export retention, and check for version updates. |
 | `/api/storage` | Storage statistics and disk usage. |
+
+### API Configuration
+
+For automated or scripted deployments, application settings can be configured via the API after the container starts. First retrieve your API key from the Settings page or the database, then use it to configure settings programmatically:
+
+```bash
+API_KEY="your-api-key"
+BASE="http://localhost:8080/api"
+
+# Configure storage paths
+curl -X PUT "$BASE/import/settings/path/captures" -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" -d '{"path": "/captures"}'
+
+# Set export retention (days, 0 = indefinite)
+curl -X PUT "$BASE/settings/export-retention" -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" -d '{"export_retention_days": 14}'
+
+# Set default naming pattern
+curl -X PUT "$BASE/settings/naming-pattern" -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" -d '{"naming_pattern": "{job_name}_{timestamp}"}'
+
+# Configure webhooks
+curl -X PUT "$BASE/settings/webhook" -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"webhook_enabled": true, "webhook_url": "https://example.com/hook", "webhook_events": ["warning", "completed"]}'
+```
+
+See `/docs` for the full interactive API reference.
 
 ## Considerations
 

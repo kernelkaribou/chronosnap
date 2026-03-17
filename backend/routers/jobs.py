@@ -53,11 +53,11 @@ async def create_job(job: JobCreate):
         cursor = conn.cursor()
         
         # Always use the global captures path from settings
-        from ..services.import_service import get_captures_path
+        from ..services.import_service import get_captures_path, get_default_naming_pattern
         captures_base = get_captures_path()
         
         if not job.naming_pattern:
-            job.naming_pattern = config.DEFAULT_CAPTURE_PATTERN
+            job.naming_pattern = get_default_naming_pattern()
         
         # Validate captures path exists and is writable
         validate_writable_directory(captures_base, "Capture path")
