@@ -15,7 +15,8 @@ from ..services.import_service import (
     validate_path_within, sanitize_filename, detect_file_type,
     extract_archive, analyze_staging, browse_directory,
     execute_image_import, execute_video_import, probe_video,
-    get_import_path, get_export_path, check_disk_space,
+    get_import_path, get_export_path, get_captures_path, get_timelapses_path,
+    check_disk_space,
     set_staging_source, cleanup_import_source,
 )
 from .. import config
@@ -46,6 +47,9 @@ class ImportPathSettings(BaseModel):
 
 class ExportPathSettings(BaseModel):
     export_path: str
+
+class ServerPathSettings(BaseModel):
+    path: str
 
 
 # ---------------------------------------------------------------------------
@@ -514,27 +518,40 @@ async def cancel_import(session_id: str):
 # ---------------------------------------------------------------------------
 
 @router.get("/settings/path")
-async def get_import_path_setting():
-    """Get the configured import and export paths."""
+async def get_path_settings():
+    """Get all configured server paths."""
     return {
+        'captures_path': get_captures_path(),
+        'timelapses_path': get_timelapses_path(),
         'import_path': get_import_path(),
         'export_path': get_export_path(),
     }
 
 
-@router.put("/settings/path")
-async def update_import_path_setting(settings: ImportPathSettings):
-    """Update the import path setting."""
+_PATH_KEYS = {
+    'captures': ('captures_path', 'Captures'),
+    'timelapses': ('timelapses_path', 'Timelapses'),
+    'import': ('import_path', 'Import'),
+    'export': ('export_path', 'Export'),
+}
+
+
+@router.put("/settings/path/{path_type}")
+async def update_path_setting(path_type: str, settings: ServerPathSettings):
+    """Update a server path setting (captures, timelapses, import, export)."""
     from ..database import get_db
-    
-    # Validate the path exists and is a directory
-    path = settings.import_path.strip()
+
+    if path_type not in _PATH_KEYS:
+        raise HTTPException(status_code=400, detail=f"Invalid path type: {path_type}")
+
+    db_key, label = _PATH_KEYS[path_type]
+    path = settings.path.strip()
     if not path:
-        raise HTTPException(status_code=400, detail="Import path cannot be empty")
-    
+        raise HTTPException(status_code=400, detail=f"{label} path cannot be empty")
+
     if not os.path.isdir(path):
         raise HTTPException(status_code=400, detail=f"Directory not found: {path}")
-    
+
     now = to_iso(get_now())
     try:
         with get_db() as conn:
@@ -542,38 +559,10 @@ async def update_import_path_setting(settings: ImportPathSettings):
             cursor.execute(
                 "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) "
                 "ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?",
-                ('import_path', path, now, path, now)
+                (db_key, path, now, path, now)
             )
-        logger.info(f"Import path updated to: {path}")
-        return {'import_path': path}
+        logger.info(f"{label} path updated to: {path}")
+        return {'path': path}
     except Exception as e:
-        logger.error(f"Error updating import path: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update import path")
-
-
-@router.put("/settings/export-path")
-async def update_export_path_setting(settings: ExportPathSettings):
-    """Update the export path setting."""
-    from ..database import get_db
-    
-    path = settings.export_path.strip()
-    if not path:
-        raise HTTPException(status_code=400, detail="Export path cannot be empty")
-    
-    if not os.path.isdir(path):
-        raise HTTPException(status_code=400, detail=f"Directory not found: {path}")
-    
-    now = to_iso(get_now())
-    try:
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) "
-                "ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?",
-                ('export_path', path, now, path, now)
-            )
-        logger.info(f"Export path updated to: {path}")
-        return {'export_path': path}
-    except Exception as e:
-        logger.error(f"Error updating export path: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update export path")
+        logger.error(f"Error updating {label} path: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update {label.lower()} path")

@@ -50,10 +50,10 @@ async def create_job(job: JobCreate):
     with get_db() as conn:
         cursor = conn.cursor()
         
-        # Get default values from config if not provided
-        from .. import config
+        # Get default values from settings or config
+        from ..services.import_service import get_captures_path
         if not job.capture_path:
-            job.capture_path = config.DEFAULT_CAPTURES_PATH
+            job.capture_path = get_captures_path()
         
         if not job.naming_pattern:
             job.naming_pattern = config.DEFAULT_CAPTURE_PATTERN

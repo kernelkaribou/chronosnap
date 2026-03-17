@@ -48,8 +48,8 @@ async def create_video(video: VideoCreate, background_tasks: BackgroundTasks):
             videos_path = video.output_path
             validate_writable_directory(videos_path, "Output path")
         else:
-            from .. import config
-            videos_path = config.DEFAULT_VIDEOS_PATH
+            from ..services.import_service import get_timelapses_path
+            videos_path = get_timelapses_path()
         
         # Create job subfolder: {job_id}_{sanitized_job_name}
         import re

@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/style.css?v=1.0.1">
+    <link rel="stylesheet" href="/static/css/style.css?v=1.0.2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -319,38 +319,14 @@
                     <!-- Server Paths Section -->
                     <div class="settings-section">
                         <h3>Server Paths</h3>
-                        <p class="settings-description">Server-side directories the container uses for importing and exporting. Must be mounted as Docker volumes.</p>
+                        <p class="settings-description">Server-side directories the container uses. Must be mounted as Docker volumes.</p>
                         <div style="display:flex;gap:1rem;margin-top:0.75rem;">
-                            <div style="flex:1;min-width:0;">
-                                <label style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Import Path</label>
-                                <div style="display:flex;gap:0.5rem;align-items:center;">
-                                    <input type="text" id="import-path-input" class="form-control" style="flex:1;opacity:0.6;" readonly>
-                                    <button class="btn-icon" id="import-path-edit-btn" onclick="togglePathEdit('import', true)" title="Edit">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                    </button>
-                                    <button class="btn-icon" id="import-path-save-btn" onclick="saveServerPath('import')" title="Save" style="display:none;color:var(--success-color);">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                                    </button>
-                                    <button class="btn-icon" id="import-path-cancel-btn" onclick="togglePathEdit('import', false)" title="Cancel" style="display:none;color:var(--danger-color);">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                    </button>
-                                </div>
-                            </div>
-                            <div style="flex:1;min-width:0;">
-                                <label style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Export Path</label>
-                                <div style="display:flex;gap:0.5rem;align-items:center;">
-                                    <input type="text" id="export-path-input" class="form-control" style="flex:1;opacity:0.6;" readonly>
-                                    <button class="btn-icon" id="export-path-edit-btn" onclick="togglePathEdit('export', true)" title="Edit">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                    </button>
-                                    <button class="btn-icon" id="export-path-save-btn" onclick="saveServerPath('export')" title="Save" style="display:none;color:var(--success-color);">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                                    </button>
-                                    <button class="btn-icon" id="export-path-cancel-btn" onclick="togglePathEdit('export', false)" title="Cancel" style="display:none;color:var(--danger-color);">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                    </button>
-                                </div>
-                            </div>
+                            <div style="flex:1;min-width:0;" id="path-row-captures"></div>
+                            <div style="flex:1;min-width:0;" id="path-row-timelapses"></div>
+                        </div>
+                        <div style="display:flex;gap:1rem;margin-top:0.75rem;">
+                            <div style="flex:1;min-width:0;" id="path-row-import"></div>
+                            <div style="flex:1;min-width:0;" id="path-row-export"></div>
                         </div>
                     </div>
 
@@ -471,7 +447,7 @@
             <form id="create-job-form" onsubmit="createJob(event)">
                 <div class="form-group" style="margin-bottom: 1.25rem;">
                     <label>Job Name *</label>
-                    <input type="text" id="job_name" class="form-control" required>
+                    <input type="text" id="job_name" class="form-control" required oninput="updateNamingPreview()">
                 </div>
 
                 <div class="form-section">
@@ -611,13 +587,25 @@
                     <div class="form-section-title">Storage</div>
                     <div class="form-group">
                         <label>Capture Path</label>
-                        <input type="text" id="capture_path" class="form-control" placeholder="Leave empty for default">
+                        <div style="display:flex;gap:0.5rem;align-items:center;">
+                            <input type="text" id="capture_path" class="form-control" style="flex:1;opacity:0.6;" readonly>
+                            <button type="button" class="btn-icon" id="capture-path-edit-btn" onclick="toggleCreatePathEdit(true)" title="Edit">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                            <button type="button" class="btn-icon" id="capture-path-save-btn" onclick="toggleCreatePathEdit(false)" title="Confirm" style="display:none;color:var(--success-color);">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                            </button>
+                            <button type="button" class="btn-icon" id="capture-path-cancel-btn" onclick="cancelCreatePathEdit()" title="Cancel" style="display:none;color:var(--danger-color);">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <label>Capture Naming Pattern</label>
-                        <input type="text" id="naming_pattern" class="form-control" placeholder="Leave empty for default">
-                        <small>Available: {job_name}, {num:06d}, {timestamp}</small>
+                        <input type="text" id="naming_pattern" class="form-control" oninput="updateNamingPreview()">
+                        <small>Available: <code>{job_name}</code>, <code>{count}</code>, <code>{timestamp}</code></small>
+                        <div id="naming-preview" style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.25rem;font-family:monospace;"></div>
                     </div>
                 </div>
 
@@ -1046,6 +1034,6 @@
     </div>
 
     <script src="/static/js/chart.min.js"></script>
-    <script src="/static/js/app.js?v=1.0.1"></script>
+    <script src="/static/js/app.js?v=1.0.2"></script>
 </body>
 </html>

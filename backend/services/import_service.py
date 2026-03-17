@@ -75,6 +75,36 @@ def get_export_path() -> str:
     return config.DEFAULT_EXPORTS_PATH
 
 
+def get_captures_path() -> str:
+    """Get the configured captures path from settings or default."""
+    try:
+        from ..database import get_db
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM settings WHERE key = 'captures_path'")
+            row = cursor.fetchone()
+            if row and row[0]:
+                return row[0]
+    except Exception:
+        pass
+    return config.DEFAULT_CAPTURES_PATH
+
+
+def get_timelapses_path() -> str:
+    """Get the configured timelapses path from settings or default."""
+    try:
+        from ..database import get_db
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM settings WHERE key = 'timelapses_path'")
+            row = cursor.fetchone()
+            if row and row[0]:
+                return row[0]
+    except Exception:
+        pass
+    return config.DEFAULT_VIDEOS_PATH
+
+
 def validate_path_within(path: str, allowed_prefix: str) -> str:
     """Canonicalize a path and verify it's within the allowed prefix.
     
@@ -970,7 +1000,7 @@ def execute_image_import(
         job_id = cursor.lastrowid
         
         # Create standard job directory
-        job_dir = os.path.join(config.DEFAULT_CAPTURES_PATH, f"{job_id}_{job_name}")
+        job_dir = os.path.join(get_captures_path(), f"{job_id}_{job_name}")
         try:
             os.makedirs(job_dir, exist_ok=True)
             os.chmod(job_dir, 0o755)
@@ -1068,10 +1098,10 @@ def execute_video_import(
                 raise ValueError(f"Job {job_id} not found")
             job_name = row[0]
             sanitized = re.sub(r'[^\w\s-]', '', job_name).strip()
-            video_dir = os.path.join(config.DEFAULT_VIDEOS_PATH, f"{job_id}_{sanitized}", video_name)
+            video_dir = os.path.join(get_timelapses_path(), f"{job_id}_{sanitized}", video_name)
     else:
         # Standalone — use imported folder
-        video_dir = os.path.join(config.DEFAULT_VIDEOS_PATH, 'imported', video_name)
+        video_dir = os.path.join(get_timelapses_path(), 'imported', video_name)
     
     os.makedirs(video_dir, exist_ok=True)
     os.chmod(video_dir, 0o755)

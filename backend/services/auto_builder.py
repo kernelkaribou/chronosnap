@@ -119,7 +119,8 @@ def _run_auto_build(job: dict, now: datetime):
         sanitized_name = re.sub(r'[^\w\s-]', '', job_name).strip()
         video_name = f"{sanitized_name}_auto_{date_str}"
 
-        videos_path = config.DEFAULT_VIDEOS_PATH
+        from .import_service import get_timelapses_path
+        videos_path = get_timelapses_path()
         job_folder = f"{job_id}_{sanitized_name}"
         job_dir = os.path.join(videos_path, job_folder)
         os.makedirs(job_dir, exist_ok=True)

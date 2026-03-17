@@ -26,7 +26,7 @@ MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 10 * 1024 * 1024 * 1024))  # 
 EXPORT_STREAM_THRESHOLD = 1 * 1024 * 1024 * 1024  # 1GB
 
 # Default naming patterns
-DEFAULT_CAPTURE_PATTERN = "{job_name}_{num:06d}_{timestamp}"
+DEFAULT_CAPTURE_PATTERN = "{job_name}_{count}_{timestamp}"
 
 # Server settings
 HOST = os.getenv("HOST", "0.0.0.0")

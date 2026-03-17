@@ -3694,20 +3694,45 @@ async function executeImport() {
 }
 
 // --- Server path settings ---
-let _pathBackups = { import: '', export: '' };
+let _pathBackups = {};
+const _pathTypes = [
+    { key: 'captures', label: 'Captures Path', apiField: 'captures_path' },
+    { key: 'timelapses', label: 'Timelapses Path', apiField: 'timelapses_path' },
+    { key: 'import', label: 'Import Path', apiField: 'import_path' },
+    { key: 'export', label: 'Export Path', apiField: 'export_path' },
+];
+
+function renderPathRow(type) {
+    const editSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+    const saveSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
+    const cancelSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    const container = document.getElementById(`path-row-${type.key}`);
+    if (!container) return;
+    container.innerHTML = `
+        <label style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">${type.label}</label>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+            <input type="text" id="${type.key}-path-input" class="form-control" style="flex:1;opacity:0.6;" readonly>
+            <button class="btn-icon" id="${type.key}-path-edit-btn" onclick="togglePathEdit('${type.key}', true)" title="Edit">${editSvg}</button>
+            <button class="btn-icon" id="${type.key}-path-save-btn" onclick="saveServerPath('${type.key}')" title="Save" style="display:none;color:var(--success-color);">${saveSvg}</button>
+            <button class="btn-icon" id="${type.key}-path-cancel-btn" onclick="togglePathEdit('${type.key}', false)" title="Cancel" style="display:none;color:var(--danger-color);">${cancelSvg}</button>
+        </div>`;
+}
 
 async function loadServerPaths() {
+    _pathTypes.forEach(t => renderPathRow(t));
     try {
         const result = await apiRequest('/import/settings/path');
-        document.getElementById('import-path-input').value = result.import_path;
-        _pathBackups.import = result.import_path;
-        _importBrowsePath = result.import_path;
-        document.getElementById('export-path-input').value = result.export_path || '/exports';
-        _pathBackups.export = result.export_path || '/exports';
+        _pathTypes.forEach(t => {
+            const val = result[t.apiField] || '';
+            document.getElementById(`${t.key}-path-input`).value = val;
+            _pathBackups[t.key] = val;
+        });
+        _importBrowsePath = result.import_path || '/imports';
     } catch (e) {
-        document.getElementById('import-path-input').value = '/imports';
+        _pathTypes.forEach(t => {
+            document.getElementById(`${t.key}-path-input`).value = '';
+        });
         _importBrowsePath = '/imports';
-        document.getElementById('export-path-input').value = '/exports';
     }
 }
 
@@ -3736,18 +3761,61 @@ function togglePathEdit(type, editing) {
 
 async function saveServerPath(type) {
     const path = document.getElementById(`${type}-path-input`).value.trim();
-    if (!path) { showNotification(`${type.charAt(0).toUpperCase() + type.slice(1)} path cannot be empty`, 'error'); return; }
+    const label = _pathTypes.find(t => t.key === type)?.label || type;
+    if (!path) { showNotification(`${label} cannot be empty`, 'error'); return; }
     try {
-        const endpoint = type === 'import' ? '/import/settings/path' : '/import/settings/export-path';
-        const body = type === 'import' ? { import_path: path } : { export_path: path };
-        await apiRequest(endpoint, { method: 'PUT', body });
+        await apiRequest(`/import/settings/path/${type}`, { method: 'PUT', body: { path } });
         _pathBackups[type] = path;
         if (type === 'import') _importBrowsePath = path;
         togglePathEdit(type, false);
-        showNotification(`${type.charAt(0).toUpperCase() + type.slice(1)} path updated`, 'success');
+        showNotification(`${label} updated`, 'success');
     } catch (error) {
-        showNotification(error.message || `Failed to update ${type} path`, 'error');
+        showNotification(error.message || `Failed to update ${label.toLowerCase()}`, 'error');
     }
+}
+
+let _createPathBackup = '';
+
+function toggleCreatePathEdit(editing) {
+    const input = document.getElementById('capture_path');
+    const editBtn = document.getElementById('capture-path-edit-btn');
+    const saveBtn = document.getElementById('capture-path-save-btn');
+    const cancelBtn = document.getElementById('capture-path-cancel-btn');
+    if (editing) {
+        _createPathBackup = input.value;
+        input.removeAttribute('readonly');
+        input.style.opacity = '1';
+        editBtn.style.display = 'none';
+        saveBtn.style.display = '';
+        cancelBtn.style.display = '';
+        input.focus();
+    } else {
+        input.setAttribute('readonly', '');
+        input.style.opacity = '0.6';
+        editBtn.style.display = '';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+    }
+}
+
+function cancelCreatePathEdit() {
+    document.getElementById('capture_path').value = _createPathBackup;
+    toggleCreatePathEdit(false);
+}
+
+function updateNamingPreview() {
+    const pattern = document.getElementById('naming_pattern').value || '{job_name}_{count}_{timestamp}';
+    const jobName = document.getElementById('job_name')?.value || 'MyJob';
+    const now = new Date();
+    const ts = now.getFullYear() + (now.getMonth()+1+'').padStart(2,'0') + (now.getDate()+'').padStart(2,'0')
+        + '_' + (now.getHours()+'').padStart(2,'0') + (now.getMinutes()+'').padStart(2,'0') + (now.getSeconds()+'').padStart(2,'0');
+    const example = pattern
+        .replace('{job_name}', jobName)
+        .replace('{count}', '000001')
+        .replace(/\{num(?::0?(\d+)d)?\}/, '000001')
+        .replace('{timestamp}', ts);
+    const el = document.getElementById('naming-preview');
+    if (el) el.textContent = `Example: ${example}.jpg`;
 }
 
 function showCreateJobModal() {
@@ -3762,8 +3830,10 @@ function showCreateJobModal() {
     setDefaultStartTime();
     
     // Set default values for capture path and naming pattern
-    document.getElementById('capture_path').value = '/captures';
-    document.getElementById('naming_pattern').value = '{job_name}_{num:06d}_{timestamp}';
+    document.getElementById('capture_path').value = _pathBackups.captures || '/captures';
+    document.getElementById('naming_pattern').value = '{job_name}_{count}_{timestamp}';
+    toggleCreatePathEdit(false);
+    updateNamingPreview();
     
     // Set initial min for end date
     updateEndDateMin();
@@ -3869,8 +3939,9 @@ async function duplicateJob(jobId) {
         document.getElementById('interval_seconds').value = job.interval_seconds;
         document.getElementById('framerate').value = job.framerate || 30;
         document.getElementById('warning_threshold').value = job.warning_threshold || 3;
-        document.getElementById('capture_path').value = '/captures';
-        document.getElementById('naming_pattern').value = job.naming_pattern || '{job_name}_{num:06d}_{timestamp}';
+        document.getElementById('capture_path').value = _pathBackups.captures || '/captures';
+        document.getElementById('naming_pattern').value = job.naming_pattern || '{job_name}_{count}_{timestamp}';
+        updateNamingPreview();
         
         // Set start to now
         setDefaultStartTime();
