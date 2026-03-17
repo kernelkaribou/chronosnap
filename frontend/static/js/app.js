@@ -2550,8 +2550,8 @@ function generateOverlayHTML(prefix, opts = {}) {
     const controlsHtml = `
             <div style="display:flex; gap:0.5rem; align-items:flex-start;">
                 <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.4rem;">
-                    <div style="display:flex; gap:0.35rem; align-items:flex-end;">
-                        <div style="width:120px; flex:0 0 120px;">
+                    <div style="display:flex; gap:0.5rem; align-items:flex-end;">
+                        <div style="flex: 1 1 0; min-width:0;">
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Text</label>
                             <input type="text" id="${prefix}-overlay-text" class="form-control" value="{job_name}" placeholder="{job_name}"${inputEvent}>
                             <small style="color: var(--text-secondary); font-size:0.6rem;"><code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code></small>
@@ -2560,13 +2560,13 @@ function generateOverlayHTML(prefix, opts = {}) {
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Font</label>
                             <select id="${prefix}-overlay-font" class="form-control"${inputEvent}>${fontOpts}</select>
                         </div>
-                        <div style="width:50px; flex:0 0 50px;">
+                        <div style="width:55px; flex:0 0 55px;">
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Size</label>
                             <input type="number" id="${prefix}-overlay-size" class="form-control" value="5" min="1" max="20" step="1"${inputEvent}>
                         </div>
                         <div style="width:36px; flex:0 0 36px;">
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Bold</label>
-                            <div style="display:flex;align-items:center;height:32px;">
+                            <div style="display:flex;align-items:center;height:38px;">
                                 <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr}>
                             </div>
                         </div>
