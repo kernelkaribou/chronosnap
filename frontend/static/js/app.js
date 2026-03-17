@@ -3815,7 +3815,6 @@ async function exportJob(jobId, jobName) {
                         // Small export — stream directly
                         const response = await fetch(`${API_BASE}/jobs/${jobId}/export`, {
                             method: 'POST',
-                            headers: { 'X-API-Key': API_KEY },
                         });
                         if (!response.ok) {
                             const err = await response.json().catch(() => ({ detail: 'Export failed' }));
@@ -3834,9 +3833,8 @@ async function exportJob(jobId, jobName) {
                     } else {
                         // Large export — built to disk
                         const result = await apiRequest(`/jobs/${jobId}/export`, { method: 'POST' });
-                        // Trigger download from the file URL
                         const a = document.createElement('a');
-                        a.href = `${API_BASE}${result.download_url}?api_key=${API_KEY}`;
+                        a.href = `${API_BASE}${result.download_url}`;
                         a.download = result.file_name;
                         document.body.appendChild(a);
                         a.click();
