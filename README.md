@@ -31,7 +31,7 @@ A self-hosted web application for creating automated timelapse captures from HTT
 - Full-resolution preview images in the build modal (not thumbnails)
 - Text overlay options: percentage-based font sizing, opacity slider, and position grid
 - Videos are preserved even if the parent job is deleted
-- **Auto-build**: per-job recurring timelapse generation (daily, weekly, monthly, etc.) — videos accumulate as a sequence with an "Auto" badge in the gallery. Next auto-build time is displayed on job cards and in the detail view.
+- **Auto-build**: per-job recurring timelapse generation (daily, weekly, monthly, etc.). Videos accumulate as a sequence with an "Auto" badge in the gallery. Next auto-build time is displayed on job cards and in the detail view.
 - **Shared videos**: videos can be shared via a public link. Shared videos display an indicator icon on their cards, and the timelapses page includes a filter toggle to show only shared videos.
 
 ### Importing
@@ -42,9 +42,9 @@ The import feature allows bringing in existing images and videos from outside th
 
 **Browser Upload**: Drag and drop files or folders directly into the import modal, or use the Browse button to select a folder. Uploads support recursive folder traversal for nested directory structures.
 
-**How it works**: Each import operation goes through a staging pipeline — files are scanned, analyzed (classified as images or videos, checked for duplicates), and previewed before confirming. Once confirmed, images are moved into the standard capture directory structure and a new job is created for them. Videos are imported as standalone timelapses in the gallery.
+**How it works**: Each import operation goes through a staging pipeline. Files are scanned, analyzed (classified as images or videos, checked for duplicates), and previewed before confirming. Once confirmed, images are moved into the standard capture directory structure and a new job is created for them. Videos are imported as standalone timelapses in the gallery.
 
-**Important**: Each import creates a single job. If you need to import images into separate jobs, perform separate imports. Videos are imported individually and do not require a job — they appear directly in the timelapse gallery with an "Imported" badge.
+**Important**: Each import creates a single job. If you need to import images into separate jobs, perform separate imports. Videos are imported individually and do not require a job. They appear directly in the timelapse gallery with an "Imported" badge.
 
 **Supported formats**:
 - **Images**: JPEG, PNG, BMP, TIFF, WebP
@@ -59,7 +59,7 @@ After a successful import, source files are removed from the import directory to
 
 Export a job as a ZIP archive containing all of its captures (with the original date-based directory structure), generated videos with thumbnails, and a `job.json` metadata file. The metadata includes the job configuration and capture/video counts for reference or potential future re-import. Stream URL credentials are automatically redacted in the exported `job.json`.
 
-**Small exports** (under 1 GB) are streamed directly as a browser download using temporary files instead of in-memory buffering. **Large exports** (1 GB or more) are built to the `/exports` directory on disk, then downloaded from there. Export filenames include a timestamp to prevent concurrent overwrites. Symlinks are skipped during export for security. You can manage saved exports from the API — list, download, or delete them.
+**Small exports** (under 1 GB) are streamed directly as a browser download using temporary files instead of in-memory buffering. **Large exports** (1 GB or more) are built to the `/exports` directory on disk, then downloaded from there. Export filenames include a timestamp to prevent concurrent overwrites. Symlinks are skipped during export for security. You can manage saved exports from the API to list, download, or delete them.
 
 **Export retention**: configurable in Settings with a default of 7 days. Old exports are automatically cleaned up at container startup. Set retention to 0 to keep exports indefinitely.
 
@@ -137,7 +137,7 @@ Five volumes are required for persistent data:
 | `PORT` | `8080` | Port the application listens on inside the container. |
 | `LOG_LEVEL` | `INFO` | Logging verbosity. Options: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
 | `MAX_UPLOAD_SIZE` | `10737418240` | Maximum upload size in bytes (default 10 GB). |
-| `APP_VERSION` | Read from `VERSION` file | Override the application version string. Optional — if not set, the version is read from the `VERSION` file at the repository root. |
+| `APP_VERSION` | Read from `VERSION` file | Override the application version string. Optional. If not set, the version is read from the `VERSION` file at the repository root. |
 
 ### Example docker-compose.yml
 
@@ -274,7 +274,7 @@ To fully back up an instance, preserve these paths:
 - `/captures/` (images)
 - `/timelapses/` (videos)
 
-The `/imports/` directory does not need to be backed up — it is a temporary drop zone for files being imported. After a successful import, files are moved out of this directory automatically.
+The `/imports/` directory does not need to be backed up. It is a temporary drop zone for files being imported. After a successful import, files are moved out of this directory automatically.
 
 The `/exports/` directory contains saved export archives for large jobs. These can be re-downloaded or deleted from the API and do not need to be backed up unless you want to preserve them separately.
 
@@ -288,7 +288,7 @@ If you want to stop a job without losing data, disable it or let it complete nat
 
 ### Network and Camera Reliability
 
-FFmpeg capture operations time out based on the `FFMPEG_TIMEOUT` setting. If your cameras are on a slow or unreliable network, increase this value. The scheduler tracks consecutive failures per job and triggers a warning after reaching the job's configured threshold (default: 3 failures). Each job can have its own threshold — set low (1-2) for once-a-day captures where every miss matters, or higher for frequent captures where brief outages are tolerable. If webhook notifications are enabled in Settings, events fire on state transitions: when a job enters warning state, when it recovers after being in warning, and when it completes its schedule. Jobs are never automatically disabled by failures; manual intervention is required to stop a persistently failing job.
+FFmpeg capture operations time out based on the `FFMPEG_TIMEOUT` setting. If your cameras are on a slow or unreliable network, increase this value. The scheduler tracks consecutive failures per job and triggers a warning after reaching the job's configured threshold (default: 3 failures). Each job can have its own threshold. Set low (1-2) for once-a-day captures where every miss matters, or higher for frequent captures where brief outages are tolerable. If webhook notifications are enabled in Settings, events fire on state transitions: when a job enters warning state, when it recovers after being in warning, and when it completes its schedule. Jobs are never automatically disabled by failures; manual intervention is required to stop a persistently failing job.
 
 RTSP captures use TCP transport for reliability over UDP. Ensure the container can reach your camera network and that any firewalls allow the RTSP port (typically 554 or 7441 for UniFi Protect).
 
