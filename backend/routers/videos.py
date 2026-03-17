@@ -14,7 +14,7 @@ from ..database import get_db, dict_from_row
 from ..services.video_processor import process_video, cancel_video
 from ..utils import get_now, to_iso
 from ..helpers.db_helpers import get_or_404, normalize_favorite, fetch_tags_for_videos, fetch_tags_for_jobs, set_video_tags
-from ..helpers.file_helpers import validate_writable_directory, delete_video_files
+from ..helpers.file_helpers import validate_writable_directory, delete_video_files, resolve_video_path, make_relative
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -43,13 +43,9 @@ async def create_video(video: VideoCreate, background_tasks: BackgroundTasks):
             "SELECT * FROM jobs WHERE id = ?",
             (video.job_id,), "Job not found")
         
-        # Get video output path from custom path or settings
-        if video.output_path:
-            videos_path = video.output_path
-            validate_writable_directory(videos_path, "Output path")
-        else:
-            from ..services.import_service import get_timelapses_path
-            videos_path = get_timelapses_path()
+        # Always use the global timelapses path from settings
+        from ..services.import_service import get_timelapses_path
+        videos_path = get_timelapses_path()
         
         # Create job subfolder: {job_id}_{sanitized_job_name}
         import re
@@ -61,6 +57,7 @@ async def create_video(video: VideoCreate, background_tasks: BackgroundTasks):
         # Create video record - name already includes timestamp from frontend
         now = to_iso(get_now())
         output_path = os.path.join(job_dir, f"{video.name}.mp4")
+        rel_output = make_relative(output_path, videos_path)
         
         cursor.execute("""
             INSERT INTO processed_videos (
@@ -70,7 +67,7 @@ async def create_video(video: VideoCreate, background_tasks: BackgroundTasks):
                 text_overlay, created_at
             ) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'processing', ?, ?)
         """, (
-            video.job_id, job_dict['name'], video.name, output_path, video.resolution,
+            video.job_id, job_dict['name'], video.name, rel_output, video.resolution,
             video.framerate, video.quality, video.start_capture_id,
             video.end_capture_id, video.start_time, video.end_time,
             video.text_overlay.model_dump_json() if video.text_overlay else None,
@@ -261,10 +258,11 @@ async def check_video_file(video_id: int):
         if vid['status'] != "completed":
             return {"accessible": False, "reason": "Video is still processing"}
         
-        if not os.path.exists(vid['file_path']):
+        abs_path = resolve_video_path(vid['file_path'])
+        if not os.path.exists(abs_path):
             return {"accessible": False, "reason": "Video file not found on disk"}
         
-        if not os.access(vid['file_path'], os.R_OK):
+        if not os.access(abs_path, os.R_OK):
             return {"accessible": False, "reason": "No read permission for video file"}
         
         return {"accessible": True, "reason": None}
@@ -279,10 +277,13 @@ async def get_video_thumbnail(video_id: int):
             "SELECT thumbnail_path, status FROM processed_videos WHERE id = ?",
             (video_id,), "Video not found")
         
-        if not vid['thumbnail_path'] or not os.path.exists(vid['thumbnail_path']):
+        if not vid['thumbnail_path']:
+            raise HTTPException(status_code=404, detail="Thumbnail not available")
+        abs_thumb = resolve_video_path(vid['thumbnail_path'])
+        if not os.path.exists(abs_thumb):
             raise HTTPException(status_code=404, detail="Thumbnail not available")
         
-        return FileResponse(vid['thumbnail_path'], media_type="image/jpeg")
+        return FileResponse(abs_thumb, media_type="image/jpeg")
 
 
 @router.get("/{video_id}/download")
@@ -297,11 +298,12 @@ async def download_video(video_id: int):
         if vid['status'] != "completed":
             raise HTTPException(status_code=400, detail="Video is not ready for download")
         
-        if not os.path.exists(vid['file_path']):
+        abs_path = resolve_video_path(vid['file_path'])
+        if not os.path.exists(abs_path):
             raise HTTPException(status_code=404, detail="Video file not found on disk")
         
         return FileResponse(
-            vid['file_path'],
+            abs_path,
             media_type="video/mp4",
             filename=f"{vid['name']}.mp4"
         )
@@ -334,10 +336,12 @@ async def delete_video(video_id: int):
             (video_id,), "Video not found")
         
         # Delete files
-        delete_video_files(vid['file_path'], vid.get('thumbnail_path'))
+        abs_fp = resolve_video_path(vid['file_path'])
+        abs_thumb = resolve_video_path(vid['thumbnail_path']) if vid.get('thumbnail_path') else None
+        delete_video_files(abs_fp, abs_thumb)
         
         # Clean up empty parent folder
-        _cleanup_empty_folder(vid['file_path'])
+        _cleanup_empty_folder(abs_fp)
         
         # Delete record
         cursor.execute("DELETE FROM processed_videos WHERE id = ?", (video_id,))
@@ -365,8 +369,11 @@ async def delete_multiple_videos(request: BulkDeleteRequest):
             if not vid:
                 continue
             
-            delete_video_files(vid['file_path'], vid.get('thumbnail_path'))
-            _cleanup_empty_folder(vid['file_path'])
+            delete_video_files(
+                resolve_video_path(vid['file_path']),
+                resolve_video_path(vid['thumbnail_path']) if vid.get('thumbnail_path') else None
+            )
+            _cleanup_empty_folder(resolve_video_path(vid['file_path']))
             
             cursor.execute("DELETE FROM processed_videos WHERE id = ?", (video_id,))
             deleted += 1

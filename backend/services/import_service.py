@@ -1028,7 +1028,9 @@ def execute_image_import(
             cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
             raise ValueError(f"Failed to create job directory: {e}")
         
-        cursor.execute("UPDATE jobs SET capture_path = ? WHERE id = ?", (job_dir, job_id))
+        # Store relative capture_path
+        rel_job_dir = f"{job_id}_{job_name}"
+        cursor.execute("UPDATE jobs SET capture_path = ? WHERE id = ?", (rel_job_dir, job_id))
         
         # Move files into hierarchical structure
         moved_count = 0
@@ -1064,9 +1066,10 @@ def execute_image_import(
                 logger.warning(f"Failed to move {src}: {e}")
                 continue
             
+            rel_dest = os.path.relpath(dest, get_captures_path())
             cursor.execute(
                 "INSERT INTO captures (job_id, file_path, file_size, captured_at) VALUES (?, ?, ?, ?)",
-                (job_id, dest, img['file_size'], img['captured_at'])
+                (job_id, rel_dest, img['file_size'], img['captured_at'])
             )
             moved_count += 1
             total_size += img['file_size']
@@ -1158,6 +1161,8 @@ def execute_video_import(
     if job_id:
         db_job_name = job_name
     
+    rel_dest = os.path.relpath(dest_path, get_timelapses_path())
+    
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -1167,13 +1172,13 @@ def execute_video_import(
                 status, progress, build_source, created_at, completed_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'high', ?, ?, 'completed', 100, 'imported', ?, ?)
         """, (
-            job_id, db_job_name, video_name, dest_path, file_size, file_hash,
+            job_id, db_job_name, video_name, rel_dest, file_size, file_hash,
             resolution, fps, frame_count, duration,
             now, now
         ))
         video_id = cursor.lastrowid
     
-    # Generate thumbnail
+    # Generate thumbnail (pass absolute path for filesystem ops)
     _generate_video_thumbnail(video_id, dest_path)
     
     logger.info(f"Imported video '{video_name}' (ID: {video_id})")
@@ -1188,7 +1193,7 @@ def execute_video_import(
 
 
 def _generate_video_thumbnail(video_id: int, video_path: str):
-    """Generate thumbnail for an imported video."""
+    """Generate thumbnail for an imported video. video_path must be absolute."""
     thumb_path = os.path.splitext(video_path)[0] + "_thumb.jpg"
     try:
         cmd = [
@@ -1203,11 +1208,12 @@ def _generate_video_thumbnail(video_id: int, video_path: str):
         
         if result.returncode == 0 and os.path.exists(thumb_path):
             os.chmod(thumb_path, 0o644)
+            rel_thumb = os.path.relpath(thumb_path, get_timelapses_path())
             from ..database import get_db
             with get_db() as conn:
                 conn.execute(
                     "UPDATE processed_videos SET thumbnail_path = ? WHERE id = ?",
-                    (thumb_path, video_id)
+                    (rel_thumb, video_id)
                 )
             logger.info(f"Generated thumbnail for imported video {video_id}")
         else:

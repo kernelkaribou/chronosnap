@@ -25,7 +25,7 @@ from ..services.auto_builder import get_next_auto_build_at
 from ..services.import_service import get_export_path
 from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware
 from ..helpers.db_helpers import get_or_404, fetch_tags_for_jobs, set_job_tags
-from ..helpers.file_helpers import validate_writable_directory
+from ..helpers.file_helpers import validate_writable_directory, make_relative, resolve_capture_path
 from .. import config
 
 router = APIRouter()
@@ -52,16 +52,15 @@ async def create_job(job: JobCreate):
     with get_db() as conn:
         cursor = conn.cursor()
         
-        # Get default values from settings or config
+        # Always use the global captures path from settings
         from ..services.import_service import get_captures_path
-        if not job.capture_path:
-            job.capture_path = get_captures_path()
+        captures_base = get_captures_path()
         
         if not job.naming_pattern:
             job.naming_pattern = config.DEFAULT_CAPTURE_PATTERN
         
-        # Validate capture_path exists and is writable
-        validate_writable_directory(job.capture_path, "Capture path")
+        # Validate captures path exists and is writable
+        validate_writable_directory(captures_base, "Capture path")
         
         now = get_now()
         now_str = to_iso(now)
@@ -101,26 +100,26 @@ async def create_job(job: JobCreate):
         job_id = cursor.lastrowid
         
         # Create job directory with ID prefix
-        job_dir = os.path.join(job.capture_path, f"{job_id}_{job.name}")
+        rel_job_dir = f"{job_id}_{job.name}"
+        abs_job_dir = os.path.join(captures_base, rel_job_dir)
         try:
-            os.makedirs(job_dir, exist_ok=True)
+            os.makedirs(abs_job_dir, exist_ok=True)
         except PermissionError:
-            # Rollback the job creation
             cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
             raise HTTPException(
                 status_code=400,
-                detail=f"Permission denied creating job directory: {job_dir}"
+                detail=f"Permission denied creating job directory: {abs_job_dir}"
             )
         except Exception as e:
-            # Rollback the job creation
             cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
             raise HTTPException(
                 status_code=400,
                 detail=f"Failed to create job directory"
             )
         
-        # Update the capture_path with the actual directory
-        cursor.execute("UPDATE jobs SET capture_path = ? WHERE id = ?", (job_dir, job_id))
+        # Store the relative directory name
+        cursor.execute("UPDATE jobs SET capture_path = ? WHERE id = ?",
+                       (rel_job_dir, job_id))
         
         # Get the job we just created
         cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
@@ -445,9 +444,10 @@ async def delete_job(job_id: int):
         # Delete the entire job folder from disk
         if job_info['capture_path']:
             try:
-                if os.path.exists(job_info['capture_path']) and os.path.isdir(job_info['capture_path']):
-                    shutil.rmtree(job_info['capture_path'])
-                    logger.info(f"Deleted job folder: {job_info['capture_path']}")
+                abs_job_dir = resolve_capture_path(job_info['capture_path'])
+                if os.path.exists(abs_job_dir) and os.path.isdir(abs_job_dir):
+                    shutil.rmtree(abs_job_dir)
+                    logger.info(f"Deleted job folder: {abs_job_dir}")
             except Exception as e:
                 logger.warning(f"Failed to delete job folder {job_info['capture_path']}: {e}")
         
@@ -621,15 +621,15 @@ def _get_export_files(job_id: int, job_name: str):
     total_size = 0
     
     # Captures — preserve directory structure relative to job folder
-    job_dir = job_dict.get('capture_path') or os.path.join(config.DEFAULT_CAPTURES_PATH,
-                                                            f"{job_id}_{job_name}")
+    job_dir = job_dict.get('capture_path') or f"{job_id}_{job_name}"
+    abs_job_dir = resolve_capture_path(job_dir)
     for row in captures:
-        disk_path = row[0]
+        disk_path = resolve_capture_path(row[0])
         if os.path.islink(disk_path) or not os.path.isfile(disk_path):
             continue
         # Relative path from job dir (e.g., 2026/01/15/14/image.jpg)
-        if disk_path.startswith(job_dir):
-            rel = os.path.relpath(disk_path, job_dir)
+        if disk_path.startswith(abs_job_dir):
+            rel = os.path.relpath(disk_path, abs_job_dir)
         else:
             rel = os.path.basename(disk_path)
         archive_path = f"{prefix}/captures/{rel}"
@@ -637,8 +637,9 @@ def _get_export_files(job_id: int, job_name: str):
         total_size += row[1] or os.path.getsize(disk_path)
     
     # Videos + thumbnails
+    from ..helpers.file_helpers import resolve_video_path
     for row in videos:
-        disk_path = row[0]
+        disk_path = resolve_video_path(row[0])
         if os.path.islink(disk_path) or not os.path.isfile(disk_path):
             continue
         archive_path = f"{prefix}/videos/{os.path.basename(disk_path)}"
@@ -646,7 +647,7 @@ def _get_export_files(job_id: int, job_name: str):
         total_size += row[1] or os.path.getsize(disk_path)
         
         # Include thumbnail if exists
-        thumb_path = row[2]
+        thumb_path = resolve_video_path(row[2]) if row[2] else None
         if thumb_path and not os.path.islink(thumb_path) and os.path.isfile(thumb_path):
             archive_path = f"{prefix}/videos/{os.path.basename(thumb_path)}"
             files.append((archive_path, thumb_path))

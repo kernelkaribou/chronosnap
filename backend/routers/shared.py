@@ -35,6 +35,16 @@ ALLOWED_VIDEO_DIRS = [
     os.path.realpath('/app/data/timelapses'),
 ]
 
+
+def _get_allowed_video_dirs():
+    """Get allowed video dirs including the configured timelapses path."""
+    from ..services.import_service import get_timelapses_path
+    dirs = list(ALLOWED_VIDEO_DIRS)
+    configured = os.path.realpath(get_timelapses_path())
+    if configured not in dirs:
+        dirs.append(configured)
+    return dirs
+
 SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
@@ -57,7 +67,8 @@ def _validate_token_format(token: str):
 def _safe_file_path(file_path: str) -> str:
     """Validate file_path is within allowed directories to prevent path traversal."""
     real = os.path.realpath(file_path)
-    if not any(real.startswith(d + os.sep) or real == d for d in ALLOWED_VIDEO_DIRS):
+    allowed = _get_allowed_video_dirs()
+    if not any(real.startswith(d + os.sep) or real == d for d in allowed):
         raise HTTPException(status_code=404, detail="Not found")
     if not os.path.isfile(real):
         raise HTTPException(status_code=404, detail="Not found")
@@ -130,6 +141,11 @@ def _resolve_shared_link(cursor, token: str):
 
     if not row["file_path"]:
         raise HTTPException(status_code=404, detail="Not found")
+
+    # Resolve relative DB path to absolute
+    from ..helpers.file_helpers import resolve_video_path
+    row = dict(row)
+    row["file_path"] = resolve_video_path(row["file_path"])
 
     return row
 

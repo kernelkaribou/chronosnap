@@ -875,7 +875,7 @@ async function showJobDetails(jobId) {
                             </button>
                         </div>
                         <div><strong>Storage:</strong> ${formatBytes(job.storage_size)}</div>
-                        <div><strong>Path:</strong> <span style="font-size: 0.8rem; word-break: break-all;">${escapeHtml(job.capture_path)}</span></div>
+                        <div><strong>Folder:</strong> <span style="font-size: 0.8rem; word-break: break-all;">${escapeHtml(job.capture_path)}</span></div>
                     </div>
                 </div>
 
@@ -1101,7 +1101,6 @@ async function createJob(event) {
         interval_seconds: { parse: 'int' },
         framerate: { parse: 'int' },
         warning_threshold: { parse: 'int' },
-        capture_path: {},
         naming_pattern: {},
         time_window_enabled: { parse: 'bool' },
         time_window_start: {},
@@ -1154,7 +1153,6 @@ async function createJob(event) {
         end_datetime: values.end_datetime ? datetimeLocalToISO(values.end_datetime) : null,
         interval_seconds: values.interval_seconds,
         framerate: values.framerate,
-        capture_path: values.capture_path,
         naming_pattern: values.naming_pattern,
         warning_threshold: values.warning_threshold || 3,
         time_window_enabled: values.time_window_enabled,
@@ -2241,8 +2239,6 @@ async function showProcessVideoModal(jobId, jobName) {
             jobSelect.setAttribute('required', 'required');
             document.getElementById('process_job_id').value = '';
             document.querySelector('#process-video-modal .modal-header h3').textContent = 'Build Timelapse';
-            document.getElementById('video_output_path').value = '/timelapses';
-            toggleOutputPathEdit(false);
             
             // Populate job dropdown
             await populateJobSelector();
@@ -2375,8 +2371,6 @@ async function populateVideoFormFromJob(jobId, jobName) {
     document.getElementById('process_job_id').value = jobId;
     document.getElementById('video_name').value = `${jobName}_${timestamp}`;
     document.getElementById('video_framerate').value = job.framerate;
-    document.getElementById('video_output_path').value = '/timelapses';
-    toggleOutputPathEdit(false);
     
     // Add native resolution option if available
     const resSelect = document.getElementById('video_resolution');
@@ -3095,36 +3089,6 @@ async function updateGenericOverlayPreview(prefix, job) {
     } catch (e) { console.error('Edit overlay preview error:', e); }
 }
 
-let _outputPathBackup = '';
-
-function toggleOutputPathEdit(editing) {
-    const input = document.getElementById('video_output_path');
-    const editBtn = document.getElementById('output-path-edit-btn');
-    const saveBtn = document.getElementById('output-path-save-btn');
-    const cancelBtn = document.getElementById('output-path-cancel-btn');
-    if (editing) {
-        _outputPathBackup = input.value;
-        input.readOnly = false;
-        input.style.opacity = '1';
-        input.focus();
-        editBtn.style.display = 'none';
-        saveBtn.style.display = '';
-        cancelBtn.style.display = '';
-    } else {
-        input.readOnly = true;
-        input.style.opacity = '0.6';
-        editBtn.style.display = '';
-        saveBtn.style.display = 'none';
-        cancelBtn.style.display = 'none';
-    }
-}
-
-function cancelOutputPathEdit() {
-    const input = document.getElementById('video_output_path');
-    input.value = _outputPathBackup;
-    toggleOutputPathEdit(false);
-}
-
 async function processVideo(event) {
     event.preventDefault();
     
@@ -3152,7 +3116,6 @@ async function processVideo(event) {
         resolution: resolution,
         framerate: framerate,
         quality: document.getElementById('video_quality').value,
-        output_path: document.getElementById('video_output_path').value.trim() || null,
         start_time: useRange ? datetimeLocalToISO(document.getElementById('video_start_datetime').value) : null,
         end_time: useRange ? datetimeLocalToISO(document.getElementById('video_end_datetime').value) : null,
         text_overlay: readOverlayConfig('build'),
@@ -3799,35 +3762,6 @@ async function saveExportRetention() {
     }
 }
 
-let _createPathBackup = '';
-
-function toggleCreatePathEdit(editing) {
-    const input = document.getElementById('capture_path');
-    const editBtn = document.getElementById('capture-path-edit-btn');
-    const saveBtn = document.getElementById('capture-path-save-btn');
-    const cancelBtn = document.getElementById('capture-path-cancel-btn');
-    if (editing) {
-        _createPathBackup = input.value;
-        input.removeAttribute('readonly');
-        input.style.opacity = '1';
-        editBtn.style.display = 'none';
-        saveBtn.style.display = '';
-        cancelBtn.style.display = '';
-        input.focus();
-    } else {
-        input.setAttribute('readonly', '');
-        input.style.opacity = '0.6';
-        editBtn.style.display = '';
-        saveBtn.style.display = 'none';
-        cancelBtn.style.display = 'none';
-    }
-}
-
-function cancelCreatePathEdit() {
-    document.getElementById('capture_path').value = _createPathBackup;
-    toggleCreatePathEdit(false);
-}
-
 function updateNamingPreview() {
     const pattern = document.getElementById('naming_pattern').value || '{job_name}_{count}_{timestamp}';
     const jobName = document.getElementById('job_name')?.value || 'MyJob';
@@ -3854,10 +3788,8 @@ function showCreateJobModal() {
     // Set default datetime to now
     setDefaultStartTime();
     
-    // Set default values for capture path and naming pattern
-    document.getElementById('capture_path').value = _pathBackups.captures || '/captures';
+    // Set default values for naming pattern
     document.getElementById('naming_pattern').value = '{job_name}_{count}_{timestamp}';
-    toggleCreatePathEdit(false);
     updateNamingPreview();
     
     // Set initial min for end date
@@ -3964,7 +3896,6 @@ async function duplicateJob(jobId) {
         document.getElementById('interval_seconds').value = job.interval_seconds;
         document.getElementById('framerate').value = job.framerate || 30;
         document.getElementById('warning_threshold').value = job.warning_threshold || 3;
-        document.getElementById('capture_path').value = _pathBackups.captures || '/captures';
         document.getElementById('naming_pattern').value = job.naming_pattern || '{job_name}_{count}_{timestamp}';
         updateNamingPreview();
         

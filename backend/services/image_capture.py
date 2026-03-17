@@ -10,6 +10,7 @@ from ..database import get_db
 from .. import config
 from ..utils import get_now, to_iso
 from .thumbnail_generator import generate_thumbnail
+from ..helpers.file_helpers import resolve_capture_path, make_relative
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +54,9 @@ def capture_image(job: Dict[str, Any]) -> tuple[bool, Optional[str]]:
         filename += ".jpg"
         
         # Create hierarchical directory structure: job/year/month/day/hour/
+        abs_capture_path = resolve_capture_path(job['capture_path'])
         date_path = os.path.join(
-            job['capture_path'],
+            abs_capture_path,
             str(now.year),
             f"{now.month:02d}",
             f"{now.day:02d}",
@@ -84,11 +86,13 @@ def capture_image(job: Dict[str, Any]) -> tuple[bool, Optional[str]]:
             with get_db() as conn:
                 cursor = conn.cursor()
                 
-                # Insert capture record
+                # Insert capture record (store path relative to captures base)
+                from .import_service import get_captures_path
+                rel_output = make_relative(output_path, get_captures_path())
                 cursor.execute("""
                     INSERT INTO captures (job_id, file_path, file_size, captured_at)
                     VALUES (?, ?, ?, ?)
-                """, (job['id'], output_path, file_size, to_iso(get_now())))
+                """, (job['id'], rel_output, file_size, to_iso(get_now())))
                 
                 # Update job statistics and clear warning message
                 cursor.execute("""
