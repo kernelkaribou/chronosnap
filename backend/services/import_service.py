@@ -45,64 +45,68 @@ STALE_STAGING_HOURS = 2
 # Path security
 # ===========================================================================
 
-def get_import_path() -> str:
-    """Get the configured import path from settings or default."""
+def _get_setting_path(key: str, default: str) -> str:
+    """Get a configured path from settings or return default."""
     try:
         from ..database import get_db
         with get_db() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT value FROM settings WHERE key = 'import_path'")
+            cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
             row = cursor.fetchone()
             if row and row[0]:
                 return row[0]
-    except Exception:
-        pass
-    return config.DEFAULT_IMPORT_PATH
+    except Exception as e:
+        logger.warning(f"Failed to read setting '{key}': {e}")
+    return default
+
+
+def get_import_path() -> str:
+    """Get the configured import path from settings or default."""
+    return _get_setting_path('import_path', config.DEFAULT_IMPORT_PATH)
 
 
 def get_export_path() -> str:
     """Get the configured export path from settings or default."""
-    try:
-        from ..database import get_db
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT value FROM settings WHERE key = 'export_path'")
-            row = cursor.fetchone()
-            if row and row[0]:
-                return row[0]
-    except Exception:
-        pass
-    return config.DEFAULT_EXPORTS_PATH
+    return _get_setting_path('export_path', config.DEFAULT_EXPORTS_PATH)
 
 
 def get_captures_path() -> str:
     """Get the configured captures path from settings or default."""
-    try:
-        from ..database import get_db
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT value FROM settings WHERE key = 'captures_path'")
-            row = cursor.fetchone()
-            if row and row[0]:
-                return row[0]
-    except Exception:
-        pass
-    return config.DEFAULT_CAPTURES_PATH
+    return _get_setting_path('captures_path', config.DEFAULT_CAPTURES_PATH)
 
 
 def get_timelapses_path() -> str:
     """Get the configured timelapses path from settings or default."""
-    try:
-        from ..database import get_db
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT value FROM settings WHERE key = 'timelapses_path'")
-            row = cursor.fetchone()
-            if row and row[0]:
-                return row[0]
-    except Exception:
-        pass
-    return config.DEFAULT_VIDEOS_PATH
+    return _get_setting_path('timelapses_path', config.DEFAULT_VIDEOS_PATH)
+
+
+def cleanup_old_exports(max_age_days: int = None):
+    """Remove export archives older than max_age_days."""
+    if max_age_days is None:
+        max_age_days = config.EXPORT_RETENTION_DAYS
+    export_path = get_export_path()
+    if not os.path.isdir(export_path):
+        return 0
+
+    import time
+    now = time.time()
+    deleted = 0
+
+    for entry in os.scandir(export_path):
+        if not entry.is_file() or not entry.name.endswith('.zip'):
+            continue
+        age_days = (now - entry.stat().st_mtime) / 86400
+        if age_days > max_age_days:
+            try:
+                os.remove(entry.path)
+                deleted += 1
+                logger.info(f"Cleaned up old export ({age_days:.0f}d old): {entry.name}")
+            except OSError as e:
+                logger.error(f"Failed to cleanup export {entry.name}: {e}")
+
+    if deleted:
+        logger.info(f"Cleaned up {deleted} old export(s)")
+    return deleted
 
 
 def validate_path_within(path: str, allowed_prefix: str) -> str:

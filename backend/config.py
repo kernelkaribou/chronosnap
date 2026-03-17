@@ -24,6 +24,7 @@ MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 10 * 1024 * 1024 * 1024))  # 
 
 # Export settings — archives above this size are built to disk instead of streamed
 EXPORT_STREAM_THRESHOLD = 1 * 1024 * 1024 * 1024  # 1GB
+EXPORT_RETENTION_DAYS = 7  # Auto-cleanup exports older than this
 
 # Default naming patterns
 DEFAULT_CAPTURE_PATTERN = "{job_name}_{count}_{timestamp}"

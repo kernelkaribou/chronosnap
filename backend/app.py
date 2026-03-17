@@ -70,8 +70,11 @@ async def lifespan(app: FastAPI):
     os.makedirs(config.IMPORT_STAGING_DIR, exist_ok=True)
     
     # Clean stale import staging directories (>2h old)
-    from .services.import_service import cleanup_stale_staging
+    from .services.import_service import cleanup_stale_staging, cleanup_old_exports
     cleanup_stale_staging()
+    
+    # Clean old export archives
+    cleanup_old_exports()
     
     # Backfill thumbnails for existing videos
     from .services.video_processor import backfill_thumbnails

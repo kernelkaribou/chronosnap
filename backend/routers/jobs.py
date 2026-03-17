@@ -9,7 +9,9 @@ import re
 import json
 import zipfile
 import logging
+import time
 from datetime import datetime
+from urllib.parse import urlparse, urlunparse
 
 from ..models import JobCreate, JobUpdate, JobResponse, TestUrlResponse, DurationEstimate, DurationCalculation, MaintenanceResult, MaintenanceCleanup, MaintenanceImport, DirectoryScanRequest, DirectoryImportRequest
 from ..database import get_db, dict_from_row
@@ -623,7 +625,7 @@ def _get_export_files(job_id: int, job_name: str):
                                                             f"{job_id}_{job_name}")
     for row in captures:
         disk_path = row[0]
-        if not os.path.isfile(disk_path):
+        if os.path.islink(disk_path) or not os.path.isfile(disk_path):
             continue
         # Relative path from job dir (e.g., 2026/01/15/14/image.jpg)
         if disk_path.startswith(job_dir):
@@ -637,7 +639,7 @@ def _get_export_files(job_id: int, job_name: str):
     # Videos + thumbnails
     for row in videos:
         disk_path = row[0]
-        if not os.path.isfile(disk_path):
+        if os.path.islink(disk_path) or not os.path.isfile(disk_path):
             continue
         archive_path = f"{prefix}/videos/{os.path.basename(disk_path)}"
         files.append((archive_path, disk_path))
@@ -645,7 +647,7 @@ def _get_export_files(job_id: int, job_name: str):
         
         # Include thumbnail if exists
         thumb_path = row[2]
-        if thumb_path and os.path.isfile(thumb_path):
+        if thumb_path and not os.path.islink(thumb_path) and os.path.isfile(thumb_path):
             archive_path = f"{prefix}/videos/{os.path.basename(thumb_path)}"
             files.append((archive_path, thumb_path))
             total_size += os.path.getsize(thumb_path)
@@ -704,14 +706,26 @@ async def export_job(job_id: int):
         raise HTTPException(status_code=404, detail="No files to export for this job")
     
     sanitized = re.sub(r'[^\w\s-]', '', job_name).strip().replace(' ', '_')
-    zip_name = f"{job_id}_{sanitized}_export.zip"
+    ts = int(time.time())
+    zip_name = f"{job_id}_{sanitized}_{ts}_export.zip"
     prefix = f"{job_id}_{sanitized}"
+    
+    # Redact credentials from stream URL for export metadata
+    raw_url = job_dict.get('stream_url', '')
+    try:
+        parsed = urlparse(raw_url)
+        if parsed.username or parsed.password:
+            safe_url = urlunparse(parsed._replace(netloc=f"***@{parsed.hostname}" + (f":{parsed.port}" if parsed.port else "")))
+        else:
+            safe_url = raw_url
+    except Exception:
+        safe_url = '(redacted)'
     
     # Build job metadata JSON
     metadata = {
         'job_id': job_dict['id'],
         'name': job_dict['name'],
-        'stream_url': job_dict.get('stream_url', ''),
+        'stream_url': safe_url,
         'stream_type': job_dict.get('stream_type', ''),
         'interval_seconds': job_dict.get('interval_seconds'),
         'start_date': job_dict.get('start_date'),
@@ -727,28 +741,38 @@ async def export_job(job_id: int):
     metadata_json = json.dumps(metadata, indent=2)
     
     if total_size < config.EXPORT_STREAM_THRESHOLD:
-        # Stream directly to browser
-        import io
+        # Build to temp file and stream — avoids holding entire ZIP in memory
+        import tempfile
         
-        def generate_zip():
-            buffer = io.BytesIO()
-            with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_STORED) as zf:
-                # Add metadata
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix='.zip', dir=get_export_path())
+        try:
+            os.close(tmp_fd)
+            with zipfile.ZipFile(tmp_path, 'w', zipfile.ZIP_STORED) as zf:
                 zf.writestr(f"{prefix}/job.json", metadata_json)
-                
                 for archive_path, disk_path in files:
                     zf.write(disk_path, archive_path)
             
-            buffer.seek(0)
-            yield from iter(lambda: buffer.read(8 * 1024 * 1024), b'')
-        
-        return StreamingResponse(
-            generate_zip(),
-            media_type='application/zip',
-            headers={'Content-Disposition': f'attachment; filename="{zip_name}"'}
-        )
+            def stream_and_cleanup():
+                try:
+                    with open(tmp_path, 'rb') as f:
+                        while chunk := f.read(8 * 1024 * 1024):
+                            yield chunk
+                finally:
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+            
+            return StreamingResponse(
+                stream_and_cleanup(),
+                media_type='application/zip',
+                headers={'Content-Disposition': f'attachment; filename="{zip_name}"'}
+            )
+        except Exception as e:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            logger.error(f"Export failed for job {job_id}: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Export failed")
     else:
-        # Build to disk for large exports
+        # Build to disk for large exports — persisted in /exports for download
         export_path = os.path.join(get_export_path(), zip_name)
         
         try:
