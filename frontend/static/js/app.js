@@ -88,7 +88,7 @@ function setValue(id, value) {
  * @param {Object} options - fetch options { method, body, query }
  */
 async function apiRequest(endpoint, options = {}) {
-    const { method = 'GET', body = null, query = null } = options;
+    const { method = 'GET', body = null, rawBody = null, query = null } = options;
     
     // Build URL with query params
     let url = `${API_BASE}${endpoint}`;
@@ -101,12 +101,13 @@ async function apiRequest(endpoint, options = {}) {
         if (queryStr) url += `?${queryStr}`;
     }
     
-    const fetchOptions = {
-        method,
-        headers: body ? { 'Content-Type': 'application/json' } : {}
-    };
+    const fetchOptions = { method, headers: {} };
     
-    if (body) {
+    if (rawBody) {
+        // FormData or other raw body — let browser set Content-Type (multipart boundary)
+        fetchOptions.body = rawBody;
+    } else if (body) {
+        fetchOptions.headers['Content-Type'] = 'application/json';
         fetchOptions.body = JSON.stringify(body);
     }
     
@@ -230,7 +231,11 @@ function confirmAction(message, actionFn, opts = {}) {
 function toggleFieldGroup(checkboxId, containerId, opts = {}) {
     const enabled = document.getElementById(checkboxId).checked;
     const container = document.getElementById(containerId);
-    container.style.display = enabled ? (opts.display || 'block') : 'none';
+    if (enabled) {
+        container.classList.remove('disabled');
+    } else {
+        container.classList.add('disabled');
+    }
     if (opts.requiredIds) {
         opts.requiredIds.forEach(id => {
             const el = document.getElementById(id);
@@ -448,24 +453,11 @@ document.addEventListener('DOMContentLoaded', () => {
         intervalInput.addEventListener('change', updateEndDateMin);
     }
     
-    // Setup range checkbox
+    // Setup range checkbox — duration estimate updates
     document.getElementById('use_range').addEventListener('change', (e) => {
-        const captureRange = document.getElementById('capture-range');
-        const startInput = document.getElementById('video_start_datetime');
-        const endInput = document.getElementById('video_end_datetime');
-        
         if (e.target.checked) {
-            captureRange.style.display = 'flex';
-            startInput.disabled = false;
-            endInput.disabled = false;
-            
-            // Update duration estimate for the selected time range
             setTimeout(() => updateVideoDurationEstimate(), 100);
         } else {
-            captureRange.style.display = 'none';
-            startInput.disabled = true;
-            endInput.disabled = true;
-            // Revert to showing full duration estimate
             updateVideoDurationEstimate();
         }
     });
@@ -520,8 +512,27 @@ function setupNavigation() {
     
     // Handle browser back/forward buttons
     window.addEventListener('popstate', (e) => {
+        // If a modal is open, close the topmost one
+        const activeModals = document.querySelectorAll('.modal.active');
+        if (activeModals.length > 0) {
+            _closingFromPopstate = true;
+            _modalHistoryDepth = Math.max(0, _modalHistoryDepth - 1);
+            const topModal = activeModals[activeModals.length - 1];
+            if (topModal.id === 'video-detail-modal') {
+                closeVideoDetail();
+            } else if (topModal.id === 'comparison-modal') {
+                closeComparison();
+            } else if (topModal.id === 'confirm-modal') {
+                topModal.classList.remove('active');
+            } else {
+                closeModal(topModal.id);
+            }
+            _closingFromPopstate = false;
+            return;
+        }
+        
         if (e.state && e.state.view) {
-            switchView(e.state.view, false); // false = don't push to history
+            switchView(e.state.view, false);
         }
     });
     
@@ -557,18 +568,82 @@ function switchView(view, pushState = true) {
 }
 
 // Jobs
+let allJobs = [];
+
 async function loadJobs() {
     try {
         const jobs = await apiRequest('/jobs/');
-        renderJobs(jobs);
+        allJobs = jobs;
+        // Initialize status filter (once)
+        const statusWrap = document.getElementById('job-status-filter-wrap');
+        if (statusWrap && !statusWrap._statusFilterSelected) {
+            renderStatusFilter('job-status-filter-wrap', () => filterJobs());
+        }
+        // Initialize tag filter (once)
+        const tagWrap = document.getElementById('job-tag-filter-wrap');
+        if (tagWrap && !tagWrap._tagFilterSelected) {
+            renderTagFilter('job-tag-filter-wrap', () => filterJobs());
+        }
+        filterJobs();
         updateJobWarningBadge(jobs);
     } catch (error) {
         console.error('Failed to load jobs:', error);
     }
 }
 
+function filterJobs() {
+    const search = (document.getElementById('job-search').value || '').toLowerCase();
+    const activeStatuses = getStatusFilterValues('job-status-filter-wrap');
+    const sort = document.getElementById('job-sort').value;
+    
+    let filtered = allJobs;
+    
+    if (search) {
+        filtered = filtered.filter(j =>
+            j.name.toLowerCase().includes(search) ||
+            j.url.toLowerCase().includes(search)
+        );
+    }
+    
+    if (activeStatuses.length > 0) {
+        filtered = filtered.filter(j => activeStatuses.includes(j.status));
+    }
+    
+    // Tag filter
+    const selectedTagIds = getTagFilterIds('job-tag-filter-wrap');
+    if (selectedTagIds.length > 0) {
+        filtered = filtered.filter(j =>
+            j.tags && j.tags.some(t => selectedTagIds.includes(t.id))
+        );
+    }
+    
+    // Sort
+    filtered = [...filtered];
+    switch (sort) {
+        case 'created_asc': filtered.sort((a, b) => a.created_at.localeCompare(b.created_at)); break;
+        case 'name_asc': filtered.sort((a, b) => a.name.localeCompare(b.name)); break;
+        case 'name_desc': filtered.sort((a, b) => b.name.localeCompare(a.name)); break;
+        case 'captures_desc': filtered.sort((a, b) => b.capture_count - a.capture_count); break;
+        default: filtered.sort((a, b) => b.created_at.localeCompare(a.created_at)); break;
+    }
+    
+    const hasFilters = search || activeStatuses.length > 0 || selectedTagIds.length > 0;
+    document.getElementById('job-filter-reset').style.display = hasFilters ? '' : 'none';
+    
+    renderJobs(filtered);
+}
+
+function resetJobFilters() {
+    document.getElementById('job-search').value = '';
+    clearStatusFilter('job-status-filter-wrap');
+    clearTagFilter('job-tag-filter-wrap');
+    filterJobs();
+}
+
 function renderJobs(jobs) {
     const container = document.getElementById('jobs-list');
+    const countEl = document.getElementById('job-count');
+    if (countEl) countEl.textContent = `${allJobs.length} jobs`;
     
     if (jobs.length === 0) {
         container.innerHTML = `
@@ -587,7 +662,7 @@ function renderJobs(jobs) {
         
         // Determine status display
         let statusLabel, statusClass;
-        if (job.warning_message && job.status !== 'disabled' && job.status !== 'completed') {
+        if (job.status === 'warning') {
             statusLabel = '⚠ Warning';
             statusClass = 'warning';
         } else if (job.status === 'sleeping') {
@@ -623,6 +698,11 @@ function renderJobs(jobs) {
             nextCaptureInfo = `<div><strong>Next Capture:</strong> ${formatDateTime(nextCapture)}</div>`;
         }
         
+        let nextAutoBuildInfo = '';
+        if (job.next_auto_build_at && job.auto_build_enabled) {
+            nextAutoBuildInfo = `<div><strong>Next Auto-Build:</strong> ${formatDateTime(job.next_auto_build_at)}</div>`;
+        }
+        
         return `
         <div class="job-card" style="--i:${idx}" onclick="showJobDetails(${job.id})">
             ${thumbnailHtml}
@@ -636,6 +716,7 @@ function renderJobs(jobs) {
                 ${job.start_datetime ? `<div><strong>Start:</strong> ${formatDateTimeNoSeconds(job.start_datetime)}</div>` : ''}
                 ${job.end_datetime ? `<div><strong>End:</strong> ${formatDateTimeNoSeconds(job.end_datetime)}</div>` : '<div><strong>Ongoing capture</strong></div>'}
                 ${nextCaptureInfo}
+                ${nextAutoBuildInfo}
                 ${lastCaptureInfo}
                 <div style="margin-top: 0.5rem;">
                     <a href="#" onclick="event.stopPropagation(); viewJobCaptures(${job.id}); return false;" 
@@ -673,8 +754,8 @@ async function showJobDetails(jobId) {
         let latestImageHtml = '';
         if (capturesData.captures && capturesData.captures.length > 0) {
             latestImageHtml = `
-                <div style="margin: 1.5rem 0;">
-                    <img src="${API_BASE}/captures/${capturesData.captures[0].id}/image" alt="Latest capture" style="max-width: 100%; border-radius: 0.5rem; border: 1px solid var(--border-color);">
+                <div style="margin: 0.5rem 0 1rem;">
+                    <img src="${API_BASE}/captures/${capturesData.captures[0].id}/image" alt="Latest capture" onclick="openOverlayLightbox(this)" style="max-width: 100%; border-radius: 0.5rem; border: 1px solid var(--border-color); cursor: pointer;" title="Click to enlarge">
                 </div>
             `;
         }
@@ -683,7 +764,7 @@ async function showJobDetails(jobId) {
         
         // Determine status display
         let statusLabel, statusClass;
-        if (job.warning_message && job.status !== 'disabled' && job.status !== 'completed') {
+        if (job.status === 'warning') {
             statusLabel = 'Warning';
             statusClass = 'warning';
         } else if (job.status === 'sleeping') {
@@ -729,11 +810,16 @@ async function showJobDetails(jobId) {
             nextCaptureHtml = `<div><strong>Next Capture:</strong> ${formatDateTime(nextCapture)}</div>`;
         }
         
+        let nextAutoBuildHtml = '';
+        if (job.next_auto_build_at && job.auto_build_enabled) {
+            nextAutoBuildHtml = `<div><strong>Next Auto-Build:</strong> ${formatDateTime(job.next_auto_build_at)}</div>`;
+        }
+        
         content.innerHTML = `
             <div style="padding: 1.5rem;">
                 ${latestImageHtml}
                 
-                ${job.warning_message && job.status !== 'disabled' && job.status !== 'completed' ? `
+                ${job.status === 'warning' && job.warning_message ? `
                 <div class="info-box" style="margin: 1rem 0; border-left-color: var(--warning-color);">
                     <div style="display: flex; align-items: start; gap: 0.5rem;">
                         <span style="font-size: 1.25rem;">⚠</span>
@@ -748,193 +834,194 @@ async function showJobDetails(jobId) {
                 
                 ${timeWindowHtml}
                 
-                <div class="job-info" style="margin-bottom: 1rem;">
-                    <div><strong>Status:</strong> <span class="job-status ${statusClass}">${statusLabel}</span></div>
-                    <div><strong>Start:</strong> ${formatDateTimeNoSeconds(job.start_datetime)}</div>
-                    ${nextCaptureHtml}
-                    ${lastCaptureHtml}
-                </div>
-                
-                <div class="job-info" style="margin-bottom: 1.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <strong>Captures:</strong> 
-                        <a href="#" onclick="event.stopPropagation(); viewJobCaptures(${job.id}); return false;" 
-                           style="color: var(--primary-color); text-decoration: none;"
-                           title="View captures">
-                            ${job.capture_count}
-                        </a>
-                        <button class="btn-icon" onclick="event.stopPropagation(); manualCapture(${job.id}, '${escapeHtml(job.name)}')" title="Take Snapshot" style="padding: 0.25rem;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                                <circle cx="12" cy="13" r="4"></circle>
-                            </svg>
-                        </button>
-                        <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); openCompareModal(${job.id})" title="Compare Captures" style="padding: 0.25rem;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="2" y="2" width="20" height="20" rx="2"/>
-                                <path d="M12 2v20"/>
-                                <circle cx="7.5" cy="7.5" r="1.5"/>
-                                <path d="M6 18l3-4 2 2 4-5 3 4"/>
-                                <rect x="12" y="2" width="10" height="20" rx="2" fill="currentColor" opacity="0.15" stroke="none"/>
-                            </svg>
-                        </button>
-                        <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); performMaintenanceScan(${job.id}, '${escapeHtml(job.name)}')" title="Sync" style="padding: 0.25rem;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="23 4 23 10 17 10"></polyline>
-                                <polyline points="1 20 1 14 7 14"></polyline>
-                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                            </svg>
-                        </button>
+                <div style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div class="job-info" style="flex: 1; margin-bottom: 0;">
+                        <div><strong>Status:</strong> <span class="job-status ${statusClass}">${statusLabel}</span></div>
+                        <div><strong>Start:</strong> ${formatDateTimeNoSeconds(job.start_datetime)}</div>
+                        ${nextCaptureHtml}
+                        ${nextAutoBuildHtml}
+                        ${lastCaptureHtml}
                     </div>
-                    <div><strong>Storage:</strong> ${formatBytes(job.storage_size)}</div>
-                    <div><strong>Path:</strong> ${escapeHtml(job.capture_path)}</div>
-                </div>
-
-                <h4 style="margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border-color);">Job Settings</h4>
-
-                <div class="form-group" style="margin-bottom: 1.5rem;">
-                    <label>Stream URL *</label>
-                    <div style="display: flex; gap: 0.5rem; align-items: center;">
-                        <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required style="flex: 1;">
-                        <button type="button" class="btn btn-secondary" onclick="previewStream('edit_url', 'edit-preview-result')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                <circle cx="12" cy="12" r="3"></circle>
-                            </svg>
-                            Preview
-                        </button>
-                    </div>
-                    <small style="color: var(--text-secondary);">HTTP or RTSP stream URL</small>
-                    <div id="edit-preview-result" class="test-result"></div>
-                </div>
-
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label>End Date & Time</label>
-                    <input type="datetime-local" id="edit_end_datetime" class="form-control">
-                    <small style="color: var(--text-secondary);">Leave empty for ongoing capture</small>
-                </div>
-                
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
-                        <input type="checkbox" id="edit_time_window_enabled" ${job.time_window_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditTimeWindow()">
-                        <span><strong>Enable Daily Time Window</strong></span>
-                    </label>
-                    <small style="color: var(--text-secondary); display: block; margin-left: 1.5rem;">Restrict captures to specific hours each day</small>
-                </div>
-                
-                <div id="edit-time-window-fields" style="display: ${job.time_window_enabled ? 'block' : 'none'}; margin-bottom: 1rem; margin-left: 1.5rem;">
-                    <div style="display: flex; gap: 1rem;">
-                        <div style="flex: 1;">
-                            <label>Window Start Time</label>
-                            <div class="time-picker-container">
-                                <input type="time" id="edit_time_window_start_time" class="form-control">
-                            </div>
-                            <input type="hidden" id="edit_time_window_start">
+                    
+                    <div class="job-info" style="flex: 1; margin-bottom: 0; padding-left: 1.5rem; border-left: 1px solid var(--border-color);">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <strong>Captures:</strong> 
+                            <a href="#" onclick="event.stopPropagation(); viewJobCaptures(${job.id}); return false;" 
+                               style="color: var(--primary-color); text-decoration: none;"
+                               title="View captures">
+                                ${job.capture_count}
+                            </a>
+                            <button class="btn-icon" onclick="event.stopPropagation(); manualCapture(${job.id}, '${escapeHtml(job.name)}')" title="Take Snapshot" style="padding: 0.25rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                    <circle cx="12" cy="13" r="4"></circle>
+                                </svg>
+                            </button>
+                            <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); openCompareModal(${job.id})" title="Compare Captures" style="padding: 0.25rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="2" width="20" height="20" rx="2"/>
+                                    <path d="M12 2v20"/>
+                                    <circle cx="7.5" cy="7.5" r="1.5"/>
+                                    <path d="M6 18l3-4 2 2 4-5 3 4"/>
+                                    <rect x="12" y="2" width="10" height="20" rx="2" fill="currentColor" opacity="0.15" stroke="none"/>
+                                </svg>
+                            </button>
+                            <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); performMaintenanceScan(${job.id}, '${escapeHtml(job.name)}')" title="Sync" style="padding: 0.25rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                </svg>
+                            </button>
                         </div>
-                        <div style="flex: 1;">
-                            <label>Window End Time</label>
-                            <div class="time-picker-container">
-                                <input type="time" id="edit_time_window_end_time" class="form-control">
-                            </div>
-                            <input type="hidden" id="edit_time_window_end">
-                        </div>
-                    </div>
-                    <small style="color: var(--text-secondary); display: block; margin-top: 0.5rem;">Can span midnight (e.g., 22:00 to 02:00)</small>
-                </div>
-
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label>Capture Interval (seconds) *</label>
-                    <input type="number" id="edit_interval_seconds" class="form-control" value="${job.interval_seconds}" min="10" required>
-                    <small style="color: var(--text-secondary);">Minimum 10 seconds</small>
-                </div>
-
-                <div class="form-row" style="margin-bottom: 1.5rem;">
-                    <div class="form-group flex-1">
-                        <label>Timelapse FPS</label>
-                        <input type="number" id="edit_framerate" class="form-control" value="30" min="1" max="120" required>
-                        <small style="color: var(--text-secondary);">Frames per second for generated timelapse videos</small>
-                    </div>
-                    <div class="form-group" style="flex: 0 0 120px;">
-                        <label>Warning After</label>
-                        <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50">
-                        <small>consecutive failures</small>
+                        <div><strong>Storage:</strong> ${formatBytes(job.storage_size)}</div>
+                        <div><strong>Path:</strong> <span style="font-size: 0.8rem; word-break: break-all;">${escapeHtml(job.capture_path)}</span></div>
                     </div>
                 </div>
 
-                <div class="duration-estimate" id="edit-duration-estimate"></div>
+                <!-- Job Settings sections -->
 
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
-                        <input type="checkbox" id="edit_auto_build_enabled" ${job.auto_build_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditAutoBuildFields()">
-                        <span><strong>Enable Auto-Build</strong></span>
-                    </label>
-                    <small style="color: var(--text-secondary); display: block; margin-left: 1.5rem;">Automatically build timelapse videos on a recurring schedule</small>
-                </div>
-
-                <div id="edit-auto-build-fields" style="display: ${job.auto_build_enabled ? 'block' : 'none'}; margin-bottom: 1rem; margin-left: 1.5rem;">
+                <div class="form-section">
+                    <div class="form-section-title">Source</div>
                     <div class="form-group" style="margin-bottom: 0.75rem;">
-                        <label>Build Interval</label>
-                        <div class="auto-build-presets">
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 1)">Hourly</button>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 6)">6 Hours</button>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 24)">Daily</button>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 168)">Weekly</button>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 720)">Monthly</button>
+                        <label>Stream URL *</label>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required style="flex: 1; min-width: 0;">
+                            <button type="button" class="btn btn-secondary" onclick="previewStream('edit_url', 'edit-preview-result')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                Preview
+                            </button>
+                            <div style="flex: 0 0 auto; text-align: center;">
+                                <label style="font-size: 0.75rem; white-space: nowrap;">Warn After</label>
+                                <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50" style="width: 72px;">
+                                <small style="font-size: 0.65rem;">failures</small>
+                            </div>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
-                            <input type="number" id="edit_auto_build_interval_hours" class="form-control" min="1" max="8760" value="${job.auto_build_interval_hours || 168}" style="width: 100px;">
-                            <small style="color: var(--text-secondary);">hours</small>
-                        </div>
+                        <div id="edit-preview-result" class="test-result"></div>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group flex-1">
-                            <label>FPS</label>
-                            <input type="number" id="edit_auto_build_fps" class="form-control" min="1" max="120" value="${job.auto_build_fps || 30}">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group flex-1">
-                            <label>Quality</label>
-                            <select id="edit_auto_build_quality" class="form-control">
-                                <option value="low" ${job.auto_build_quality === 'low' ? 'selected' : ''}>Low</option>
-                                <option value="medium" ${(!job.auto_build_quality || job.auto_build_quality === 'medium') ? 'selected' : ''}>Medium</option>
-                                <option value="high" ${job.auto_build_quality === 'high' ? 'selected' : ''}>High</option>
-                                <option value="lossless" ${job.auto_build_quality === 'lossless' ? 'selected' : ''}>Lossless</option>
-                            </select>
-                        </div>
-                        <div class="form-group flex-1">
-                            <label>Resolution</label>
-                            <select id="edit_auto_build_resolution" class="form-control">
-                                <option value="3840x2160" ${job.auto_build_resolution === '3840x2160' ? 'selected' : ''}>4K (3840x2160)</option>
-                                <option value="1920x1080" ${(!job.auto_build_resolution || job.auto_build_resolution === '1920x1080') ? 'selected' : ''}>Full HD (1920x1080)</option>
-                                <option value="1280x720" ${job.auto_build_resolution === '1280x720' ? 'selected' : ''}>HD (1280x720)</option>
-                                <option value="640x480" ${job.auto_build_resolution === '640x480' ? 'selected' : ''}>SD (640x480)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div id="edit-ab-overlay-container"></div>
-                    ${job.last_auto_build_at ? `<small style="color: var(--text-secondary);">Last auto-build: ${formatDateTime(job.last_auto_build_at)}</small>` : ''}
                 </div>
 
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label>Tags</label>
-                    <div class="tag-picker" id="edit-job-tags"></div>
+                <div class="form-section">
+                    <div class="form-section-title">Schedule</div>
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label>End Date & Time</label>
+                        <input type="datetime-local" id="edit_end_datetime" class="form-control">
+                        <small style="color: var(--text-secondary);">Leave empty for ongoing capture</small>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
+                                <input type="checkbox" id="edit_time_window_enabled" ${job.time_window_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditTimeWindow()">
+                                <span><strong>Daily Time Window</strong></span>
+                            </label>
+                            <div id="edit-time-window-fields" class="toggle-fields ${job.time_window_enabled ? '' : 'disabled'}" style="display: flex; align-items: center; gap: 0.5rem;">
+                                <label style="font-size: 0.8rem; margin: 0;">Start</label>
+                                <div class="time-picker-container" style="margin: 0;">
+                                    <input type="time" id="edit_time_window_start_time" class="form-control" style="padding: 0.3rem 0.5rem;">
+                                </div>
+                                <input type="hidden" id="edit_time_window_start">
+                                <label style="font-size: 0.8rem; margin: 0;">End</label>
+                                <div class="time-picker-container" style="margin: 0;">
+                                    <input type="time" id="edit_time_window_end_time" class="form-control" style="padding: 0.3rem 0.5rem;">
+                                </div>
+                                <input type="hidden" id="edit_time_window_end">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 0.75rem; align-items: stretch;">
+                        <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 0.5rem;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Capture Interval (s) *</label>
+                                <input type="number" id="edit_interval_seconds" class="form-control" value="${job.interval_seconds}" min="10" required style="width: 120px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Timelapse FPS</label>
+                                <input type="number" id="edit_framerate" class="form-control" value="30" min="1" max="120" required style="width: 120px;">
+                            </div>
+                        </div>
+                        <div class="duration-estimate" id="edit-duration-estimate" style="flex: 1; margin: 0;"></div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="form-section-title">Auto Build</div>
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
+                            <input type="checkbox" id="edit_auto_build_enabled" ${job.auto_build_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditAutoBuildFields()">
+                            <span><strong>Enable Auto-Build</strong></span>
+                        </label>
+                        <small style="color: var(--text-secondary); display: block; margin-left: 1.5rem;">Automatically build timelapse videos on a recurring schedule</small>
+                    </div>
+
+                    <div id="edit-auto-build-fields" class="toggle-fields ${job.auto_build_enabled ? '' : 'disabled'}" style="margin-bottom: 1rem; margin-left: 1.5rem;">
+                        <div class="form-group" style="margin-bottom: 0.75rem;">
+                            <label>Build Interval</label>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <input type="number" id="edit_auto_build_interval_hours" class="form-control" min="1" max="8760" value="${job.auto_build_interval_hours || 168}" style="width: 100px;">
+                                <small style="color: var(--text-secondary);">hours</small>
+                                <div class="auto-build-presets" style="display: flex; gap: 0.25rem; flex-wrap: wrap; margin-left: 0.5rem;">
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 1)">Hourly</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 24)">Daily</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 168)">Weekly</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 720)">Monthly</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <label>FPS</label>
+                                <input type="number" id="edit_auto_build_fps" class="form-control" min="1" max="120" value="${job.auto_build_fps || 30}">
+                            </div>
+                            <div class="form-group flex-1">
+                                <label>Quality</label>
+                                <select id="edit_auto_build_quality" class="form-control">
+                                    <option value="low" ${job.auto_build_quality === 'low' ? 'selected' : ''}>Low</option>
+                                    <option value="medium" ${(!job.auto_build_quality || job.auto_build_quality === 'medium') ? 'selected' : ''}>Medium</option>
+                                    <option value="high" ${job.auto_build_quality === 'high' ? 'selected' : ''}>High</option>
+                                    <option value="lossless" ${job.auto_build_quality === 'lossless' ? 'selected' : ''}>Lossless</option>
+                                </select>
+                            </div>
+                            <div class="form-group flex-1">
+                                <label>Resolution</label>
+                                <select id="edit_auto_build_resolution" class="form-control">
+                                    <option value="3840x2160" ${job.auto_build_resolution === '3840x2160' ? 'selected' : ''}>4K (3840x2160)</option>
+                                    <option value="1920x1080" ${(!job.auto_build_resolution || job.auto_build_resolution === '1920x1080') ? 'selected' : ''}>Full HD (1920x1080)</option>
+                                    <option value="1280x720" ${job.auto_build_resolution === '1280x720' ? 'selected' : ''}>HD (1280x720)</option>
+                                    <option value="640x480" ${job.auto_build_resolution === '640x480' ? 'selected' : ''}>SD (640x480)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="edit-ab-overlay-container"></div>
+                        ${job.last_auto_build_at ? `<small style="color: var(--text-secondary);">Last auto-build: ${formatDateTime(job.last_auto_build_at)}</small>` : ''}
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="form-section-title">Tags</div>
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <div class="tag-picker" id="edit-job-tags"></div>
+                    </div>
                 </div>
 
                 <input type="hidden" id="edit_start_datetime" value="${job.start_datetime}">
                 
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: space-between; align-items: center; padding-top: 1rem; border-top: 2px solid var(--border-color);">
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-                        <button class="btn btn-primary" onclick="event.stopPropagation(); closeModal('job-details-modal'); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')">
+                        <button class="btn btn-secondary compare-btn" onclick="event.stopPropagation(); closeModal('job-details-modal'); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')">
                             Build Timelapse
                         </button>
                         ${job.status !== 'completed' ? 
-                            `<button class="btn btn-secondary" onclick="confirmCompleteJob(${job.id}, '${escapeHtml(job.name)}')">Complete</button>` : ''
+                            `<button class="btn btn-secondary compare-btn" onclick="confirmCompleteJob(${job.id}, '${escapeHtml(job.name)}')">Complete</button>` : ''
                         }
                         ${job.status === 'active' || job.status === 'sleeping' ? 
-                            `<button class="btn btn-warning" onclick="confirmDisableJob(${job.id}, '${escapeHtml(job.name)}')">Disable</button>` :
+                            `<button class="btn btn-secondary compare-btn" onclick="confirmDisableJob(${job.id}, '${escapeHtml(job.name)}')">Disable</button>` :
                             job.status === 'disabled' ?
-                            `<button class="btn btn-success" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')">Enable</button>` : ''
+                            `<button class="btn btn-secondary compare-btn" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')">Enable</button>` : ''
                         }
                         <button class="btn-icon" onclick="duplicateJob(${job.id})" title="Duplicate Job" style="padding: 0.5rem;">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -942,7 +1029,12 @@ async function showJobDetails(jobId) {
                                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                             </svg>
                         </button>
-                        <button class="btn-icon" onclick="closeModal('job-details-modal'); deleteJob(${job.id}, '${escapeHtml(job.name)}')" title="Delete Job" style="padding: 0.5rem;">
+                        <button class="btn-icon" onclick="exportJob(${job.id}, '${escapeHtml(job.name)}')" title="Export Job" style="padding: 0.5rem;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                        </button>
+                        <button class="btn-icon" onclick="deleteJob(${job.id}, '${escapeHtml(job.name)}')" title="Delete Job" style="padding: 0.5rem;">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="3 6 5 6 21 6"></polyline>
                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -965,6 +1057,22 @@ async function showJobDetails(jobId) {
         
         // Initialize edit overlay section
         initEditJobOverlay(job);
+        
+        // Add native resolution option to auto-build dropdown
+        if (job.capture_count > 0) {
+            fetch(`${API_BASE}/captures/job/${job.id}/time-range`).then(r => r.json()).then(tr => {
+                if (tr.native_resolution) {
+                    const sel = document.getElementById('edit_auto_build_resolution');
+                    if (sel && !sel.querySelector(`option[value="${tr.native_resolution}"]`)) {
+                        const opt = document.createElement('option');
+                        opt.value = tr.native_resolution;
+                        opt.textContent = `Native (${tr.native_resolution})`;
+                        sel.insertBefore(opt, sel.firstChild);
+                        if (job.auto_build_resolution === tr.native_resolution) sel.value = tr.native_resolution;
+                    }
+                }
+            }).catch(() => {});
+        }
         
         // Render tag picker with auto-save on toggle
         renderTagPicker('edit-job-tags', (job.tags || []).map(t => t.id), (tagIds) => {
@@ -1392,7 +1500,8 @@ async function deleteJob(jobId, jobName) {
                 console.error('Failed to delete job:', error);
                 showNotification(`Failed to delete job "${jobName}"`, 'error');
             }
-        }
+        },
+        { closeModalId: 'job-details-modal' }
     );
 }
 
@@ -1523,10 +1632,14 @@ function resetVideoFilters() {
     document.getElementById('video-year-filter').value = '';
     document.getElementById('video-month-filter').value = '';
     document.getElementById('video-month-filter').disabled = true;
+    document.getElementById('video-source-filter').value = '';
     clearTagFilter('video-tag-filter-wrap');
     videoFavoritesOnly = false;
     const favBtn = document.getElementById('video-fav-filter');
     if (favBtn) favBtn.classList.remove('active');
+    videoSharedOnly = false;
+    const shareBtn = document.getElementById('video-share-filter');
+    if (shareBtn) shareBtn.classList.remove('active');
     filterVideos();
 }
 
@@ -1534,6 +1647,7 @@ function filterVideos(opts = {}) {
     const search = (document.getElementById('video-search').value || '').toLowerCase();
     const yearFilter = document.getElementById('video-year-filter').value;
     const monthFilter = document.getElementById('video-month-filter').value;
+    const sourceFilter = document.getElementById('video-source-filter').value;
     const selectedTags = getTagFilterIds('video-tag-filter-wrap');
     
     let filtered = allVideos;
@@ -1555,24 +1669,42 @@ function filterVideos(opts = {}) {
         }
     }
     
+    if (sourceFilter === 'imported') {
+        filtered = filtered.filter(v => v.build_source === 'imported');
+    } else if (sourceFilter === 'built') {
+        filtered = filtered.filter(v => v.build_source !== 'imported');
+    }
+    
     if (videoFavoritesOnly) {
         filtered = filtered.filter(v => v.is_favorite);
+    }
+    
+    if (videoSharedOnly) {
+        filtered = filtered.filter(v => !!v.share_token);
     }
     
     if (selectedTags.length > 0) {
         filtered = filtered.filter(v => v.tags && selectedTags.every(tid => v.tags.some(t => t.id === tid)));
     }
     
+    // Sort
+    const sort = document.getElementById('video-sort')?.value || 'created_desc';
+    filtered = [...filtered];
+    switch (sort) {
+        case 'created_asc': filtered.sort((a, b) => a.created_at.localeCompare(b.created_at)); break;
+        case 'name_asc': filtered.sort((a, b) => a.name.localeCompare(b.name)); break;
+        case 'name_desc': filtered.sort((a, b) => b.name.localeCompare(a.name)); break;
+        case 'duration_desc': filtered.sort((a, b) => (b.duration_seconds || 0) - (a.duration_seconds || 0)); break;
+        case 'duration_asc': filtered.sort((a, b) => (a.duration_seconds || 0) - (b.duration_seconds || 0)); break;
+        default: filtered.sort((a, b) => b.created_at.localeCompare(a.created_at)); break;
+    }
+    
     // Show/hide reset button
-    const hasFilters = search || yearFilter || monthFilter !== '' || videoFavoritesOnly || selectedTags.length > 0;
+    const hasFilters = search || yearFilter || monthFilter !== '' || sourceFilter || videoFavoritesOnly || videoSharedOnly || selectedTags.length > 0;
     document.getElementById('video-filter-reset').style.display = hasFilters ? '' : 'none';
     
     const countEl = document.getElementById('video-count');
-    if (filtered.length !== allVideos.length) {
-        countEl.textContent = `${filtered.length} of ${allVideos.length}`;
-    } else {
-        countEl.textContent = `${allVideos.length} videos`;
-    }
+    countEl.textContent = `${filtered.length} videos`;
     
     currentFilteredVideos = filtered;
     videosDisplayed = 0;
@@ -1654,6 +1786,7 @@ function renderVideos(videos, isEmpty) {
                     `<div class="thumb-placeholder">${filmIcon}</div>`
                 }
                 ${isCompleted ? `<div class="video-gallery-duration">${formatDuration(video.duration_seconds)}</div>` : ''}
+                ${video.share_token ? '<div class="video-gallery-shared" title="Shared"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg></div>' : ''}
                 ${isProcessing ? `<div class="video-gallery-status"><span class="job-status processing">Processing</span></div>` : ''}
                 ${video.status === 'failed' ? `<div class="video-gallery-status"><span class="job-status completed" style="background:var(--danger-color)">Failed</span></div>` : ''}
                 ${isCompleted ? `<div class="video-gallery-play">${playIcon}</div>` : ''}
@@ -1666,7 +1799,7 @@ function renderVideos(videos, isEmpty) {
             ` : ''}
             <div class="video-gallery-info">
                 <div class="video-gallery-name">${escapeHtml(video.name)}</div>
-                <div class="video-gallery-job">${video.job_name ? escapeHtml(video.job_name) : 'No job'}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}</div>
+                <div class="video-gallery-job">${video.build_source === 'imported' ? '<span class="auto-build-badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;">Imported</span>' : (video.job_name ? escapeHtml(video.job_name) : 'No job')}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}</div>
                 ${video.tags && video.tags.length ? `<div class="card-tags">${video.tags.map(t => tagChipHTML(t, true)).join('')}</div>` : ''}
             </div>
         </div>`;
@@ -1701,11 +1834,13 @@ async function openVideoDetail(videoId) {
         let metaHtml = '';
         
         // Row 1: Job, Duration, Size, Status
-        const jobVal = video.job_name
-            ? (video.job_id
-                ? `<a href="#" class="job-link" onclick="event.preventDefault(); closeVideoDetail(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a>`
-                : escapeHtml(video.job_name))
-            : 'None';
+        const jobVal = video.build_source === 'imported'
+            ? '<span class="auto-build-badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;">Imported</span>'
+            : (video.job_name
+                ? (video.job_id
+                    ? `<a href="#" class="job-link" onclick="event.preventDefault(); closeVideoDetail(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a>`
+                    : escapeHtml(video.job_name))
+                : 'None');
         const sizeVal = (video.status === 'completed' && video.file_size) ? formatBytes(video.file_size) : 'N/A';
         metaHtml += `<dt>Job</dt><dd>${jobVal}</dd><dt>Duration</dt><dd>${formatDuration(video.duration_seconds)}</dd>`;
         metaHtml += `<dt>Size</dt><dd>${sizeVal}</dd><dt>Status</dt><dd><span class="job-status ${video.status}">${video.status}</span></dd>`;
@@ -1742,6 +1877,9 @@ async function openVideoDetail(videoId) {
         
         // Build actions
         let actionsHtml = '';
+        if (video.status === 'processing') {
+            actionsHtml += `<button class="btn btn-danger btn-sm" onclick="cancelVideoBuild(${video.id}, '${escapeHtml(video.name)}')">Cancel Build</button>`;
+        }
         if (video.status === 'completed') {
             actionsHtml += `<a href="${API_BASE}/videos/${video.id}/download" class="btn btn-primary btn-sm">Download</a>`;
         }
@@ -1751,7 +1889,7 @@ async function openVideoDetail(videoId) {
         }
         actions.innerHTML = actionsHtml;
         
-        modal.classList.add('active');
+        showModal('video-detail-modal');
     } catch (error) {
         console.error('Failed to load video details:', error);
     }
@@ -1759,10 +1897,16 @@ async function openVideoDetail(videoId) {
 
 function closeVideoDetail() {
     const modal = document.getElementById('video-detail-modal');
+    const wasActive = modal.classList.contains('active');
     const player = document.getElementById('video-detail-player');
     player.pause();
     player.currentTime = 0;
     modal.classList.remove('active');
+    
+    if (wasActive && _modalHistoryDepth > 0 && !_closingFromPopstate) {
+        _modalHistoryDepth--;
+        history.back();
+    }
 }
 
 async function deleteVideoFromDetail(videoId, videoName) {
@@ -1776,6 +1920,22 @@ async function deleteVideoFromDetail(videoId, videoName) {
                 showNotification(`Video "${videoName}" deleted successfully`);
             } catch (error) {
                 showNotification(`Failed to delete video "${videoName}"`, 'error');
+            }
+        }
+    );
+}
+
+async function cancelVideoBuild(videoId, videoName) {
+    confirmAction(
+        `Cancel the build for "${videoName}"? The partial file will be deleted.`,
+        async () => {
+            try {
+                await apiRequest(`/videos/${videoId}/cancel`, { method: 'POST' });
+                closeVideoDetail();
+                loadVideos();
+                showNotification(`Build cancelled for "${videoName}"`);
+            } catch (error) {
+                showNotification(`Failed to cancel: ${error.message}`, 'error');
             }
         }
     );
@@ -1797,7 +1957,7 @@ function shareToggleHTML(videoId, shareToken) {
             ${isShared ? `
             <div class="share-link-url">
                 <input type="text" value="${url}" readonly onclick="this.select()">
-                <button class="btn btn-secondary btn-sm" onclick="copyShareLink(this, '${url}')" title="Copy">
+                <button class="btn-icon" onclick="copyShareLink(this, '${url}')" title="Copy">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 </button>
             </div>` : ''}
@@ -1846,7 +2006,7 @@ async function loadSharedVideosList() {
                     <span class="shared-video-name">${escapeHtml(link.video_name || 'Unknown')}</span>
                     <div class="share-link-url">
                         <input type="text" value="${url}" readonly onclick="this.select()">
-                        <button class="btn btn-secondary btn-sm" onclick="copyShareLink(this, '${url}')" title="Copy">
+                        <button class="btn-icon" onclick="copyShareLink(this, '${url}')" title="Copy">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                         </button>
                     </div>
@@ -1952,7 +2112,7 @@ async function openComparison() {
         playerA.addEventListener('loadedmetadata', onMeta, { once: true });
         playerB.addEventListener('loadedmetadata', onMeta, { once: true });
 
-        modal.classList.add('active');
+        showModal('comparison-modal');
     } catch (error) {
         showNotification('Failed to load videos for comparison', 'error');
     }
@@ -1960,6 +2120,7 @@ async function openComparison() {
 
 function closeComparison() {
     const modal = document.getElementById('comparison-modal');
+    const wasActive = modal.classList.contains('active');
     const { playerA, playerB, animFrame } = comparisonState;
     if (playerA) { playerA.pause(); playerA.currentTime = 0; }
     if (playerB) { playerB.pause(); playerB.currentTime = 0; }
@@ -1968,6 +2129,11 @@ function closeComparison() {
     comparisonState.animFrame = null;
     modal.classList.remove('active');
     if (compareMode.active) toggleCompareMode();
+    
+    if (wasActive && _modalHistoryDepth > 0 && !_closingFromPopstate) {
+        _modalHistoryDepth--;
+        history.back();
+    }
 }
 
 function toggleComparisonPlay() {
@@ -2046,8 +2212,8 @@ async function showProcessVideoModal(jobId, jobName) {
         // Reset form
         document.getElementById('process-video-form').reset();
         document.getElementById('use_range').checked = false;
-        document.getElementById('capture-range').style.display = 'none';
-        document.getElementById('video-duration-estimate').innerHTML = '';
+        document.getElementById('capture-range-fields').classList.add('disabled');
+        document.getElementById('video-duration-estimate').innerHTML = '<span style="color: var(--text-secondary); font-size: 0.85rem;">No job selected</span>';
         document.getElementById('available-range-info').style.display = 'none';
         // Reset text overlay
         const buildOverlayContainer = document.getElementById('build-overlay-container');
@@ -2076,6 +2242,7 @@ async function showProcessVideoModal(jobId, jobName) {
             document.getElementById('process_job_id').value = '';
             document.querySelector('#process-video-modal .modal-header h3').textContent = 'Build Timelapse';
             document.getElementById('video_output_path').value = '/timelapses';
+            toggleOutputPathEdit(false);
             
             // Populate job dropdown
             await populateJobSelector();
@@ -2088,6 +2255,14 @@ async function showProcessVideoModal(jobId, jobName) {
         }
         
         showModal('process-video-modal');
+        
+        // Render tag picker — pre-select job's tags when opened from job details
+        let preselectedTagIds = [];
+        if (jobId) {
+            const job = allJobs.find(j => j.id === jobId);
+            if (job?.tags) preselectedTagIds = job.tags.map(t => t.id);
+        }
+        renderTagPicker('build-video-tags', preselectedTagIds);
     } catch (error) {
         console.error('Failed to load modal data:', error);
         showNotification('Failed to load data for timelapse creation', 'error');
@@ -2135,7 +2310,7 @@ async function onJobSelectChange() {
     
     if (!jobId) {
         document.getElementById('process_job_id').value = '';
-        document.getElementById('video-duration-estimate').innerHTML = '';
+        document.getElementById('video-duration-estimate').innerHTML = '<span style="color: var(--text-secondary); font-size: 0.85rem;">No job selected</span>';
         document.getElementById('available-range-info').style.display = 'none';
         const createBtn = document.getElementById('create-video-btn');
         if (createBtn) {
@@ -2168,9 +2343,9 @@ async function populateVideoFormFromJob(jobId, jobName) {
     if (previewImage && latestCaptures.captures && latestCaptures.captures.length > 0) {
         const cap = latestCaptures.captures[0];
         const img = document.getElementById('job-preview-img');
-        const thumbUrl = `${API_BASE}/captures/${cap.id}/thumbnail`;
-        img.src = thumbUrl;
-        img._originalSrc = thumbUrl;
+        const imgUrl = `${API_BASE}/captures/${cap.id}/image`;
+        img.src = imgUrl;
+        img._originalSrc = imgUrl;
         document.getElementById('job-preview-label').textContent = `Latest capture: ${formatDateTime(cap.captured_at)}`;
         previewImage.style.display = 'flex';
         if (previewPlaceholder) previewPlaceholder.style.display = 'none';
@@ -2201,6 +2376,20 @@ async function populateVideoFormFromJob(jobId, jobName) {
     document.getElementById('video_name').value = `${jobName}_${timestamp}`;
     document.getElementById('video_framerate').value = job.framerate;
     document.getElementById('video_output_path').value = '/timelapses';
+    toggleOutputPathEdit(false);
+    
+    // Add native resolution option if available
+    const resSelect = document.getElementById('video_resolution');
+    const existingNative = resSelect.querySelector('option[value^="native:"]');
+    if (existingNative) existingNative.remove();
+    if (timeRange.native_resolution) {
+        const nativeOpt = document.createElement('option');
+        nativeOpt.value = timeRange.native_resolution;
+        nativeOpt.textContent = `Native (${timeRange.native_resolution})`;
+        resSelect.insertBefore(nativeOpt, resSelect.firstChild);
+        resSelect.value = timeRange.native_resolution;
+        toggleCustomResolution();
+    }
     
     // Store capture count for duration calculation
     document.getElementById('video_framerate').setAttribute('data-capture-count', captureCount);
@@ -2260,7 +2449,7 @@ async function populateVideoFormFromJob(jobId, jobName) {
     
     // Reset the use_range checkbox
     document.getElementById('use_range').checked = false;
-    document.getElementById('capture-range').style.display = 'none';
+    document.getElementById('capture-range-fields').classList.add('disabled');
     
     // Calculate and display initial duration
     updateVideoDurationEstimate();
@@ -2272,6 +2461,10 @@ async function populateVideoFormFromJob(jobId, jobName) {
         createBtn.style.opacity = '1';
         createBtn.style.cursor = 'pointer';
     }
+    
+    // Update tag picker with job's tags
+    const jobTagIds = (job.tags || []).map(t => t.id);
+    renderTagPicker('build-video-tags', jobTagIds);
 }
 
 function updateVideoDurationEstimate() {
@@ -2305,6 +2498,9 @@ function displayDurationEstimate(captureCount, framerate) {
     const useRange = document.getElementById('use_range')?.checked;
     
     // Validate custom time range against available captures
+    const rangeInfo = document.getElementById('available-range-info');
+    let rangeWarning = false;
+    
     if (useRange && window.firstCaptureTime && window.lastCaptureTime) {
         const startTimeInput = document.getElementById('video_start_datetime');
         const endTimeInput = document.getElementById('video_end_datetime');
@@ -2314,30 +2510,36 @@ function displayDurationEstimate(captureCount, framerate) {
             const customEnd = new Date(endTimeInput.value);
             
             if (customEnd < window.firstCaptureTime || customStart > window.lastCaptureTime) {
-                document.getElementById('video-duration-estimate').innerHTML = 
-                    '<p style="color: var(--danger-color); font-weight: 600;"><strong>Warning:</strong> Selected time range is outside available captures!</p>' +
-                    '<p style="color: var(--danger-color); font-size: 0.875rem;">Available: ' + 
-                    formatDateTime(window.firstCaptureTime.toISOString()) + ' - ' + 
-                    formatDateTime(window.lastCaptureTime.toISOString()) + '</p>';
-                
-                if (createBtn) {
-                    setButtonState(createBtn, true);
+                rangeWarning = true;
+                if (rangeInfo) {
+                    rangeInfo.style.display = '';
+                    rangeInfo.style.borderLeftColor = 'var(--danger-color)';
+                    rangeInfo.style.color = 'var(--danger-color)';
+                    rangeInfo.innerHTML = `<strong>Warning:</strong> Selected range is outside available captures! Available: ${formatDateTime(window.firstCaptureTime.toISOString())} – ${formatDateTime(window.lastCaptureTime.toISOString())}`;
                 }
-                return;
+                captureCount = 0;
             }
         }
     }
     
-    if (captureCount === 0) {
-        const message = useRange 
-            ? '<p style="color: var(--danger-color); font-weight: 600;"><strong>Warning:</strong> No captures in selected time range!</p>'
-            : '<p style="color: var(--text-secondary);">No captures available for this job yet.</p>';
-        document.getElementById('video-duration-estimate').innerHTML = message;
-        
-        // Disable create button when no captures
-        if (createBtn) {
-            setButtonState(createBtn, true);
+    if (captureCount === 0 && !rangeWarning && useRange) {
+        if (rangeInfo) {
+            rangeInfo.style.display = '';
+            rangeInfo.style.borderLeftColor = 'var(--danger-color)';
+            rangeInfo.style.color = 'var(--danger-color)';
+            rangeInfo.innerHTML = `<strong>Warning:</strong> No captures in selected time range!`;
         }
+    } else if (!rangeWarning && rangeInfo) {
+        rangeInfo.style.borderLeftColor = '';
+        rangeInfo.style.color = '';
+    }
+    
+    if (captureCount === 0) {
+        document.getElementById('video-duration-estimate').innerHTML = `
+            <span style="font-weight: 600;">0s</span>
+            <span style="color: var(--text-secondary); font-size: 0.85rem;"> · 0 captures @ ${framerate} FPS</span>
+        `;
+        if (createBtn) setButtonState(createBtn, true);
         return;
     }
     
@@ -2351,8 +2553,8 @@ function displayDurationEstimate(captureCount, framerate) {
     const seconds = Math.floor(durationSeconds % 60);
     
     document.getElementById('video-duration-estimate').innerHTML = `
-        <p style="font-size: 0.875rem; color: var(--text-secondary);">${captureCount} captures at ${framerate} FPS</p>
-        <p>${minutes}m ${seconds}s</p>
+        <span style="font-weight: 600;">${minutes}m ${seconds}s</span>
+        <span style="color: var(--text-secondary); font-size: 0.85rem;"> · ${captureCount} captures @ ${framerate} FPS</span>
     `;
 }
 
@@ -2413,7 +2615,7 @@ const OVERLAY_POSITIONS = [
  * @param {object} opts    - { label: string, showPreview: bool, onchange: string|null }
  */
 function generateOverlayHTML(prefix, opts = {}) {
-    const label = opts.label || 'Text Overlay';
+    const label = opts.label || 'Add Text Overlay';
     const showPreview = opts.showPreview || false;
     const onchangeAttr = opts.onchange ? ` onchange="${opts.onchange}"` : '';
     const inputEvent = opts.onchange ? ` oninput="${opts.onchange}" onchange="${opts.onchange}"` : '';
@@ -2427,50 +2629,47 @@ function generateOverlayHTML(prefix, opts = {}) {
         : '<option value="DejaVu Sans">DejaVu Sans</option>';
 
     const controlsHtml = `
-            <div class="form-group">
-                <label>Overlay Text</label>
-                <input type="text" id="${prefix}-overlay-text" class="form-control" value="{job_name}" placeholder="{job_name} - {date} {time}"${inputEvent}>
-                <small style="color: var(--text-secondary);">Variables: <code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code> <code>{total_frames}</code></small>
-            </div>
-            <div class="form-row" style="gap:0.5rem; align-items:flex-start;">
-                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.4rem;">
-                    <div class="form-row" style="gap:0.5rem;">
-                        <div class="form-group flex-1">
-                            <label>Font</label>
+            <div style="display:flex; gap:0.75rem; align-items:center;">
+                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.35rem;">
+                    <div style="display:flex; gap:0.5rem; align-items:flex-end;">
+                        <div style="flex: 1 1 0; min-width:0;">
+                            <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Text</label>
+                            <input type="text" id="${prefix}-overlay-text" class="form-control" value="{job_name}" placeholder="{job_name}"${inputEvent}>
+                        </div>
+                        <div style="flex: 0 0 163px;">
+                            <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Font</label>
                             <select id="${prefix}-overlay-font" class="form-control"${inputEvent}>${fontOpts}</select>
                         </div>
-                        <div class="form-group" style="width: 65px;">
-                            <label>Size</label>
-                            <input type="number" id="${prefix}-overlay-size" class="form-control" value="48" min="8" max="200"${inputEvent}>
+                        <div style="flex:0 0 56px;">
+                            <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Size</label>
+                            <input type="number" id="${prefix}-overlay-size" class="form-control" value="5" min="1" max="20" step="1"${inputEvent}>
                         </div>
-                        <div class="form-group" style="width: 45px;">
-                            <label>Bold</label>
-                            <div style="display:flex;align-items:center;height:32px;">
-                                <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr}>
-                            </div>
-                        </div>
-                        <div class="form-group" style="width: 50px;">
-                            <label>Color</label>
-                            <input type="color" id="${prefix}-overlay-color" value="#FFFFFF" class="form-control" style="padding:2px;height:32px;"${inputEvent}>
+                        <div style="flex:0 0 36px;">
+                            <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Bold</label>
+                            <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr} style="margin-top:10px; margin-left:6px;">
                         </div>
                     </div>
-                    <div style="display:flex; align-items:center; gap:0.35rem;">
-                        <input type="checkbox" id="${prefix}-overlay-bg" checked${onchangeAttr}>
-                        <span style="font-size:0.8rem;">BG</span>
-                        <input type="color" id="${prefix}-overlay-bg-color" value="#000000" class="form-control" style="padding:2px;height:24px;width:32px;"${inputEvent}>
-                        <input type="range" id="${prefix}-overlay-bg-opacity" min="0" max="100" value="50" style="flex:1; height:16px;"${inputEvent}>
-                        <span id="${prefix}-overlay-opacity-label" style="width:28px;text-align:right;font-size:0.7rem;color:var(--text-secondary);">50%</span>
+                    <small style="color: var(--text-secondary); font-size:0.6rem;"><code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code></small>
+                    <div style="display:flex; gap:0.3rem; align-items:center;">
+                        <span style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">Text:</span>
+                        <input type="color" id="${prefix}-overlay-color" value="#FFFFFF" style="border:none;padding:0;height:18px;width:18px;border-radius:50%;cursor:pointer;background:none;"${inputEvent}>
+                        <input type="range" id="${prefix}-overlay-color-opacity" min="0" max="100" value="100" style="flex:1; height:14px;"${inputEvent}>
+                        <span id="${prefix}-overlay-color-opacity-label" style="width:30px;text-align:right;font-size:0.75rem;color:var(--text-secondary);">100%</span>
+                        <input type="checkbox" id="${prefix}-overlay-bg" checked${onchangeAttr} style="margin:0 0 0 0.25rem;">
+                        <span style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">Background:</span>
+                        <input type="color" id="${prefix}-overlay-bg-color" value="#000000" style="border:none;padding:0;height:18px;width:18px;border-radius:50%;cursor:pointer;background:none;"${inputEvent}>
+                        <input type="range" id="${prefix}-overlay-bg-opacity" min="0" max="100" value="50" style="flex:1; height:14px;"${inputEvent}>
+                        <span id="${prefix}-overlay-opacity-label" style="width:30px;text-align:right;font-size:0.75rem;color:var(--text-secondary);">50%</span>
                     </div>
                 </div>
-                <div class="form-group" style="margin:0;">
-                    <label>Position</label>
+                <div style="flex:0 0 auto;">
                     <div class="overlay-position-grid" id="${prefix}-overlay-grid">${gridBtns}</div>
                 </div>
             </div>`;
 
     const previewHtml = showPreview ? `
             <div class="overlay-preview-panel" id="${prefix}-overlay-preview-panel">
-                <img id="${prefix}-overlay-preview-img" alt="Overlay preview" onclick="openOverlayLightbox(this)" style="border-radius: var(--radius-lg); border: 1px solid var(--border-color); display: none;" title="Click to enlarge">
+                <img id="${prefix}-overlay-preview-img" alt="Overlay preview" style="border-radius: var(--radius-lg); border: 1px solid var(--border-color); display: none;">
                 <div id="${prefix}-overlay-preview-placeholder" style="width:100%; aspect-ratio:16/9; background:var(--surface-color); border:1px dashed var(--border-color); border-radius:var(--radius-lg); display:flex; align-items:center; justify-content:center; color:var(--text-secondary); font-size:0.8rem;">
                     Loading preview…
                 </div>
@@ -2487,8 +2686,9 @@ function generateOverlayHTML(prefix, opts = {}) {
                 <input type="checkbox" id="${prefix}-overlay-enabled"${onchangeAttr}>
                 <span>${label}</span>
             </div>
+            <small style="color: var(--text-secondary); display: block; margin-left: 1.5rem;">Burn text into each frame during timelapse rendering</small>
         </div>
-        <div id="${prefix}-overlay-fields" style="display: none;">
+        <div id="${prefix}-overlay-fields" class="toggle-fields disabled">
             ${fieldsInner}
         </div>`;
 }
@@ -2497,11 +2697,8 @@ function openOverlayLightbox(imgEl) {
     if (!imgEl || !imgEl.src) return;
     const lb = document.createElement('div');
     lb.className = 'overlay-lightbox';
-    lb.innerHTML = `<img src="${imgEl.src}" alt="Overlay preview">`;
+    lb.innerHTML = `<img src="${imgEl.src}" alt="Preview">`;
     lb.addEventListener('click', () => lb.remove());
-    document.addEventListener('keydown', function esc(e) {
-        if (e.key === 'Escape') { lb.remove(); document.removeEventListener('keydown', esc); }
-    });
     document.body.appendChild(lb);
 }
 
@@ -2516,8 +2713,12 @@ function initOverlayWidget(prefix, opts = {}) {
 
     // Toggle visibility
     cb.addEventListener('change', () => {
-        fields.style.display = cb.checked ? 'block' : 'none';
-        if (cb.checked && !_overlayFontsLoaded) loadOverlayFonts();
+        if (cb.checked) {
+            fields.classList.remove('disabled');
+            if (!_overlayFontsLoaded) loadOverlayFonts();
+        } else {
+            fields.classList.add('disabled');
+        }
         if (opts.onToggle) opts.onToggle(cb.checked);
     });
 
@@ -2539,6 +2740,11 @@ function initOverlayWidget(prefix, opts = {}) {
     if (opSlider && opLabel) {
         opSlider.addEventListener('input', () => { opLabel.textContent = opSlider.value + '%'; });
     }
+    const colorOpSlider = document.getElementById(`${prefix}-overlay-color-opacity`);
+    const colorOpLabel = document.getElementById(`${prefix}-overlay-color-opacity-label`);
+    if (colorOpSlider && colorOpLabel) {
+        colorOpSlider.addEventListener('input', () => { colorOpLabel.textContent = colorOpSlider.value + '%'; });
+    }
 }
 
 /** Read overlay config from any widget by prefix. Returns config object or null. */
@@ -2553,9 +2759,10 @@ function readOverlayConfig(prefix) {
         enabled: true,
         text,
         font: document.getElementById(`${prefix}-overlay-font`)?.value || 'DejaVu Sans',
-        font_size: parseInt(document.getElementById(`${prefix}-overlay-size`)?.value) || 48,
+        font_size: parseInt(document.getElementById(`${prefix}-overlay-size`)?.value) || 5,
         bold: document.getElementById(`${prefix}-overlay-bold`)?.checked || false,
         color: document.getElementById(`${prefix}-overlay-color`)?.value || '#FFFFFF',
+        color_opacity: parseInt(document.getElementById(`${prefix}-overlay-color-opacity`)?.value || '100') / 100,
         position: activeBtn?.dataset.pos || 'bottom-left',
         background: document.getElementById(`${prefix}-overlay-bg`)?.checked !== false,
         background_color: document.getElementById(`${prefix}-overlay-bg-color`)?.value || '#000000',
@@ -2569,12 +2776,21 @@ function writeOverlayConfig(prefix, config) {
     const el = id => document.getElementById(`${prefix}-overlay-${id}`);
     if (el('enabled')) el('enabled').checked = !!config.enabled;
     const fields = document.getElementById(`${prefix}-overlay-fields`);
-    if (fields) fields.style.display = config.enabled ? 'block' : 'none';
+    if (fields) {
+        if (config.enabled) {
+            fields.classList.remove('disabled');
+        } else {
+            fields.classList.add('disabled');
+        }
+    }
     if (el('text')) el('text').value = config.text || '';
     if (el('font')) el('font').value = config.font || 'DejaVu Sans';
-    if (el('size')) el('size').value = config.font_size || 48;
+    if (el('size')) el('size').value = config.font_size || 5;
     if (el('bold')) el('bold').checked = !!config.bold;
     if (el('color')) el('color').value = config.color || '#FFFFFF';
+    if (el('color-opacity')) el('color-opacity').value = Math.round((config.color_opacity ?? 1.0) * 100);
+    const colorOpLabel = document.getElementById(`${prefix}-overlay-color-opacity-label`);
+    if (colorOpLabel) colorOpLabel.textContent = Math.round((config.color_opacity ?? 1.0) * 100) + '%';
     if (el('bg')) el('bg').checked = config.background !== false;
     if (el('bg-color')) el('bg-color').value = config.background_color || '#000000';
     if (el('bg-opacity')) el('bg-opacity').value = Math.round((config.background_opacity ?? 0.5) * 100);
@@ -2616,7 +2832,7 @@ async function loadOverlayFonts() {
 
 function initBuildOverlay() {
     mountOverlayWidget('build-overlay-container', 'build', {
-        label: 'Text Overlay',
+        label: 'Add Text Overlay',
         onchange: 'debouncedOverlayPreview()',
         onToggle: (enabled) => { if (enabled) debouncedOverlayPreview(); else resetOverlayPreview(); },
         onChange: () => debouncedOverlayPreview(),
@@ -2680,7 +2896,7 @@ function initCreateJobOverlay() {
     };
 
     mountOverlayWidget('create-ab-overlay-container', 'create-ab', {
-        label: 'Text Overlay',
+        label: 'Add Text Overlay',
         showPreview: true,
         onchange: '_createAbOverlayChanged()',
         onToggle: (enabled) => { if (enabled) fetchOverlayPreviewFromUrl('create-ab'); },
@@ -2701,7 +2917,7 @@ function initEditJobOverlay(job) {
     };
 
     mountOverlayWidget('edit-ab-overlay-container', 'edit-ab', {
-        label: 'Text Overlay',
+        label: 'Add Text Overlay',
         showPreview: true,
         onchange: '_editAbOverlayChanged()',
         onToggle: (enabled) => { if (enabled) triggerEditPreview(); },
@@ -2734,7 +2950,7 @@ async function loadOverlayPreviewImage(prefix, job) {
         if (capsData.captures && capsData.captures.length > 0) {
             const cap = capsData.captures[0];
             img._filePath = cap.file_path;
-            img._originalSrc = `${API_BASE}/captures/${cap.id}/thumbnail`;
+            img._originalSrc = `${API_BASE}/captures/${cap.id}/image`;
             img.src = img._originalSrc;
             img.style.display = 'block';
             if (placeholder) placeholder.style.display = 'none';
@@ -2879,6 +3095,36 @@ async function updateGenericOverlayPreview(prefix, job) {
     } catch (e) { console.error('Edit overlay preview error:', e); }
 }
 
+let _outputPathBackup = '';
+
+function toggleOutputPathEdit(editing) {
+    const input = document.getElementById('video_output_path');
+    const editBtn = document.getElementById('output-path-edit-btn');
+    const saveBtn = document.getElementById('output-path-save-btn');
+    const cancelBtn = document.getElementById('output-path-cancel-btn');
+    if (editing) {
+        _outputPathBackup = input.value;
+        input.readOnly = false;
+        input.style.opacity = '1';
+        input.focus();
+        editBtn.style.display = 'none';
+        saveBtn.style.display = '';
+        cancelBtn.style.display = '';
+    } else {
+        input.readOnly = true;
+        input.style.opacity = '0.6';
+        editBtn.style.display = '';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+    }
+}
+
+function cancelOutputPathEdit() {
+    const input = document.getElementById('video_output_path');
+    input.value = _outputPathBackup;
+    toggleOutputPathEdit(false);
+}
+
 async function processVideo(event) {
     event.preventDefault();
     
@@ -2909,7 +3155,8 @@ async function processVideo(event) {
         output_path: document.getElementById('video_output_path').value.trim() || null,
         start_time: useRange ? datetimeLocalToISO(document.getElementById('video_start_datetime').value) : null,
         end_time: useRange ? datetimeLocalToISO(document.getElementById('video_end_datetime').value) : null,
-        text_overlay: readOverlayConfig('build')
+        text_overlay: readOverlayConfig('build'),
+        tag_ids: getSelectedTagIds('build-video-tags')
     };
     
     try {
@@ -2944,6 +3191,8 @@ async function deleteVideo(videoId, videoName) {
 }
 
 // Modal management
+let _modalHistoryDepth = 0;
+
 function showModal(modalId) {
     const modal = document.getElementById(modalId);
     modal.classList.add('active');
@@ -2953,10 +3202,23 @@ function showModal(modalId) {
     if (modalContent) {
         modalContent.scrollTop = 0;
     }
+    
+    // Push history state so back button can close modal
+    _modalHistoryDepth++;
+    history.pushState({ modal: true, depth: _modalHistoryDepth }, '');
 }
 
+let _closingFromPopstate = false;
+
 function closeModal(modalId) {
+    const wasActive = document.getElementById(modalId).classList.contains('active');
     document.getElementById(modalId).classList.remove('active');
+    
+    // Pop history entry if we pushed one and this isn't from popstate
+    if (wasActive && _modalHistoryDepth > 0 && !_closingFromPopstate) {
+        _modalHistoryDepth--;
+        history.back();
+    }
     
     // Clear form when closing create job modal
     if (modalId === 'create-job-modal') {
@@ -2964,6 +3226,11 @@ function closeModal(modalId) {
         document.getElementById('test-result').innerHTML = '';
         // Reset datetime to now for next time modal opens
         setDefaultStartTime();
+    }
+    
+    // Clean up import staging session when closing import modal
+    if (modalId === 'import-modal') {
+        resetImportModal();
     }
     
     // Clean up video modal listeners to prevent memory leaks
@@ -2988,6 +3255,13 @@ function closeModal(modalId) {
 // Close the topmost active modal on Escape key
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
+        // Close lightbox first if open
+        const lightbox = document.querySelector('.overlay-lightbox');
+        if (lightbox) {
+            lightbox.remove();
+            return;
+        }
+        
         // Check custom modals first (video detail, confirm dialog)
         const videoDetail = document.getElementById('video-detail-modal');
         if (videoDetail && videoDetail.classList.contains('active')) {
@@ -3010,6 +3284,565 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
+// ── Directory Import ──────────────────────────────────────────────────────
+
+// ── Import modal (redesigned) ──────────────────────────
+let _importSessionId = null;
+let _importAnalysis = null;
+let _importBrowsePath = '/imports';
+let _importSourcePath = null;
+
+function showImportModal() {
+    resetImportModal();
+    showModal('import-modal');
+    loadImportBrowse();
+}
+
+function resetImportModal() {
+    // Clean up any active staging session on the server
+    if (_importSessionId) {
+        apiRequest(`/import/${_importSessionId}`, { method: 'DELETE' }).catch(() => {});
+    }
+    _importSessionId = null;
+    _importAnalysis = null;
+    _importSourcePath = null;
+    document.getElementById('import-source-panels').style.display = 'flex';
+    document.getElementById('import-staging-preview').style.display = 'none';
+    document.getElementById('import-upload-progress').style.display = 'none';
+    document.getElementById('import-folder-input').value = '';
+    document.getElementById('import-job-name').value = '';
+    const execBtn = document.getElementById('import-execute-btn');
+    execBtn.disabled = false;
+    execBtn.textContent = 'Import';
+}
+
+// --- Upload handling ---
+function handleImportDrop(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    
+    // Use webkitGetAsEntry for recursive folder traversal
+    const items = e.dataTransfer.items;
+    if (!items || !items.length) return;
+    
+    const entries = [];
+    for (let i = 0; i < items.length; i++) {
+        const entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
+        if (entry) entries.push(entry);
+    }
+    
+    if (entries.length === 0) {
+        // Fallback for browsers without webkitGetAsEntry
+        if (e.dataTransfer.files.length) handleImportFiles(e.dataTransfer.files);
+        return;
+    }
+    
+    // Capture root folder/file name for job name suggestion
+    if (entries.length === 1 && entries[0].isDirectory) {
+        _importSourcePath = '/upload/' + entries[0].name;
+    } else {
+        _importSourcePath = null;
+    }
+    
+    // Recursively collect all files from entries
+    collectFilesFromEntries(entries).then(files => {
+        if (files.length) handleImportFiles(files);
+        else showNotification('No supported files found', 'error');
+    });
+}
+
+function collectFilesFromEntries(entries) {
+    return new Promise(resolve => {
+        const files = [];
+        let pending = entries.length;
+        if (pending === 0) { resolve(files); return; }
+        
+        function readEntry(entry) {
+            if (entry.isFile) {
+                entry.file(file => {
+                    files.push(file);
+                    if (--pending === 0) resolve(files);
+                }, () => { if (--pending === 0) resolve(files); });
+            } else if (entry.isDirectory) {
+                const reader = entry.createReader();
+                const readBatch = () => {
+                    reader.readEntries(batch => {
+                        if (batch.length === 0) {
+                            if (--pending === 0) resolve(files);
+                            return;
+                        }
+                        pending += batch.length;
+                        batch.forEach(readEntry);
+                        readBatch(); // Continue reading (batched at 100 entries)
+                    }, () => { if (--pending === 0) resolve(files); });
+                };
+                readBatch();
+            } else {
+                if (--pending === 0) resolve(files);
+            }
+        }
+        
+        entries.forEach(readEntry);
+    });
+}
+
+async function handleImportFiles(files) {
+    if (!files || !files.length) return;
+
+    const progressWrap = document.getElementById('import-upload-progress');
+    const progressBar = document.getElementById('import-progress-bar');
+    const progressText = document.getElementById('import-progress-text');
+    progressWrap.style.display = 'block';
+    progressBar.style.width = '0%';
+
+    // Convert to array (may be FileList or Array)
+    const fileArr = Array.from(files);
+    const total = fileArr.length;
+    progressText.textContent = `Uploading ${total} file(s)...`;
+
+    try {
+        let result;
+        const CHUNK_SIZE = 50; // Upload in batches of 50 files
+        
+        if (total === 1) {
+            const formData = new FormData();
+            formData.append('file', fileArr[0]);
+            result = await apiRequest('/import/upload', { method: 'POST', rawBody: formData });
+        } else if (total <= CHUNK_SIZE) {
+            const formData = new FormData();
+            for (const f of fileArr) formData.append('files', f);
+            result = await apiRequest('/import/upload-batch', { method: 'POST', rawBody: formData });
+        } else {
+            // Upload in chunks, reusing the same session
+            let uploaded = 0;
+            for (let i = 0; i < total; i += CHUNK_SIZE) {
+                const chunk = fileArr.slice(i, i + CHUNK_SIZE);
+                const formData = new FormData();
+                for (const f of chunk) formData.append('files', f);
+                
+                if (result) {
+                    // Subsequent chunks: append to existing session
+                    formData.append('session_id', result.session_id);
+                }
+                result = await apiRequest('/import/upload-batch', { method: 'POST', rawBody: formData });
+                
+                uploaded += chunk.length;
+                const pct = Math.round((uploaded / total) * 100);
+                progressBar.style.width = `${pct}%`;
+                progressText.textContent = `Uploading ${uploaded}/${total} files...`;
+            }
+        }
+
+        progressBar.style.width = '100%';
+        progressText.textContent = 'Upload complete. Analyzing...';
+        _importSessionId = result.session_id;
+        await analyzeAndShowPreview();
+    } catch (error) {
+        progressText.textContent = 'Upload failed';
+        showNotification(error.message || 'Upload failed', 'error');
+    }
+}
+
+// --- Server path browser ---
+async function loadImportBrowse(path) {
+    if (path) _importBrowsePath = path;
+    
+    try {
+        const result = await apiRequest(`/import/browse?path=${encodeURIComponent(_importBrowsePath)}`);
+        _importBrowsePath = result.path;
+        document.getElementById('import-browse-path').textContent = _importBrowsePath;
+
+        const list = document.getElementById('import-browse-list');
+        const scanBtn = document.getElementById('import-scan-btn');
+        
+        if (!result.entries.length) {
+            list.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">Empty directory</div>';
+            scanBtn.disabled = true;
+            return;
+        }
+
+        scanBtn.disabled = false;
+        list.innerHTML = result.entries.map(e => {
+            const icon = e.type === 'folder' ? '📁' :
+                         e.type === 'image' ? '🖼️' :
+                         e.type === 'video' ? '🎬' :
+                         e.type === 'archive' ? '📦' : '📄';
+            const sizeStr = e.type === 'folder' ? '' : formatBytes(e.size);
+            const clickAction = e.type === 'folder'
+                ? `loadImportBrowse('${escapeHtml(_importBrowsePath + '/' + e.name)}')`
+                : '';
+            return `<div class="import-browse-item" ${clickAction ? `onclick="${clickAction}"` : ''}>
+                <span class="browse-icon">${icon}</span>
+                <span class="browse-name">${escapeHtml(e.name)}</span>
+                <span class="browse-size">${sizeStr}</span>
+            </div>`;
+        }).join('');
+    } catch (error) {
+        document.getElementById('import-browse-list').innerHTML =
+            `<div style="padding:1rem;text-align:center;color:var(--danger);font-size:0.85rem;">${escapeHtml(error.message || 'Failed to browse')}</div>`;
+        document.getElementById('import-scan-btn').disabled = true;
+    }
+}
+
+function browseImportParent() {
+    const parts = _importBrowsePath.split('/').filter(Boolean);
+    if (parts.length <= 1) return; // Already at root
+    parts.pop();
+    loadImportBrowse('/' + parts.join('/'));
+}
+
+async function scanImportCurrentPath() {
+    try {
+        const result = await apiRequest('/import/scan', {
+            method: 'POST',
+            body: { path: _importBrowsePath }
+        });
+        _importSessionId = result.session_id;
+        _importSourcePath = result.source_path || _importBrowsePath;
+        await analyzeAndShowPreview();
+    } catch (error) {
+        showNotification(error.message || 'Scan failed', 'error');
+    }
+}
+
+// --- Analysis & Preview ---
+async function analyzeAndShowPreview() {
+    if (!_importSessionId) return;
+
+    try {
+        _importAnalysis = await apiRequest(`/import/${_importSessionId}/analyze`);
+        showImportPreview();
+    } catch (error) {
+        showNotification(error.message || 'Analysis failed', 'error');
+    }
+}
+
+function showImportPreview() {
+    const a = _importAnalysis;
+    if (!a) return;
+
+    // Hide source panels, show preview
+    document.getElementById('import-source-panels').style.display = 'none';
+    document.getElementById('import-staging-preview').style.display = 'block';
+
+    // Images
+    const imgSection = document.getElementById('import-preview-images');
+    if (a.image_count > 0) {
+        imgSection.style.display = 'block';
+        document.getElementById('import-images-info').innerHTML = `
+            <strong>${a.image_count.toLocaleString()} images</strong> · ${formatBytes(a.image_total_size)}<br>
+            <small style="color:var(--text-secondary);">
+                Range: ${formatDateTimeNoSeconds(a.image_first)} → ${formatDateTimeNoSeconds(a.image_last)}
+            </small>
+        `;
+        // Auto-suggest job name from source folder name (not the import root)
+        const nameInput = document.getElementById('import-job-name');
+        if (!nameInput.value) {
+            const srcPath = _importSourcePath || _importBrowsePath || '';
+            const parts = srcPath.split('/').filter(Boolean);
+            // If we're deeper than just the root import dir, use the last folder name
+            const folderName = parts.length > 1 ? parts[parts.length - 1] : '';
+            nameInput.value = folderName || 'Imported';
+        }
+    } else {
+        imgSection.style.display = 'none';
+    }
+
+    // Videos
+    const vidSection = document.getElementById('import-preview-videos');
+    if (a.video_count > 0) {
+        vidSection.style.display = 'block';
+        const dupes = a.video_duplicates || {};
+        const dupeCount = Object.keys(dupes).length;
+        const importableCount = a.video_count - dupeCount;
+        document.getElementById('import-videos-list').innerHTML = `
+            <div class="info-box" style="margin-bottom:0.75rem;">
+                <strong>${importableCount} video(s)</strong> · ${formatBytes(a.video_total_size)}
+                ${dupeCount ? `<br><small style="color:var(--warning);">⚠ ${dupeCount} duplicate(s) will be skipped</small>` : ''}
+            </div>
+            ${a.videos.map(v => {
+                const baseName = v.file_name.replace(/\.[^.]+$/, '');
+                const dupe = dupes[v.file_name];
+                const res = v.width && v.height ? `${v.width}×${v.height}` : '';
+                const dur = v.duration ? formatDuration(v.duration) : '';
+                const thumbUrl = v.has_thumbnail
+                    ? `${API_BASE}/import/${_importSessionId}/thumbnail/${encodeURIComponent(v.file_name)}`
+                    : '';
+                if (dupe) {
+                    const matchLabel = dupe.match_type === 'hash' ? 'Exact match' : 'Size + duration match';
+                    return `<div class="import-video-card" data-filename="${escapeHtml(v.file_name)}" data-duplicate="true" style="opacity:0.5;pointer-events:none;">
+                        ${thumbUrl
+                            ? `<img src="${thumbUrl}" alt="" style="width:60px;height:44px;object-fit:cover;border-radius:4px;flex-shrink:0;">`
+                            : '<span style="font-size:1.5rem;flex-shrink:0;">🎬</span>'}
+                        <div class="video-meta" style="flex:1;min-width:0;">
+                            <div style="font-size:0.85rem;padding:0.25rem 0;font-weight:500;">${escapeHtml(baseName)}</div>
+                            <small>${[res, dur, formatBytes(v.file_size), v.codec].filter(Boolean).join(' · ')}</small>
+                        </div>
+                        <span class="duplicate-badge" title="${matchLabel}: '${escapeHtml(dupe.existing_name)}'">⚠ Duplicate</span>
+                    </div>`;
+                }
+                return `<div class="import-video-card" data-filename="${escapeHtml(v.file_name)}">
+                    ${thumbUrl
+                        ? `<img src="${thumbUrl}" alt="" style="width:60px;height:44px;object-fit:cover;border-radius:4px;flex-shrink:0;">`
+                        : '<span style="font-size:1.5rem;flex-shrink:0;">🎬</span>'}
+                    <div class="video-meta" style="flex:1;min-width:0;">
+                        <input type="text" class="form-control" value="${escapeHtml(baseName)}" data-file="${escapeHtml(v.file_name)}" style="font-size:0.85rem;padding:0.25rem 0.5rem;margin-bottom:0.25rem;">
+                        <small>${[res, dur, formatBytes(v.file_size), v.codec].filter(Boolean).join(' · ')}</small>
+                    </div>
+                    <button class="btn-icon" onclick="removeImportVideo(this)" title="Remove" style="flex-shrink:0;color:var(--danger);padding:0.25rem;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>`;
+            }).join('')}
+        `;
+    } else {
+        vidSection.style.display = 'none';
+    }
+
+    // Errors
+    const errSection = document.getElementById('import-preview-errors');
+    if (a.error_count > 0) {
+        errSection.style.display = 'block';
+        document.getElementById('import-errors-info').innerHTML = `
+            <strong>${a.error_count} skipped</strong><br>
+            <small style="color:var(--text-secondary);">
+                ${a.errors.slice(0, 5).map(e => `${escapeHtml(e.file_name)}: ${escapeHtml(e.reason)}`).join('<br>')}
+                ${a.error_count > 5 ? `<br>...and ${a.error_count - 5} more` : ''}
+            </small>
+        `;
+    } else {
+        errSection.style.display = 'none';
+    }
+
+    // Disable execute if nothing importable
+    const hasImages = a.image_count > 0;
+    const hasVideos = document.querySelectorAll('.import-video-card:not([data-duplicate])').length > 0;
+    document.getElementById('import-execute-btn').disabled = (!hasImages && !hasVideos);
+}
+
+function removeImportVideo(btn) {
+    const card = btn.closest('.import-video-card');
+    if (!card) return;
+    card.remove();
+    
+    // Update video count display (exclude duplicates)
+    const remaining = document.querySelectorAll('.import-video-card:not([data-duplicate])').length;
+    const vidSection = document.getElementById('import-preview-videos');
+    if (remaining === 0) {
+        // Hide only if no duplicates either
+        const dupeCards = document.querySelectorAll('.import-video-card[data-duplicate]').length;
+        if (dupeCards === 0) vidSection.style.display = 'none';
+        else {
+            const infoBox = vidSection.querySelector('.info-box');
+            if (infoBox) infoBox.innerHTML = `<strong>0 video(s)</strong>`;
+        }
+    } else {
+        const infoBox = vidSection.querySelector('.info-box');
+        if (infoBox) infoBox.innerHTML = `<strong>${remaining} video(s)</strong>`;
+    }
+    
+    // Update execute button state
+    const hasImages = _importAnalysis && _importAnalysis.image_count > 0;
+    document.getElementById('import-execute-btn').disabled = (!hasImages && remaining === 0);
+}
+
+// --- Execute import ---
+async function executeImport() {
+    if (!_importSessionId || !_importAnalysis) return;
+
+    const body = {};
+
+    // Image config
+    if (_importAnalysis.image_count > 0) {
+        const jobName = document.getElementById('import-job-name').value.trim();
+        if (!jobName) { showNotification('Enter a job name for images', 'error'); return; }
+        body.image_job_name = jobName;
+    }
+
+    // Video configs — only include remaining (non-removed) cards
+    const videoCards = document.querySelectorAll('.import-video-card input[data-file]');
+    if (videoCards.length > 0) {
+        body.videos = Array.from(videoCards).map(input => ({
+            file_name: input.dataset.file,
+            name: input.value.trim() || input.dataset.file.replace(/\.[^.]+$/, ''),
+        }));
+    }
+
+    try {
+        document.getElementById('import-execute-btn').disabled = true;
+        document.getElementById('import-execute-btn').textContent = 'Importing...';
+
+        const result = await apiRequest(`/import/${_importSessionId}/execute`, {
+            method: 'POST',
+            body
+        });
+
+        const parts = [];
+        if (result.images) parts.push(`${result.images.imported_count} images as "${result.images.job_name}"`);
+        if (result.videos && result.videos.length) parts.push(`${result.videos.length} video(s)`);
+        
+        closeModal('import-modal');
+        _importSessionId = null; // Already cleaned by execute
+        showNotification(`Imported ${parts.join(' and ')}`, 'success');
+        loadJobs();
+        loadVideos();
+    } catch (error) {
+        showNotification(error.message || 'Import failed', 'error');
+        document.getElementById('import-execute-btn').disabled = false;
+        document.getElementById('import-execute-btn').textContent = 'Import';
+    }
+}
+
+// --- Server path settings ---
+let _pathBackups = {};
+const _pathTypes = [
+    { key: 'captures', label: 'Captures Path', apiField: 'captures_path' },
+    { key: 'timelapses', label: 'Timelapses Path', apiField: 'timelapses_path' },
+    { key: 'import', label: 'Import Path', apiField: 'import_path' },
+    { key: 'export', label: 'Export Path', apiField: 'export_path' },
+];
+
+function renderPathRow(type) {
+    const editSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+    const saveSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
+    const cancelSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    const container = document.getElementById(`path-row-${type.key}`);
+    if (!container) return;
+    container.innerHTML = `
+        <label style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">${type.label}</label>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+            <input type="text" id="${type.key}-path-input" class="form-control" style="flex:1;opacity:0.6;" readonly>
+            <button class="btn-icon" id="${type.key}-path-edit-btn" onclick="togglePathEdit('${type.key}', true)" title="Edit">${editSvg}</button>
+            <button class="btn-icon" id="${type.key}-path-save-btn" onclick="saveServerPath('${type.key}')" title="Save" style="display:none;color:var(--success-color);">${saveSvg}</button>
+            <button class="btn-icon" id="${type.key}-path-cancel-btn" onclick="togglePathEdit('${type.key}', false)" title="Cancel" style="display:none;color:var(--danger-color);">${cancelSvg}</button>
+        </div>`;
+}
+
+async function loadServerPaths() {
+    _pathTypes.forEach(t => renderPathRow(t));
+    try {
+        const result = await apiRequest('/import/settings/path');
+        _pathTypes.forEach(t => {
+            const val = result[t.apiField] || '';
+            document.getElementById(`${t.key}-path-input`).value = val;
+            _pathBackups[t.key] = val;
+        });
+        _importBrowsePath = result.import_path || '/imports';
+    } catch (e) {
+        _pathTypes.forEach(t => {
+            document.getElementById(`${t.key}-path-input`).value = '';
+        });
+        _importBrowsePath = '/imports';
+    }
+}
+
+function togglePathEdit(type, editing) {
+    const input = document.getElementById(`${type}-path-input`);
+    const editBtn = document.getElementById(`${type}-path-edit-btn`);
+    const saveBtn = document.getElementById(`${type}-path-save-btn`);
+    const cancelBtn = document.getElementById(`${type}-path-cancel-btn`);
+    if (editing) {
+        _pathBackups[type] = input.value;
+        input.removeAttribute('readonly');
+        input.style.opacity = '1';
+        editBtn.style.display = 'none';
+        saveBtn.style.display = '';
+        cancelBtn.style.display = '';
+        input.focus();
+    } else {
+        input.value = _pathBackups[type];
+        input.setAttribute('readonly', '');
+        input.style.opacity = '0.6';
+        editBtn.style.display = '';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+    }
+}
+
+async function saveServerPath(type) {
+    const path = document.getElementById(`${type}-path-input`).value.trim();
+    const label = _pathTypes.find(t => t.key === type)?.label || type;
+    if (!path) { showNotification(`${label} cannot be empty`, 'error'); return; }
+    try {
+        await apiRequest(`/import/settings/path/${type}`, { method: 'PUT', body: { path } });
+        _pathBackups[type] = path;
+        if (type === 'import') _importBrowsePath = path;
+        togglePathEdit(type, false);
+        showNotification(`${label} updated`, 'success');
+    } catch (error) {
+        showNotification(error.message || `Failed to update ${label.toLowerCase()}`, 'error');
+    }
+}
+
+// --- Export retention setting ---
+async function loadExportRetention() {
+    try {
+        const result = await apiRequest('/settings/export-retention');
+        document.getElementById('export-retention-days').value = result.export_retention_days;
+    } catch (e) {
+        document.getElementById('export-retention-days').value = 7;
+    }
+}
+
+async function saveExportRetention() {
+    const input = document.getElementById('export-retention-days');
+    const days = parseInt(input.value, 10);
+    if (isNaN(days) || days < 0) {
+        showNotification('Retention must be 0 (indefinite) or a positive number of days', 'error');
+        return;
+    }
+    try {
+        await apiRequest('/settings/export-retention', { method: 'PUT', body: { export_retention_days: days } });
+        showNotification(days === 0 ? 'Export retention: keep indefinitely' : `Export retention: ${days} day${days !== 1 ? 's' : ''}`, 'success');
+    } catch (error) {
+        showNotification(error.message || 'Failed to update export retention', 'error');
+    }
+}
+
+let _createPathBackup = '';
+
+function toggleCreatePathEdit(editing) {
+    const input = document.getElementById('capture_path');
+    const editBtn = document.getElementById('capture-path-edit-btn');
+    const saveBtn = document.getElementById('capture-path-save-btn');
+    const cancelBtn = document.getElementById('capture-path-cancel-btn');
+    if (editing) {
+        _createPathBackup = input.value;
+        input.removeAttribute('readonly');
+        input.style.opacity = '1';
+        editBtn.style.display = 'none';
+        saveBtn.style.display = '';
+        cancelBtn.style.display = '';
+        input.focus();
+    } else {
+        input.setAttribute('readonly', '');
+        input.style.opacity = '0.6';
+        editBtn.style.display = '';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+    }
+}
+
+function cancelCreatePathEdit() {
+    document.getElementById('capture_path').value = _createPathBackup;
+    toggleCreatePathEdit(false);
+}
+
+function updateNamingPreview() {
+    const pattern = document.getElementById('naming_pattern').value || '{job_name}_{count}_{timestamp}';
+    const jobName = document.getElementById('job_name')?.value || 'MyJob';
+    const now = new Date();
+    const ts = now.getFullYear() + (now.getMonth()+1+'').padStart(2,'0') + (now.getDate()+'').padStart(2,'0')
+        + '_' + (now.getHours()+'').padStart(2,'0') + (now.getMinutes()+'').padStart(2,'0') + (now.getSeconds()+'').padStart(2,'0');
+    const example = pattern
+        .replace('{job_name}', jobName)
+        .replace('{count}', '000001')
+        .replace(/\{num(?::0?(\d+)d)?\}/, '000001')
+        .replace('{timestamp}', ts);
+    const el = document.getElementById('naming-preview');
+    if (el) el.textContent = `Example: ${example}.jpg`;
+}
+
 function showCreateJobModal() {
     // Reset the form to clear any previous values
     document.getElementById('create-job-form').reset();
@@ -3022,19 +3855,21 @@ function showCreateJobModal() {
     setDefaultStartTime();
     
     // Set default values for capture path and naming pattern
-    document.getElementById('capture_path').value = '/captures';
-    document.getElementById('naming_pattern').value = '{job_name}_{num:06d}_{timestamp}';
+    document.getElementById('capture_path').value = _pathBackups.captures || '/captures';
+    document.getElementById('naming_pattern').value = '{job_name}_{count}_{timestamp}';
+    toggleCreatePathEdit(false);
+    updateNamingPreview();
     
     // Set initial min for end date
     updateEndDateMin();
     
     // Reset time window
     document.getElementById('time_window_enabled').checked = false;
-    document.getElementById('time-window-fields').style.display = 'none';
+    document.getElementById('time-window-fields').classList.add('disabled');
     
     // Reset auto-build
     document.getElementById('auto_build_enabled').checked = false;
-    document.getElementById('auto-build-fields').style.display = 'none';
+    document.getElementById('auto-build-fields').classList.add('disabled');
     
     showModal('create-job-modal');
     
@@ -3045,6 +3880,71 @@ function showCreateJobModal() {
     setTimeout(() => {
         updateDurationEstimate();
     }, 100);
+}
+
+async function exportJob(jobId, jobName) {
+    try {
+        // Get estimate first
+        const estimate = await apiRequest(`/jobs/${jobId}/export/estimate`);
+        const totalSize = formatBytes(estimate.total_size);
+        const details = [];
+        if (estimate.capture_count > 0) details.push(`${estimate.capture_count} captures (${formatBytes(estimate.capture_size)})`);
+        if (estimate.video_count > 0) details.push(`${estimate.video_count} video(s) (${formatBytes(estimate.video_size)})`);
+        
+        if (!details.length) {
+            showNotification('No files to export for this job', 'error');
+            return;
+        }
+        
+        const desc = `${details.join(', ')} — estimated ${totalSize}`;
+        const msg = estimate.method === 'file'
+            ? `Export "${jobName}"? ${desc} (large export — saved to /exports)`
+            : `Export "${jobName}"? ${desc}`;
+        
+        confirmAction(
+            msg,
+            async () => {
+                showNotification('Building export...', 'info');
+                try {
+                    if (estimate.method === 'stream') {
+                        // Small export — stream directly
+                        const response = await fetch(`${API_BASE}/jobs/${jobId}/export`, {
+                            method: 'POST',
+                        });
+                        if (!response.ok) {
+                            const err = await response.json().catch(() => ({ detail: 'Export failed' }));
+                            throw new Error(err.detail || 'Export failed');
+                        }
+                        const blob = await response.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = response.headers.get('content-disposition')?.match(/filename="(.+)"/)?.[1] || `${jobId}_export.zip`;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        URL.revokeObjectURL(url);
+                        showNotification('Export downloaded', 'success');
+                    } else {
+                        // Large export — built to disk
+                        const result = await apiRequest(`/jobs/${jobId}/export`, { method: 'POST' });
+                        const a = document.createElement('a');
+                        a.href = `${API_BASE}${result.download_url}`;
+                        a.download = result.file_name;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        showNotification(`Export ready: ${result.file_name} (${formatBytes(result.file_size)})`, 'success');
+                    }
+                } catch (error) {
+                    showNotification(error.message || 'Export failed', 'error');
+                }
+            },
+            { closeModalId: null }
+        );
+    } catch (error) {
+        showNotification(error.message || 'Failed to estimate export', 'error');
+    }
 }
 
 async function duplicateJob(jobId) {
@@ -3064,8 +3964,9 @@ async function duplicateJob(jobId) {
         document.getElementById('interval_seconds').value = job.interval_seconds;
         document.getElementById('framerate').value = job.framerate || 30;
         document.getElementById('warning_threshold').value = job.warning_threshold || 3;
-        document.getElementById('capture_path').value = '/captures';
-        document.getElementById('naming_pattern').value = job.naming_pattern || '{job_name}_{num:06d}_{timestamp}';
+        document.getElementById('capture_path').value = _pathBackups.captures || '/captures';
+        document.getElementById('naming_pattern').value = job.naming_pattern || '{job_name}_{count}_{timestamp}';
+        updateNamingPreview();
         
         // Set start to now
         setDefaultStartTime();
@@ -3080,7 +3981,7 @@ async function duplicateJob(jobId) {
         const twFields = document.getElementById('time-window-fields');
         if (job.time_window_enabled) {
             twEnabled.checked = true;
-            twFields.style.display = '';
+            twFields.classList.remove('disabled');
             if (job.time_window_start) {
                 document.getElementById('time_window_start_time').value = job.time_window_start;
                 document.getElementById('time_window_start_time').dispatchEvent(new Event('change'));
@@ -3091,7 +3992,7 @@ async function duplicateJob(jobId) {
             }
         } else {
             twEnabled.checked = false;
-            twFields.style.display = 'none';
+            twFields.classList.add('disabled');
         }
         
         // Copy auto-build settings
@@ -3099,7 +4000,7 @@ async function duplicateJob(jobId) {
         const abFields = document.getElementById('auto-build-fields');
         if (job.auto_build_enabled) {
             abEnabled.checked = true;
-            abFields.style.display = 'block';
+            abFields.classList.remove('disabled');
             document.getElementById('auto_build_interval_hours').value = job.auto_build_interval_hours || 168;
             document.getElementById('auto_build_fps').value = job.auto_build_fps || 30;
             document.getElementById('auto_build_quality').value = job.auto_build_quality || 'medium';
@@ -3118,7 +4019,7 @@ async function duplicateJob(jobId) {
             }
         } else {
             abEnabled.checked = false;
-            abFields.style.display = 'none';
+            abFields.classList.add('disabled');
         }
         
         updateEndDateMin();
@@ -3431,26 +4332,20 @@ function calculateAndDisplayDuration(options) {
             { label: '1 Month', seconds: 2592000 }
         ];
         
-        displayElement.innerHTML = `<h4>Estimated Video Duration @ ${framerate} FPS (Ongoing)${windowNote}</h4>`;
-        
-        durations.forEach(dur => {
+        let boxes = durations.map(dur => {
             const captures = calculateCaptures(dur.seconds);
-            displayElement.innerHTML += `
-                <div class="duration-row">
-                    <strong>${dur.label}</strong>
-                    <div class="duration-table">
-                        <div class="duration-item">
-                            <div class="duration-fps">Captures</div>
-                            <div class="duration-time">${captures.toLocaleString()}</div>
-                        </div>
-                        <div class="duration-item">
-                            <div class="duration-fps">Duration</div>
-                            <div class="duration-time">${formatDuration(captures / framerate)}</div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
+            return `
+                <div class="duration-item">
+                    <div class="duration-label">${dur.label}</div>
+                    <div class="duration-time">${formatDuration(captures / framerate)}</div>
+                    <div class="duration-fps">${captures.toLocaleString()} captures</div>
+                </div>`;
+        }).join('');
+
+        displayElement.innerHTML = `
+            <h4>Est. Duration @ ${framerate} FPS (Ongoing)${windowNote}</h4>
+            <div class="duration-grid">${boxes}</div>
+        `;
     }
 }
 
@@ -3550,7 +4445,7 @@ async function performMaintenanceScan(jobId, jobName) {
             </p>
         </div>
     `;
-    modal.classList.add('active');
+    showModal('maintenance-modal');
     
     try {
         maintenanceData = await apiRequest(`/jobs/${jobId}/maintenance/scan`, { method: 'POST' });
@@ -4267,7 +5162,7 @@ function renderDiskChart(data, colors) {
         type: 'doughnut',
         data: {
             labels: [
-                `App Data (${formatBytes(appUsed)})`,
+                `Timelapse Manager (${formatBytes(appUsed)})`,
                 `Other (${formatBytes(otherUsed)})`,
                 `Free (${formatBytes(free)})`
             ],
@@ -4405,6 +5300,23 @@ async function loadSettings() {
     loadWebhookSettings();
     loadTagManager();
     loadSharedVideosList();
+    loadServerPaths();
+    loadExportRetention();
+    
+    // Load version and check for updates
+    try {
+        const ver = await apiRequest('/settings/version');
+        const el = document.getElementById('app-version');
+        if (el) el.textContent = `Timelapse Manager v${ver.version}`;
+        if (ver.update_available && ver.latest) {
+            const badge = document.getElementById('update-badge');
+            if (badge) {
+                badge.textContent = `v${ver.latest} available`;
+                badge.href = ver.release_url || 'https://github.com/kernelkaribou/timelapse-manager/releases';
+                badge.style.display = '';
+            }
+        }
+    } catch (e) { /* non-critical */ }
 }
 
 function updateTimeFormatButtons() {
@@ -4457,11 +5369,29 @@ async function regenerateApiKey() {
 
 // Webhook Settings Functions
 let webhookDirty = false;
+let webhookSnapshot = null;
+
+function getWebhookCurrentValues() {
+    return {
+        url: document.getElementById('webhook-url').value.trim(),
+        enabled: document.getElementById('webhook-enabled').checked,
+        template: document.getElementById('webhook-template').value.trim(),
+        events: [...document.querySelectorAll('.webhook-event-cb:checked')].map(cb => cb.value).sort().join(','),
+    };
+}
 
 function markWebhookDirty() {
-    webhookDirty = true;
+    if (webhookSnapshot) {
+        const cur = getWebhookCurrentValues();
+        webhookDirty = cur.url !== webhookSnapshot.url
+            || cur.enabled !== webhookSnapshot.enabled
+            || cur.template !== webhookSnapshot.template
+            || cur.events !== webhookSnapshot.events;
+    } else {
+        webhookDirty = true;
+    }
     const btn = document.getElementById('webhook-save-btn');
-    if (btn) btn.disabled = false;
+    if (btn) btn.disabled = !webhookDirty;
     updateWebhookToggleState();
 }
 
@@ -4482,7 +5412,13 @@ async function loadWebhookSettings() {
         document.getElementById('webhook-url').value = data.webhook_url || '';
         document.getElementById('webhook-enabled').checked = data.webhook_enabled;
         document.getElementById('webhook-template').value = data.webhook_payload_template || '{"title": "{title}", "message": "{message}"}';
+        // Load event filters — if empty array, check all (backwards-compatible default)
+        const events = data.webhook_events || [];
+        document.querySelectorAll('.webhook-event-cb').forEach(cb => {
+            cb.checked = events.length === 0 || events.includes(cb.value);
+        });
         updateWebhookToggleState();
+        webhookSnapshot = getWebhookCurrentValues();
         webhookDirty = false;
         const btn = document.getElementById('webhook-save-btn');
         if (btn) btn.disabled = true;
@@ -4500,6 +5436,7 @@ async function saveWebhookSettings() {
         webhook_enabled: document.getElementById('webhook-enabled').checked && !!url,
         webhook_url: url,
         webhook_payload_template: template || defaultTemplate,
+        webhook_events: [...document.querySelectorAll('.webhook-event-cb:checked')].map(cb => cb.value),
     };
 
     // If template was empty, update the textarea to show the default
@@ -4527,6 +5464,7 @@ async function saveWebhookSettings() {
             method: 'PUT',
             body: settings
         });
+        webhookSnapshot = getWebhookCurrentValues();
         webhookDirty = false;
         const btn = document.getElementById('webhook-save-btn');
         if (btn) btn.disabled = true;
@@ -4713,11 +5651,10 @@ function renderTagPicker(containerId, selectedTagIds = [], onToggle = null) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    // Store callback and containerId for toggle/inline-create to reference
     container._tagOnToggle = onToggle;
     container._tagPickerId = containerId;
 
-    let html = allTags.map(tag => {
+    container.innerHTML = allTags.map(tag => {
         const isSelected = selectedTagIds.includes(tag.id);
         return `<span class="tag-chip ${isSelected ? 'selected' : ''}" data-tag-id="${tag.id}"
             style="background:${tag.color}22;color:${tag.color};border:1px solid ${tag.color}44;cursor:pointer;opacity:${isSelected ? '1' : '0.4'};"
@@ -4726,33 +5663,49 @@ function renderTagPicker(containerId, selectedTagIds = [], onToggle = null) {
             ${escapeHtml(tag.name)}</span>`;
     }).join('');
 
-    // Inline create button
-    html += `<span class="tag-chip tag-inline-create" onclick="showInlineTagCreate('${containerId}')" title="Create new tag"
-        style="cursor:pointer;opacity:0.5;border:1px dashed var(--border-color);color:var(--text-secondary);background:transparent;">＋ New</span>`;
-
-    container.innerHTML = html;
+    // Render footer: form always in flow (reserves height), button overlays it
+    let footer = container.parentElement.querySelector('.tag-picker-footer');
+    if (!footer) {
+        footer = document.createElement('div');
+        footer.className = 'tag-picker-footer';
+        container.parentElement.appendChild(footer);
+    }
+    const swatchesHTML = TAG_COLORS.map(c =>
+        `<span class="color-swatch${c === '#6366f1' ? ' selected' : ''}" style="background:${c};" data-color="${c}" onclick="selectSwatch(this)"></span>`
+    ).join('');
+    footer.innerHTML = `
+        <span class="tag-create-btn" onclick="showInlineTagCreate('${containerId}')" title="Create new tag">＋ New Tag</span>
+        <div class="tag-inline-form" style="visibility:hidden;">
+            <input type="text" class="form-control" placeholder="New tag name..." maxlength="50" tabindex="-1">
+            <div class="color-swatch-row">${swatchesHTML}</div>
+            <button type="button" class="btn btn-purple btn-sm" tabindex="-1">Add Tag</button>
+            <button type="button" class="btn btn-secondary btn-sm" tabindex="-1">Cancel</button>
+        </div>
+    `;
 }
 
 function showInlineTagCreate(containerId) {
     const container = document.getElementById(containerId);
-    if (!container || container.querySelector('.tag-inline-form')) return;
+    if (!container) return;
+    const footer = container.parentElement.querySelector('.tag-picker-footer');
+    if (!footer) return;
+    const btn = footer.querySelector('.tag-create-btn');
+    const form = footer.querySelector('.tag-inline-form');
+    if (!form || !btn) return;
 
-    const createBtn = container.querySelector('.tag-inline-create');
-    if (createBtn) createBtn.remove();
+    btn.style.display = 'none';
+    form.style.visibility = 'visible';
 
-    const form = document.createElement('div');
-    form.className = 'tag-inline-form';
-    form.innerHTML = `
-        <input type="text" class="form-control" placeholder="Tag name..." maxlength="50" style="width:100px;font-size:0.75rem;padding:0.2rem 0.4rem;">
-        <div class="color-swatch-row" style="gap:2px;">${TAG_COLORS.slice(0, 10).map(c =>
-            `<span class="color-swatch${c === '#6366f1' ? ' selected' : ''}" style="background:${c};width:16px;height:16px;" data-color="${c}" onclick="selectSwatch(this)"></span>`
-        ).join('')}</div>
-        <button class="btn btn-purple btn-sm" style="font-size:0.7rem;padding:0.15rem 0.5rem;" onclick="submitInlineTag('${containerId}')">Add</button>
-        <button class="btn btn-secondary btn-sm" style="font-size:0.7rem;padding:0.15rem 0.4rem;" onclick="cancelInlineTagCreate('${containerId}')">✕</button>
-    `;
-    container.appendChild(form);
-    form.querySelector('input').focus();
-    form.querySelector('input').addEventListener('keydown', e => {
+    // Wire up the buttons now that form is active
+    const input = form.querySelector('input');
+    input.removeAttribute('tabindex');
+    form.querySelectorAll('button').forEach(b => b.removeAttribute('tabindex'));
+    const addBtn = form.querySelectorAll('button')[0];
+    const cancelBtn = form.querySelectorAll('button')[1];
+    addBtn.onclick = () => submitInlineTag(containerId);
+    cancelBtn.onclick = () => cancelInlineTagCreate(containerId);
+    input.focus();
+    input.addEventListener('keydown', e => {
         if (e.key === 'Enter') submitInlineTag(containerId);
         if (e.key === 'Escape') cancelInlineTagCreate(containerId);
     });
@@ -4760,13 +5713,21 @@ function showInlineTagCreate(containerId) {
 
 function cancelInlineTagCreate(containerId) {
     const container = document.getElementById(containerId);
-    const onToggle = container?._tagOnToggle || null;
-    renderTagPicker(containerId, getSelectedTagIds(containerId), onToggle);
+    const footer = container?.parentElement.querySelector('.tag-picker-footer');
+    if (!footer) return;
+    const btn = footer.querySelector('.tag-create-btn');
+    const form = footer.querySelector('.tag-inline-form');
+    if (btn) btn.style.display = '';
+    if (form) {
+        form.style.visibility = 'hidden';
+        form.querySelector('input').value = '';
+    }
 }
 
 async function submitInlineTag(containerId) {
     const container = document.getElementById(containerId);
-    const form = container?.querySelector('.tag-inline-form');
+    const footer = container?.parentElement.querySelector('.tag-picker-footer');
+    const form = footer?.querySelector('.tag-inline-form');
     if (!form) return;
     const name = form.querySelector('input').value.trim();
     const swatchRow = form.querySelector('.color-swatch-row');
@@ -4780,7 +5741,6 @@ async function submitInlineTag(containerId) {
         currentIds.push(newTag.id);
         const onToggle = container._tagOnToggle || null;
         renderTagPicker(containerId, currentIds, onToggle);
-        // Fire callback for the newly added tag
         if (onToggle) onToggle(currentIds);
         showNotification(`Tag "${name}" created`);
     } catch (error) {
@@ -4927,6 +5887,110 @@ function clearTagFilter(wrapId) {
     updateTagFilterTrigger(wrapId);
 }
 
+// ── Status Filter Dropdown ─────────────────────────────────────────────
+
+const JOB_STATUSES = [
+    { value: 'active', label: 'Active', color: 'var(--success-color)' },
+    { value: 'sleeping', label: 'Sleeping', color: 'var(--primary-color)' },
+    { value: 'warning', label: 'Warning', color: 'var(--warning-color)' },
+    { value: 'completed', label: 'Completed', color: 'var(--text-secondary)' },
+    { value: 'disabled', label: 'Disabled', color: 'var(--text-muted, #666)' },
+];
+
+function renderStatusFilter(wrapId, onChange) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    
+    wrap._statusFilterSelected = new Set();
+    wrap._statusFilterOnChange = onChange;
+
+    wrap.innerHTML = `
+        <div class="tag-filter-trigger" onclick="toggleStatusFilterDropdown('${wrapId}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            <span class="tag-filter-label">Status</span>
+        </div>
+        <div class="tag-filter-dropdown" id="${wrapId}-dropdown">
+            <div class="tag-filter-list" id="${wrapId}-list">
+                ${JOB_STATUSES.map(s => `
+                    <div class="tag-filter-item" data-status="${s.value}"
+                         onclick="toggleStatusFilter('${wrapId}', '${s.value}')">
+                        <span class="tag-filter-check"></span>
+                        <span class="tag-filter-dot" style="background:${s.color};"></span>
+                        <span>${s.label}</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+
+    document.addEventListener('click', (e) => {
+        if (!wrap.contains(e.target)) {
+            const dd = document.getElementById(`${wrapId}-dropdown`);
+            if (dd) dd.classList.remove('open');
+            const trigger = wrap.querySelector('.tag-filter-trigger');
+            if (trigger) trigger.classList.remove('active');
+        }
+    });
+}
+
+function toggleStatusFilterDropdown(wrapId) {
+    const dd = document.getElementById(`${wrapId}-dropdown`);
+    const trigger = document.querySelector(`#${wrapId} .tag-filter-trigger`);
+    if (!dd) return;
+    const isOpen = dd.classList.toggle('open');
+    if (trigger) trigger.classList.toggle('active', isOpen);
+}
+
+function toggleStatusFilter(wrapId, status) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    const selected = wrap._statusFilterSelected;
+    if (selected.has(status)) selected.delete(status);
+    else selected.add(status);
+
+    const item = document.querySelector(`#${wrapId}-list .tag-filter-item[data-status="${status}"]`);
+    if (item) item.classList.toggle('selected', selected.has(status));
+
+    updateStatusFilterTrigger(wrapId);
+    if (wrap._statusFilterOnChange) wrap._statusFilterOnChange();
+}
+
+function updateStatusFilterTrigger(wrapId) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    const selected = wrap._statusFilterSelected;
+    const label = wrap.querySelector('.tag-filter-label');
+    if (!label) return;
+    const trigger = wrap.querySelector('.tag-filter-trigger');
+
+    if (selected.size === 0) {
+        label.textContent = 'Status';
+        if (trigger) trigger.classList.remove('active');
+    } else if (selected.size <= 2) {
+        const names = JOB_STATUSES.filter(s => selected.has(s.value)).map(s => s.label);
+        label.textContent = names.join(', ');
+        if (trigger) trigger.classList.add('active');
+    } else {
+        label.innerHTML = `Status <span class="tag-filter-count">${selected.size}</span>`;
+        if (trigger) trigger.classList.add('active');
+    }
+}
+
+function getStatusFilterValues(wrapId) {
+    const wrap = document.getElementById(wrapId);
+    return wrap?._statusFilterSelected ? [...wrap._statusFilterSelected] : [];
+}
+
+function clearStatusFilter(wrapId) {
+    const wrap = document.getElementById(wrapId);
+    if (wrap?._statusFilterSelected) {
+        wrap._statusFilterSelected.clear();
+        const items = document.querySelectorAll(`#${wrapId}-list .tag-filter-item`);
+        items.forEach(i => i.classList.remove('selected'));
+    }
+    updateStatusFilterTrigger(wrapId);
+}
+
 // Nav Warning Badge
 function updateJobWarningBadge(jobs) {
     const jobsLink = document.querySelector('.nav-link[data-view="jobs"]');
@@ -4936,8 +6000,8 @@ function updateJobWarningBadge(jobs) {
     const existing = jobsLink.querySelector('.nav-warning-badge');
     if (existing) existing.remove();
 
-    // Check if any active/sleeping job has a warning
-    const hasWarnings = jobs && jobs.some(j => j.warning_message && j.status !== 'disabled' && j.status !== 'completed');
+    // Check if any job has warning status
+    const hasWarnings = jobs && jobs.some(j => j.status === 'warning');
     if (hasWarnings) {
         const badge = document.createElement('span');
         badge.className = 'nav-warning-badge';
@@ -5018,7 +6082,7 @@ async function scanOrphanedCaptures() {
             </p>
         </div>
     `;
-    modal.classList.add('active');
+    showModal('maintenance-modal');
     
     try {
         const data = await apiRequest('/captures/orphaned');
@@ -5360,7 +6424,7 @@ async function showCapturePreview(captureId) {
         document.getElementById('capture-detail-size').textContent = formatBytes(capture.file_size);
         document.getElementById('capture-detail-path').textContent = capture.file_path;
         
-        document.getElementById('capture-preview-modal').classList.add('active');
+        showModal('capture-preview-modal');
     } catch (error) {
         console.error('Failed to load capture preview:', error);
         showNotification(`Failed to load capture preview: ${error.message}`, 'error');
@@ -5429,6 +6493,7 @@ function toggleCaptureFavoritesFilter() {
 }
 
 let videoFavoritesOnly = false;
+let videoSharedOnly = false;
 
 function toggleVideoFavoritesFilter() {
     videoFavoritesOnly = !videoFavoritesOnly;
@@ -5439,11 +6504,13 @@ function toggleVideoFavoritesFilter() {
     loadVideos();
 }
 
-// Helper to escape HTML
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+function toggleVideoSharedFilter() {
+    videoSharedOnly = !videoSharedOnly;
+    document.getElementById('video-share-filter').classList.toggle('active', videoSharedOnly);
+    if (videoSharedOnly) {
+        document.getElementById('video-filter-reset').style.display = '';
+    }
+    loadVideos();
 }
 
 async function viewJobCaptures(jobId) {

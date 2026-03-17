@@ -74,6 +74,15 @@ def _is_auto_build_due(job: dict, now: datetime) -> bool:
     return now >= last_build_dt + interval
 
 
+def get_next_auto_build_at(job: dict) -> Optional[str]:
+    """Calculate the next auto-build time for a job. Returns ISO string or None."""
+    if not job.get('auto_build_enabled') or not job.get('last_auto_build_at'):
+        return None
+    last_build_dt = parse_iso(job['last_auto_build_at'])
+    interval = timedelta(hours=job.get('auto_build_interval_hours', 168))
+    return to_iso(last_build_dt + interval)
+
+
 def _run_auto_build(job: dict, now: datetime):
     """Execute an auto-build for a job. Runs in a daemon thread.
     The in_progress flag is already set before this function is called."""
@@ -110,7 +119,8 @@ def _run_auto_build(job: dict, now: datetime):
         sanitized_name = re.sub(r'[^\w\s-]', '', job_name).strip()
         video_name = f"{sanitized_name}_auto_{date_str}"
 
-        videos_path = config.DEFAULT_VIDEOS_PATH
+        from .import_service import get_timelapses_path
+        videos_path = get_timelapses_path()
         job_folder = f"{job_id}_{sanitized_name}"
         job_dir = os.path.join(videos_path, job_folder)
         os.makedirs(job_dir, exist_ok=True)

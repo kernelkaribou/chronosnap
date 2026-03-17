@@ -153,6 +153,7 @@ class JobResponse(BaseModel):
     auto_build_in_progress: int = 0
     next_scheduled_capture_at: Optional[str] = None
     next_capture_at: Optional[str] = None
+    next_auto_build_at: Optional[str] = None
     latest_capture: Optional[Dict[str, Any]] = None
     tags: List[TagBrief] = []
     created_at: str
@@ -188,9 +189,10 @@ class TextOverlayConfig(BaseModel):
     enabled: bool = False
     text: str = ""
     font: str = "DejaVu Sans"
-    font_size: int = Field(default=48, ge=8, le=200)
+    font_size: int = Field(default=5, ge=1, le=20, description="Font size as percentage of image height")
     bold: bool = False
     color: str = Field(default="#FFFFFF", pattern=r"^#[0-9a-fA-F]{6}$")
+    color_opacity: float = Field(default=1.0, ge=0.0, le=1.0)
     position: str = Field(default="bottom-left", pattern=r"^(top-left|top-center|top-right|middle-left|middle-center|middle-right|bottom-left|bottom-center|bottom-right)$")
     background: bool = True
     background_color: str = Field(default="#000000", pattern=r"^#[0-9a-fA-F]{6}$")
@@ -209,6 +211,7 @@ class VideoCreate(BaseModel):
     start_time: Optional[str] = None  # ISO datetime string
     end_time: Optional[str] = None  # ISO datetime string
     text_overlay: Optional[TextOverlayConfig] = None
+    tag_ids: Optional[List[int]] = None
 
 
 class VideoResponse(BaseModel):
@@ -236,6 +239,7 @@ class VideoResponse(BaseModel):
     is_favorite: bool = False
     text_overlay: Optional[str] = None
     tags: List[TagBrief] = []
+    share_token: Optional[str] = None
 
 
 class TestUrlResponse(BaseModel):
@@ -274,3 +278,15 @@ class MaintenanceCleanup(BaseModel):
 
 class MaintenanceImport(BaseModel):
     orphaned_files: List[Dict[str, Any]]
+
+
+class DirectoryScanRequest(BaseModel):
+    directory: str
+
+
+class DirectoryImportRequest(BaseModel):
+    name: str
+    directory: str
+    url: Optional[str] = None
+    stream_type: str = "rtsp"
+    interval_seconds: int = Field(default=60, gt=0)

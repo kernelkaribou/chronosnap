@@ -166,16 +166,20 @@ def render_overlay(
         return image
 
     font_name = config.get('font', 'DejaVu Sans')
-    font_size = config.get('font_size', 48)
+    font_size_pct = config.get('font_size', 5.0)
     bold = config.get('bold', False)
     color = config.get('color', '#FFFFFF')
+    color_opacity = config.get('color_opacity', 1.0)
     position = config.get('position', 'bottom-left')
     bg_enabled = config.get('background', True)
     bg_color = config.get('background_color', '#000000')
     bg_opacity = config.get('background_opacity', 0.5)
 
-    font = _load_font(font_name, font_size, bold)
-    color_rgba = _hex_to_rgba(color)
+    # Convert percentage to pixels based on image height
+    font_size_px = max(8, int(image.height * font_size_pct / 100))
+
+    font = _load_font(font_name, font_size_px, bold)
+    color_rgba = _hex_to_rgba(color, color_opacity)
 
     # Work on RGBA copy for transparency support
     if image.mode != 'RGBA':
@@ -185,8 +189,8 @@ def render_overlay(
     overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 
-    text_w, text_h, text_x_off, text_y_off = _get_text_bbox(draw, text, font)
-    bg_pad = int(font_size * 0.25)
+    text_w, text_h, _, _ = _get_text_bbox(draw, text, font)
+    bg_pad = max(int(font_size_px * 0.2), 2)
     box_w = text_w + bg_pad * 2
     box_h = text_h + bg_pad * 2
 
@@ -196,14 +200,16 @@ def render_overlay(
         bg_rgba = _hex_to_rgba(bg_color, bg_opacity)
         draw.rounded_rectangle(
             [x, y, x + box_w, y + box_h],
-            radius=int(font_size * 0.15),
+            radius=int(font_size_px * 0.15),
             fill=bg_rgba,
         )
 
-    # Draw text on the overlay, compensating for font's internal offset
-    text_x = x + bg_pad - text_x_off
-    text_y = y + bg_pad - text_y_off
-    draw.multiline_text((text_x, text_y), text, font=font, fill=color_rgba)
+    # Draw text centered in the background box using anchor
+    center_x = x + box_w / 2
+    center_y = y + box_h / 2
+    draw.multiline_text(
+        (center_x, center_y), text, font=font, fill=color_rgba, anchor='mm',
+    )
 
     # Composite overlay onto image
     result = Image.alpha_composite(image, overlay)
@@ -215,7 +221,7 @@ def render_preview_bytes(
     image_data: Optional[str] = None,
     config: Dict[str, Any] = None,
     variables: Optional[Dict[str, str]] = None,
-    max_width: int = 800,
+    max_width: int = 1920,
 ) -> bytes:
     """Render a preview image with overlay and return as JPEG bytes.
 
@@ -242,10 +248,7 @@ def render_preview_bytes(
         ratio = max_width / img.width
         new_h = int(img.height * ratio)
         img = img.resize((max_width, new_h), Image.LANCZOS)
-        # Scale font size proportionally
-        if 'font_size' in config:
-            config = dict(config)
-            config['font_size'] = max(12, int(config['font_size'] * ratio))
+        # font_size is percentage-based, so it scales automatically with image size
 
     result = render_overlay(img, config, variables)
 

@@ -17,6 +17,8 @@ services:
     volumes:
       - ${PWD}/captures:/captures
       - ${PWD}/timelapses:/timelapses
+      - ${PWD}/imports:/imports
+      - ${PWD}/exports:/exports
       - ${PWD}/data:/app/data
     # Security: Resource limits
     deploy:

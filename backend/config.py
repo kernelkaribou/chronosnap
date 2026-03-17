@@ -15,9 +15,19 @@ DATABASE_PATH = str(DATA_DIR / "timelapse-manager.db")
 # Default paths (hardcoded, customizable per job/video)
 DEFAULT_CAPTURES_PATH = "/captures"
 DEFAULT_VIDEOS_PATH = "/timelapses"
+DEFAULT_IMPORT_PATH = "/imports"
+DEFAULT_EXPORTS_PATH = "/exports"
+
+# Import settings
+IMPORT_STAGING_DIR = str(DATA_DIR / "import-staging")
+MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 10 * 1024 * 1024 * 1024))  # 10GB
+
+# Export settings — archives above this size are built to disk instead of streamed
+EXPORT_STREAM_THRESHOLD = 1 * 1024 * 1024 * 1024  # 1GB
+EXPORT_RETENTION_DAYS = 7  # Auto-cleanup exports older than this
 
 # Default naming patterns
-DEFAULT_CAPTURE_PATTERN = "{job_name}_{num:06d}_{timestamp}"
+DEFAULT_CAPTURE_PATTERN = "{job_name}_{count}_{timestamp}"
 
 # Server settings
 HOST = os.getenv("HOST", "0.0.0.0")

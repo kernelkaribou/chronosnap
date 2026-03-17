@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=__APP_VERSION__">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -58,7 +58,29 @@
             <div id="jobs-view" class="view active">
                 <div class="view-header">
                     <h2>Jobs</h2>
-                    <button class="btn btn-purple" onclick="showCreateJobModal()">+ Create Job</button>
+                    <div style="display:flex;gap:0.5rem;">
+                        <button class="btn compare-btn" onclick="showImportModal()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Import
+                        </button>
+                        <button class="btn btn-purple" onclick="showCreateJobModal()">+ Create Job</button>
+                    </div>
+                </div>
+                <div class="gallery-filters" id="job-filter-bar">
+                    <input type="text" class="gallery-search" id="job-search" placeholder="Search jobs..." oninput="filterJobs()">
+                    <div class="tag-filter-wrap" id="job-status-filter-wrap"></div>
+                    <div class="tag-filter-wrap" id="job-tag-filter-wrap"></div>
+                    <button class="btn btn-secondary btn-sm" id="job-filter-reset" onclick="resetJobFilters()" style="display:none;">Reset</button>
+                    <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;">
+                        <select class="gallery-filter-select" id="job-sort" onchange="filterJobs()">
+                            <option value="created_desc">Newest First</option>
+                            <option value="created_asc">Oldest First</option>
+                            <option value="name_asc">Name A-Z</option>
+                            <option value="name_desc">Name Z-A</option>
+                            <option value="captures_desc">Most Captures</option>
+                        </select>
+                        <span class="gallery-count" id="job-count"></span>
+                    </div>
                 </div>
                 <div id="jobs-list" class="jobs-grid"></div>
             </div>
@@ -83,12 +105,30 @@
                     <select class="gallery-filter-select" id="video-month-filter" onchange="filterVideos()" disabled>
                         <option value="">All Months</option>
                     </select>
+                    <select class="gallery-filter-select" id="video-source-filter" onchange="filterVideos()">
+                        <option value="">All Sources</option>
+                        <option value="built">Built</option>
+                        <option value="imported">Imported</option>
+                    </select>
                     <button class="btn btn-sm fav-filter-btn" id="video-fav-filter" onclick="toggleVideoFavoritesFilter()" title="Show favorites only">
-                        <span class="fav-heart">♥</span>
+                        <svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                    </button>
+                    <button class="btn btn-sm share-filter-btn" id="video-share-filter" onclick="toggleVideoSharedFilter()" title="Show shared only">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
                     </button>
                     <div class="tag-filter-wrap" id="video-tag-filter-wrap"></div>
                     <button class="btn btn-secondary btn-sm" id="video-filter-reset" onclick="resetVideoFilters()" style="display:none;" title="Clear all filters">Reset</button>
-                    <span class="gallery-count" id="video-count"></span>
+                    <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;">
+                        <select class="gallery-filter-select" id="video-sort" onchange="filterVideos()">
+                            <option value="created_desc">Newest First</option>
+                            <option value="created_asc">Oldest First</option>
+                            <option value="name_asc">Name A-Z</option>
+                            <option value="name_desc">Name Z-A</option>
+                            <option value="duration_desc">Longest</option>
+                            <option value="duration_asc">Shortest</option>
+                        </select>
+                        <span class="gallery-count" id="video-count"></span>
+                    </div>
                 </div>
                 <div class="compare-mode-banner" id="compare-mode-banner" style="display:none;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="10" height="18" rx="1"/><rect x="13" y="3" width="10" height="18" rx="1"/><polyline points="3,17 6,12 9,17"/><polyline points="15,17 18,12 21,17"/></svg>
@@ -99,8 +139,8 @@
                     <span class="selection-clear" onclick="videoSelection.clear()" title="Clear selection">&times;</span>
                     <span id="video-selected-count">0 selected</span>
                     <button class="btn btn-secondary btn-sm" id="video-toggle-selection-btn" onclick="videoSelection.toggleAll()">Select Visible</button>
-                    <button class="btn btn-sm btn-fav-bulk" onclick="videoSelection.favoriteSelected(true)" title="Favorite selected"><span class="fav-heart">♥</span> Favorite</button>
-                    <button class="btn btn-sm btn-unfav-bulk" onclick="videoSelection.favoriteSelected(false)" title="Unfavorite selected"><span class="fav-heart">♥</span> Unfavorite</button>
+                    <button class="btn btn-sm btn-fav-bulk" onclick="videoSelection.favoriteSelected(true)" title="Favorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Favorite</button>
+                    <button class="btn btn-sm btn-unfav-bulk" onclick="videoSelection.favoriteSelected(false)" title="Unfavorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Unfavorite</button>
                     <button class="btn btn-danger btn-sm" onclick="videoSelection.deleteSelected()">Delete Selected</button>
                 </div>
                 <div id="videos-list" class="videos-grid"></div>
@@ -111,7 +151,7 @@
                 <div class="view-header">
                     <h2>Captures</h2>
                     <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-purple" onclick="openCompareModal()">
+                        <button class="btn compare-btn" onclick="openCompareModal()">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 0.25rem;">
                                 <rect x="2" y="2" width="20" height="20" rx="2"/>
                                 <path d="M12 2v20"/>
@@ -121,7 +161,7 @@
                             </svg>
                             Compare
                         </button>
-                        <button class="btn btn-secondary" onclick="scanOrphanedCaptures()">
+                        <button class="btn btn-purple" onclick="scanOrphanedCaptures()">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 0.25rem;">
                                 <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
                             </svg>
@@ -138,20 +178,22 @@
                     <input type="datetime-local" class="gallery-filter-input" id="captures-start-time" onchange="applyCaptureSortAndFilter()" title="From">
                     <input type="datetime-local" class="gallery-filter-input" id="captures-end-time" onchange="applyCaptureSortAndFilter()" title="To">
                     <button class="btn btn-sm fav-filter-btn" id="captures-fav-filter" onclick="toggleCaptureFavoritesFilter()" title="Show favorites only">
-                        <span class="fav-heart">♥</span>
+                        <svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                     </button>
                     <div class="tag-filter-wrap" id="captures-tag-filter-wrap"></div>
-                    <select class="gallery-filter-select" id="captures-sort-order" onchange="applyCaptureSortAndFilter()">
-                        <option value="desc">Newest</option>
-                        <option value="asc">Oldest</option>
-                    </select>
-                    <select class="gallery-filter-select" id="captures-page-size" onchange="applyCaptureSortAndFilter()">
-                        <option value="16" selected>16</option>
-                        <option value="32">32</option>
-                        <option value="64">64</option>
-                    </select>
                     <button class="btn btn-secondary btn-sm" id="captures-filter-reset" onclick="clearCaptureFilters()" style="display:none;" title="Clear all filters">Reset</button>
-                    <span class="gallery-count" id="captures-count"></span>
+                    <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;">
+                        <select class="gallery-filter-select" id="captures-sort-order" onchange="applyCaptureSortAndFilter()">
+                            <option value="desc">Newest</option>
+                            <option value="asc">Oldest</option>
+                        </select>
+                        <select class="gallery-filter-select" id="captures-page-size" onchange="applyCaptureSortAndFilter()">
+                            <option value="16" selected>16</option>
+                            <option value="32">32</option>
+                            <option value="64">64</option>
+                        </select>
+                        <span class="gallery-count" id="captures-count"></span>
+                    </div>
                 </div>
 
                 <!-- Selection controls -->
@@ -159,8 +201,8 @@
                     <span class="selection-clear" onclick="captureSelection.clear()" title="Clear selection">&times;</span>
                     <span id="captures-selected-count">0 selected</span>
                     <button class="btn btn-secondary btn-sm" id="toggle-selection-btn" onclick="captureSelection.toggleAll()">Select Visible</button>
-                    <button class="btn btn-sm btn-fav-bulk" onclick="captureSelection.favoriteSelected(true)" title="Favorite selected"><span class="fav-heart">♥</span> Favorite</button>
-                    <button class="btn btn-sm btn-unfav-bulk" onclick="captureSelection.favoriteSelected(false)" title="Unfavorite selected"><span class="fav-heart">♥</span> Unfavorite</button>
+                    <button class="btn btn-sm btn-fav-bulk" onclick="captureSelection.favoriteSelected(true)" title="Favorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Favorite</button>
+                    <button class="btn btn-sm btn-unfav-bulk" onclick="captureSelection.favoriteSelected(false)" title="Unfavorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Unfavorite</button>
                     <button class="btn btn-danger btn-sm" onclick="captureSelection.deleteSelected()">Delete Selected</button>
                 </div>
 
@@ -254,8 +296,10 @@
                         </p>
                         <div class="api-key-container">
                             <input type="text" id="api-key-display" class="form-control api-key-input" readonly>
-                            <button class="btn btn-secondary" onclick="copyApiKey()">Copy</button>
-                            <button class="btn btn-purple" onclick="regenerateApiKey()">Regenerate</button>
+                            <button class="btn-icon" onclick="copyApiKey()" title="Copy" style="padding: 0.4rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            </button>
+                            <button class="btn btn-secondary compare-btn" onclick="regenerateApiKey()">Regenerate</button>
                         </div>
                     </div>
                     
@@ -269,6 +313,31 @@
                                 <button id="time-format-24" class="btn btn-sm" onclick="toggleTimeFormat('24')">24-hour</button>
                                 <button id="time-format-12" class="btn btn-sm" onclick="toggleTimeFormat('12')">12-hour</button>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Server Paths Section -->
+                    <div class="settings-section">
+                        <h3>Server Paths</h3>
+                        <p class="settings-description">Server-side directories the container uses. Must be mounted as Docker volumes.</p>
+                        <div style="display:flex;gap:1rem;margin-top:0.75rem;">
+                            <div style="flex:1;min-width:0;" id="path-row-captures"></div>
+                            <div style="flex:1;min-width:0;" id="path-row-timelapses"></div>
+                        </div>
+                        <div style="display:flex;gap:1rem;margin-top:0.75rem;">
+                            <div style="flex:1;min-width:0;" id="path-row-import"></div>
+                            <div style="flex:1;min-width:0;" id="path-row-export"></div>
+                        </div>
+                    </div>
+
+                    <!-- Export Retention Section -->
+                    <div class="settings-section">
+                        <h3>Export Retention</h3>
+                        <p class="settings-description">Automatically clean up export archives older than this many days. Set to 0 to keep exports indefinitely.</p>
+                        <div style="display:flex;gap:0.75rem;align-items:center;margin-top:0.75rem;">
+                            <input type="number" id="export-retention-days" class="form-control" min="0" step="1" style="width:5rem;text-align:center;">
+                            <span style="color:var(--text-secondary);font-size:0.85rem;">days</span>
+                            <button class="btn btn-sm btn-purple" onclick="saveExportRetention()" style="margin-left:0.5rem;">Save</button>
                         </div>
                     </div>
 
@@ -298,8 +367,25 @@
                                     <code>{title}</code> <code>{message}</code> <code>{event}</code> <code>{job_name}</code> <code>{job_id}</code> <code>{failure_count}</code> <code>{error_message}</code>
                                 </div>
                             </div>
+                            <div class="webhook-row">
+                                <label class="webhook-label">Events</label>
+                                <div class="webhook-events" style="display:flex; flex-wrap:wrap; gap:0.5rem 1rem;">
+                                    <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;">
+                                        <input type="checkbox" class="webhook-event-cb" value="warning" onchange="markWebhookDirty()"> Capture Warnings
+                                    </label>
+                                    <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;">
+                                        <input type="checkbox" class="webhook-event-cb" value="recovered" onchange="markWebhookDirty()"> Recovery
+                                    </label>
+                                    <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;">
+                                        <input type="checkbox" class="webhook-event-cb" value="completed" onchange="markWebhookDirty()"> Job Completed
+                                    </label>
+                                    <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;">
+                                        <input type="checkbox" class="webhook-event-cb" value="auto_build_complete" onchange="markWebhookDirty()"> Auto-Build
+                                    </label>
+                                </div>
+                            </div>
                             <div class="webhook-actions">
-                                <button class="btn btn-secondary" onclick="testWebhook()">Test Webhook</button>
+                                <button class="btn btn-secondary compare-btn" onclick="testWebhook()">Test Webhook</button>
                                 <button class="btn btn-purple" id="webhook-save-btn" onclick="saveWebhookSettings()" disabled>Save</button>
                             </div>
                         </div>
@@ -327,6 +413,17 @@
                         <div id="shared-videos-list" class="shared-videos-list">
                             <!-- Populated dynamically -->
                         </div>
+                    </div>
+                    
+                    <div style="margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between;">
+                        <div style="display:flex;align-items:center;gap:0.5rem;">
+                            <span style="font-size:0.75rem;color:var(--text-secondary);" id="app-version"></span>
+                            <a id="update-badge" href="#" target="_blank" rel="noopener" style="display:none;font-size:0.65rem;background:var(--primary);color:#fff;padding:0.15rem 0.5rem;border-radius:999px;text-decoration:none;">Update available</a>
+                        </div>
+                        <a href="https://github.com/kernelkaribou/timelapse-manager" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--text-secondary);text-decoration:none;display:inline-flex;align-items:center;gap:0.3rem;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                            GitHub
+                        </a>
                     </div>
                 </div>
             </div>
@@ -362,157 +459,171 @@
                 <span class="close" onclick="closeModal('create-job-modal')">&times;</span>
             </div>
             <form id="create-job-form" onsubmit="createJob(event)">
-                <div class="form-group">
+                <div class="form-group" style="margin-bottom: 1.25rem;">
                     <label>Job Name *</label>
-                    <input type="text" id="job_name" class="form-control" required>
-                </div>
-                
-                <div class="form-group">
-                    <label>Stream URL *</label>
-                    <div style="display: flex; gap: 0.5rem; align-items: center;">
-                        <input type="text" id="job_url" class="form-control" placeholder="http:// or rtsp://" required style="flex: 1;">
-                        <button type="button" class="btn btn-secondary" onclick="testUrl()" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                <circle cx="12" cy="12" r="3"></circle>
-                            </svg>
-                            Preview
-                        </button>
-                    </div>
-                    <input type="hidden" id="stream_type" value="http">
-                    <div id="test-result" class="test-result"></div>
+                    <input type="text" id="job_name" class="form-control" required oninput="updateNamingPreview()">
                 </div>
 
-                <div class="form-row">
-                    <div class="form-group flex-1">
-                        <label>Start Date & Time *</label>
-                        <input type="datetime-local" id="start_datetime" class="form-control" required>
-                    </div>
-                    <div class="form-group flex-1">
-                        <label>End Date & Time</label>
-                        <input type="datetime-local" id="end_datetime" class="form-control">
-                        <small>Leave empty for ongoing capture</small>
+                <div class="form-section">
+                    <div class="form-section-title">Source</div>
+                    <div class="form-group">
+                        <label>Stream URL *</label>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="text" id="job_url" class="form-control" placeholder="http:// or rtsp://" required style="flex: 1; min-width: 0;">
+                            <button type="button" class="btn btn-secondary compare-btn" onclick="testUrl()" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                Preview
+                            </button>
+                            <div style="flex: 0 0 auto; text-align: center;">
+                                <label style="font-size: 0.75rem; white-space: nowrap;">Warn After</label>
+                                <input type="number" id="warning_threshold" class="form-control" min="1" max="50" value="3" style="width: 72px;">
+                                <small style="font-size: 0.65rem;">failures</small>
+                            </div>
+                        </div>
+                        <input type="hidden" id="stream_type" value="http">
+                        <div id="test-result" class="test-result"></div>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                        <input type="checkbox" id="time_window_enabled" style="cursor: pointer;" onchange="toggleTimeWindow()">
-                        <span>Enable Daily Time Window</span>
-                    </label>
-                    <small>Restrict captures to a specific time range each day, otherwise always capture on specified interval</small>
-                </div>
-
-                <div id="time-window-fields" style="display: none;">
+                <div class="form-section">
+                    <div class="form-section-title">Schedule</div>
                     <div class="form-row">
                         <div class="form-group flex-1">
-                            <label>Window Start Time *</label>
-                            <div class="time-picker-container">
-                                <input type="time" id="time_window_start_time" class="form-control">
+                            <label>Start Date & Time *</label>
+                            <input type="datetime-local" id="start_datetime" class="form-control" required>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>End Date & Time</label>
+                            <input type="datetime-local" id="end_datetime" class="form-control">
+                            <small style="color: var(--text-secondary);">Leave empty for ongoing capture</small>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
+                                <input type="checkbox" id="time_window_enabled" style="cursor: pointer;" onchange="toggleTimeWindow()">
+                                <span><strong>Daily Time Window</strong></span>
+                            </label>
+                            <div id="time-window-fields" class="toggle-fields disabled" style="display: flex; align-items: center; gap: 0.5rem;">
+                                <label style="font-size: 0.8rem; margin: 0;">Start</label>
+                                <div class="time-picker-container" style="margin: 0;">
+                                    <input type="time" id="time_window_start_time" class="form-control" style="padding: 0.3rem 0.5rem;">
+                                </div>
+                                <input type="hidden" id="time_window_start">
+                                <label style="font-size: 0.8rem; margin: 0;">End</label>
+                                <div class="time-picker-container" style="margin: 0;">
+                                    <input type="time" id="time_window_end_time" class="form-control" style="padding: 0.3rem 0.5rem;">
+                                </div>
+                                <input type="hidden" id="time_window_end">
                             </div>
-                            <input type="hidden" id="time_window_start">
-                            <small>Start of daily capture window</small>
                         </div>
-                        <div class="form-group flex-1">
-                            <label>Window End Time *</label>
-                            <div class="time-picker-container">
-                                <input type="time" id="time_window_end_time" class="form-control">
+                    </div>
+
+                    <div style="display: flex; gap: 0.75rem; align-items: stretch;">
+                        <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 0.5rem;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Capture Interval (s) *</label>
+                                <input type="number" id="interval_seconds" class="form-control" min="10" value="60" required onchange="updateDurationEstimate()" style="width: 120px;">
                             </div>
-                            <input type="hidden" id="time_window_end">
-                            <small>End of daily capture window (can be next day)</small>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Timelapse FPS</label>
+                                <input type="number" id="framerate" class="form-control" min="1" max="120" value="30" style="width: 120px;">
+                            </div>
                         </div>
-                    </div>
-                    <div class="info-box" style="margin-bottom: 1rem;">
-                        <p style="margin: 0; font-size: 0.875rem;">
-                            <strong>Note:</strong> The time window can span days. For example, 22:00 to 02:00 will capture from 10 PM to 2 AM.
-                        </p>
+                        <div class="duration-estimate" id="duration-estimate" style="flex: 1; margin: 0;"></div>
                     </div>
                 </div>
 
-                <div class="form-row">
-                    <div class="form-group flex-1">
-                        <label>Capture Interval (seconds) *</label>
-                        <input type="number" id="interval_seconds" class="form-control" min="10" value="60" required onchange="updateDurationEstimate()">
-                        <small>Minimum 10 seconds</small>
+                <div class="form-section">
+                    <div class="form-section-title">Auto Build</div>
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
+                            <input type="checkbox" id="auto_build_enabled" style="cursor: pointer;" onchange="toggleAutoBuildFields()">
+                            <span><strong>Enable Auto-Build</strong></span>
+                        </label>
+                        <small style="color: var(--text-secondary); display: block; margin-left: 1.5rem;">Automatically build timelapse videos on a recurring schedule</small>
                     </div>
-                    <div class="form-group flex-1">
-                        <label>Target Framerate</label>
-                        <input type="number" id="framerate" class="form-control" min="1" max="120" value="30">
-                        <small style="color: var(--text-secondary);">Frames per second for generated timelapse videos, for estimation purposes only</small>
-                    </div>
-                    <div class="form-group" style="flex: 0 0 120px;">
-                        <label>Warning After</label>
-                        <input type="number" id="warning_threshold" class="form-control" min="1" max="50" value="3">
-                        <small>consecutive failures</small>
+
+                    <div id="auto-build-fields" class="toggle-fields disabled" style="margin-bottom: 1rem; margin-left: 1.5rem;">
+                        <div class="form-group" style="margin-bottom: 0.75rem;">
+                            <label>Build Interval</label>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <input type="number" id="auto_build_interval_hours" class="form-control" min="1" max="8760" value="168" style="width: 100px;">
+                                <small style="color: var(--text-secondary);">hours</small>
+                                <div class="auto-build-presets" style="display: flex; gap: 0.25rem; flex-wrap: wrap; margin-left: 0.5rem;">
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 1)">Hourly</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 24)">Daily</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 168)">Weekly</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 720)">Monthly</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <label>FPS</label>
+                                <input type="number" id="auto_build_fps" class="form-control" min="1" max="120" value="30">
+                            </div>
+                            <div class="form-group flex-1">
+                                <label>Quality</label>
+                                <select id="auto_build_quality" class="form-control">
+                                    <option value="low">Low</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="high">High</option>
+                                    <option value="lossless">Lossless</option>
+                                </select>
+                            </div>
+                            <div class="form-group flex-1">
+                                <label>Resolution</label>
+                                <select id="auto_build_resolution" class="form-control">
+                                    <option value="3840x2160">4K (3840x2160)</option>
+                                    <option value="1920x1080" selected>Full HD (1920x1080)</option>
+                                    <option value="1280x720">HD (1280x720)</option>
+                                    <option value="640x480">SD (640x480)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="create-ab-overlay-container"></div>
                     </div>
                 </div>
 
-                <div class="duration-estimate" id="duration-estimate"></div>
-
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
-                        <input type="checkbox" id="auto_build_enabled" style="cursor: pointer;" onchange="toggleAutoBuildFields()">
-                        <span><strong>Enable Auto-Build</strong></span>
-                    </label>
-                    <small style="color: var(--text-secondary); display: block; margin-left: 1.5rem;">Automatically build timelapse videos on a recurring schedule</small>
+                <div class="form-section">
+                    <div class="form-section-title">Tags</div>
+                    <div class="form-group">
+                        <div class="tag-picker" id="create-job-tags"></div>
+                    </div>
                 </div>
 
-                <div id="auto-build-fields" style="display: none; margin-bottom: 1rem; margin-left: 1.5rem;">
-                    <div class="form-group" style="margin-bottom: 0.75rem;">
-                        <label>Build Interval</label>
-                        <div class="auto-build-presets">
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 1)">Hourly</button>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 6)">6 Hours</button>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 24)">Daily</button>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 168)">Weekly</button>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('auto_build_interval_hours', 720)">Monthly</button>
+                <div class="form-section">
+                    <div class="form-section-title">Storage</div>
+                    <div style="display:flex;gap:1rem;">
+                        <div class="form-group" style="flex:1;min-width:0;">
+                            <label>Capture Path</label>
+                            <div style="display:flex;gap:0.5rem;align-items:center;">
+                                <input type="text" id="capture_path" class="form-control" style="flex:1;opacity:0.6;" readonly>
+                                <button type="button" class="btn-icon" id="capture-path-edit-btn" onclick="toggleCreatePathEdit(true)" title="Edit">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                </button>
+                                <button type="button" class="btn-icon" id="capture-path-save-btn" onclick="toggleCreatePathEdit(false)" title="Confirm" style="display:none;color:var(--success-color);">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                </button>
+                                <button type="button" class="btn-icon" id="capture-path-cancel-btn" onclick="cancelCreatePathEdit()" title="Cancel" style="display:none;color:var(--danger-color);">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                            </div>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
-                            <input type="number" id="auto_build_interval_hours" class="form-control" min="1" max="8760" value="168" style="width: 100px;">
-                            <small style="color: var(--text-secondary);">hours</small>
+                        <div class="form-group" style="flex:1;min-width:0;">
+                            <label>Naming Pattern</label>
+                            <input type="text" id="naming_pattern" class="form-control" oninput="updateNamingPreview()">
+                            <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.25rem;">
+                                <span>Variables: <code>{job_name}</code> <code>{count}</code> <code>{timestamp}</code></span>
+                                <span id="naming-preview" style="font-family:monospace;display:block;margin-top:0.15rem;"></span>
+                            </div>
                         </div>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group flex-1">
-                            <label>FPS</label>
-                            <input type="number" id="auto_build_fps" class="form-control" min="1" max="120" value="30">
-                        </div>
-                        <div class="form-group flex-1">
-                            <label>Quality</label>
-                            <select id="auto_build_quality" class="form-control">
-                                <option value="low">Low</option>
-                                <option value="medium" selected>Medium</option>
-                                <option value="high">High</option>
-                                <option value="lossless">Lossless</option>
-                            </select>
-                        </div>
-                        <div class="form-group flex-1">
-                            <label>Resolution</label>
-                            <select id="auto_build_resolution" class="form-control">
-                                <option value="3840x2160">4K (3840x2160)</option>
-                                <option value="1920x1080" selected>Full HD (1920x1080)</option>
-                                <option value="1280x720">HD (1280x720)</option>
-                                <option value="640x480">SD (640x480)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div id="create-ab-overlay-container"></div>
-                </div>
-
-                <div class="form-group">
-                    <label>Tags</label>
-                    <div class="tag-picker" id="create-job-tags"></div>
-                </div>
-
-                <div class="form-group">
-                    <label>Capture Path</label>
-                    <input type="text" id="capture_path" class="form-control" placeholder="Leave empty for default">
-                </div>
-
-                <div class="form-group">
-                    <label>Capture Naming Pattern</label>
-                    <input type="text" id="naming_pattern" class="form-control" placeholder="Leave empty for default">
-                    <small>Available: {job_name}, {num:06d}, {timestamp}</small>
                 </div>
 
                 <div class="modal-footer">
@@ -538,33 +649,26 @@
     <div id="process-video-modal" class="modal">
         <div class="modal-content large">
             <div class="modal-header">
-                <h3>Process Timelapse Video</h3>
+                <h3>Build Timelapse</h3>
                 <span class="close" onclick="closeModal('process-video-modal')">&times;</span>
             </div>
             <form id="process-video-form" onsubmit="processVideo(event)">
                 <input type="hidden" id="process_job_id">
-                <div class="builder-layout">
-                <div class="builder-fields">
 
-                <div class="form-group" id="job-selector-group">
-                    <label>Job *</label>
-                    <select id="process_job_select" class="form-control" required onchange="onJobSelectChange()">
-                        <option value="">Select a job...</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label>Video Name *</label>
-                    <input type="text" id="video_name" class="form-control" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Output Path *</label>
-                    <input type="text" id="video_output_path" class="form-control" required>
-                    <small>Directory where the video file will be saved</small>
+                <div class="form-row">
+                    <div class="form-group flex-1" id="job-selector-group">
+                        <label>Job *</label>
+                        <select id="process_job_select" class="form-control" required onchange="onJobSelectChange()">
+                            <option value="">Select a job...</option>
+                        </select>
+                    </div>
+                    <div class="form-group flex-1">
+                        <label>Video Name *</label>
+                        <input type="text" id="video_name" class="form-control" required>
+                    </div>
                 </div>
 
-              <div class="form-row">
+                <div class="form-row">
                     <div class="form-group flex-1">
                         <label>Resolution *</label>
                         <select id="video_resolution" class="form-control" required onchange="toggleCustomResolution()">
@@ -575,7 +679,7 @@
                             <option value="custom">Custom</option>
                         </select>
                     </div>
-                    <div class="form-group flex-1">
+                    <div class="form-group" style="flex: 0.75;">
                         <label>Quality *</label>
                         <select id="video_quality" class="form-control" required>
                             <option value="low">Low</option>
@@ -583,6 +687,14 @@
                             <option value="high" selected>High</option>
                             <option value="lossless">Lossless</option>
                         </select>
+                    </div>
+                    <div class="form-group" style="flex: 0.75;">
+                        <label>Framerate (FPS) *</label>
+                        <input type="number" id="video_framerate" class="form-control" min="1" value="30" required>
+                    </div>
+                    <div class="form-group" style="flex: 1.5;">
+                        <label>Estimated Duration</label>
+                        <div class="duration-estimate duration-estimate-inline" id="video-duration-estimate" style="margin-top: 0.2rem;"></div>
                     </div>
                 </div>
 
@@ -597,14 +709,18 @@
                     </div>
                 </div>
 
-                <div class="form-row">
-                    <div class="form-group flex-1">
-                        <label>Framerate (FPS) *</label>
-                        <input type="number" id="video_framerate" class="form-control" min="1" value="30" required>
-                    </div>
-                    <div class="form-group flex-1">
-                        <label>Estimated Duration</label>
-                        <div class="duration-estimate" id="video-duration-estimate" style="margin-top: 0.2rem;"></div>
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
+                            <input type="checkbox" id="use_range" style="cursor: pointer;" onchange="toggleFieldGroup('use_range', 'capture-range-fields')">
+                            <span><strong>Custom Time Range</strong></span>
+                        </label>
+                        <div id="capture-range-fields" class="toggle-fields disabled" style="display: flex; align-items: center; gap: 0.5rem;">
+                            <label style="font-size: 0.8rem; margin: 0;">Start</label>
+                            <input type="datetime-local" id="video_start_datetime" class="form-control" style="padding: 0.3rem 0.5rem;">
+                            <label style="font-size: 0.8rem; margin: 0;">End</label>
+                            <input type="datetime-local" id="video_end_datetime" class="form-control" style="padding: 0.3rem 0.5rem;">
+                        </div>
                     </div>
                 </div>
 
@@ -612,29 +728,7 @@
                     <strong>Capture Range:</strong> <span id="capture-time-range"></span>
                 </div>
 
-                <div class="form-group">
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <input type="checkbox" id="use_range">
-                        <span>Use custom time range</span>
-                    </div>
-                </div>
-
-                <div id="capture-range" style="display: none;">
-                    <div class="form-group">
-                        <label>Custom Time Range</label>
-                        <div style="display: flex; gap: 0.75rem; align-items: center;">
-                            <span style="color: var(--text-secondary); font-size: 0.85rem; white-space: nowrap;">Start</span>
-                            <input type="datetime-local" id="video_start_datetime" class="form-control" style="flex: 1; min-width: 0;">
-                            <span style="color: var(--text-secondary); font-size: 0.85rem; white-space: nowrap;">End</span>
-                            <input type="datetime-local" id="video_end_datetime" class="form-control" style="flex: 1; min-width: 0;">
-                        </div>
-                    </div>
-                </div>
-
-                <div id="build-overlay-container"></div>
-
-                </div><!-- .builder-fields -->
-                <div class="builder-preview" id="builder-preview">
+                <div class="builder-preview" id="builder-preview" style="margin-bottom: 1rem;">
                     <div class="builder-preview-placeholder" id="builder-preview-placeholder">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
                             <rect x="2" y="2" width="20" height="20" rx="2"/>
@@ -644,11 +738,34 @@
                         <span>Select a job to preview</span>
                     </div>
                     <div class="builder-preview-image" id="builder-preview-image" style="display:none;">
-                        <img id="job-preview-img" alt="Latest capture">
+                        <img id="job-preview-img" alt="Latest capture" onclick="openOverlayLightbox(this)" style="cursor: pointer;" title="Click to enlarge">
                         <span id="job-preview-label"></span>
                     </div>
                 </div>
-                </div><!-- .builder-layout -->
+
+                <div id="build-overlay-container"></div>
+
+                <div class="form-group" style="margin-top: 0.75rem;">
+                    <label>Tags</label>
+                    <div class="tag-picker" id="build-video-tags"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>Output Path *</label>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="text" id="video_output_path" class="form-control" required readonly style="flex: 1; opacity: 0.6;">
+                        <button type="button" class="btn-icon" id="output-path-edit-btn" onclick="toggleOutputPathEdit(true)" title="Edit" style="padding: 0.4rem;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button type="button" class="btn-icon" id="output-path-save-btn" onclick="toggleOutputPathEdit(false)" title="Save" style="padding: 0.4rem; display: none; color: var(--success-color);">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </button>
+                        <button type="button" class="btn-icon" id="output-path-cancel-btn" onclick="cancelOutputPathEdit()" title="Cancel" style="padding: 0.4rem; display: none; color: var(--danger-color);">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                    <small>Directory where the video file will be saved</small>
+                </div>
 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" onclick="closeModal('process-video-modal')">Cancel</button>
@@ -842,7 +959,98 @@
         </div>
     </div>
 
+    <!-- Import Modal (redesigned with split panels) -->
+    <div id="import-modal" class="modal">
+        <div class="modal-content" style="max-width:800px;">
+            <div class="modal-header">
+                <h3>Import</h3>
+                <span class="close" onclick="closeModal('import-modal')">&times;</span>
+            </div>
+            <div style="padding:1.5rem;">
+                <!-- Source selection panels -->
+                <div id="import-source-panels" style="display:flex;gap:1.5rem;min-height:280px;">
+                    <!-- Left: Server Path Browser (70%) -->
+                    <div style="flex:7;display:flex;flex-direction:column;min-width:0;">
+                        <h4 style="margin:0 0 0.75rem;font-size:0.9rem;color:var(--text-secondary);">Server Path</h4>
+                        <div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;flex:1;display:flex;flex-direction:column;overflow:hidden;">
+                            <div style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--border-color);display:flex;align-items:center;gap:0.5rem;">
+                                <button class="btn-icon" onclick="browseImportParent()" title="Up" id="import-browse-up" style="padding:2px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                                </button>
+                                <small id="import-browse-path" style="color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">/imports</small>
+                            </div>
+                            <div id="import-browse-list" style="flex:1;overflow-y:auto;padding:0.25rem 0;min-height:160px;">
+                                <!-- Populated dynamically -->
+                            </div>
+                            <div style="padding:0.5rem 0.75rem;border-top:1px solid var(--border-color);display:flex;gap:0.5rem;justify-content:flex-end;">
+                                <button class="btn btn-purple btn-sm" id="import-scan-btn" onclick="scanImportCurrentPath()" disabled>Import</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Right: Upload / Drag & Drop (30%) -->
+                    <div style="flex:3;display:flex;flex-direction:column;">
+                        <h4 style="margin:0 0 0.75rem;font-size:0.9rem;color:var(--text-secondary);">Upload</h4>
+                        <div id="import-drop-zone" class="import-drop-zone"
+                             ondragover="event.preventDefault();this.classList.add('drag-over')"
+                             ondragleave="if (!this.contains(event.relatedTarget)) this.classList.remove('drag-over')"
+                             ondrop="handleImportDrop(event)">
+                            <div style="text-align:center;">
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-secondary);margin-bottom:0.5rem;">
+                                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                                <p style="color:var(--text-secondary);font-size:0.85rem;margin:0;">Drop files or folders here</p>
+                                <p style="color:var(--text-secondary);font-size:0.75rem;margin:0.25rem 0 0.75rem;">Images, videos, or archives</p>
+                                <div style="display:flex;gap:0.5rem;justify-content:center;">
+                                    <button class="compare-btn" onclick="document.getElementById('import-folder-input').click()" style="padding:0.4rem 1rem;font-size:0.85rem;">Browse</button>
+                                </div>
+                                <input type="file" id="import-folder-input" webkitdirectory style="display:none" onchange="handleImportFiles(this.files)">
+                            </div>
+                        </div>
+                        <div id="import-upload-progress" style="display:none;margin-top:0.5rem;">
+                            <div style="background:var(--bg-secondary);border-radius:4px;overflow:hidden;height:6px;">
+                                <div id="import-progress-bar" style="height:100%;background:var(--purple);width:0%;transition:width 0.3s;"></div>
+                            </div>
+                            <small id="import-progress-text" style="color:var(--text-secondary);font-size:0.75rem;">Uploading...</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Staging Preview (hidden until analysis complete) -->
+                <div id="import-staging-preview" style="display:none;margin-top:1.5rem;">
+                    <div style="border-top:1px solid var(--border-color);padding-top:1rem;">
+                        <h4 style="margin:0 0 0.75rem;">Analysis Results</h4>
+
+                        <!-- Images summary -->
+                        <div id="import-preview-images" style="display:none;margin-bottom:1rem;">
+                            <div class="info-box" id="import-images-info"></div>
+                            <div class="form-group" style="margin-top:0.75rem;">
+                                <label>Job Name *</label>
+                                <input type="text" id="import-job-name" class="form-control" placeholder="My Timelapse">
+                            </div>
+                        </div>
+
+                        <!-- Videos summary -->
+                        <div id="import-preview-videos" style="display:none;margin-bottom:1rem;">
+                            <div id="import-videos-list"></div>
+                        </div>
+
+                        <!-- Errors -->
+                        <div id="import-preview-errors" style="display:none;margin-bottom:1rem;">
+                            <div class="info-box" style="border-color:var(--danger);" id="import-errors-info"></div>
+                        </div>
+
+                        <!-- Actions -->
+                        <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:1rem;">
+                            <button class="btn btn-secondary" onclick="resetImportModal()">Back</button>
+                            <button class="btn btn-purple" id="import-execute-btn" onclick="executeImport()">Import</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/js/chart.min.js"></script>
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v=__APP_VERSION__"></script>
 </body>
 </html>
