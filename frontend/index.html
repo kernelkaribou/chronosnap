@@ -283,26 +283,6 @@
                     <h2>Settings</h2>
                 </div>
                 <div class="settings-content">
-                    <!-- API Key Section -->
-                    <div class="settings-section">
-                        <h3>API Key</h3>
-                        <p class="settings-description">
-                            Use this API key to authenticate external requests to the API. 
-                            <a href="/docs" 
-                               target="_blank" 
-                               class="api-docs-link">
-                                View API Documentation
-                            </a>
-                        </p>
-                        <div class="api-key-container">
-                            <input type="text" id="api-key-display" class="form-control api-key-input" readonly>
-                            <button class="btn-icon" onclick="copyApiKey()" title="Copy" style="padding: 0.4rem;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                            </button>
-                            <button class="btn btn-secondary compare-btn" onclick="regenerateApiKey()">Regenerate</button>
-                        </div>
-                    </div>
-                    
                     <!-- Display Preferences Section -->
                     <div class="settings-section">
                         <h3>Display</h3>
@@ -312,6 +292,22 @@
                             <div class="time-format-toggle">
                                 <button id="time-format-24" class="btn btn-sm" onclick="toggleTimeFormat('24')">24-hour</button>
                                 <button id="time-format-12" class="btn btn-sm" onclick="toggleTimeFormat('12')">12-hour</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tags Manager Section -->
+                    <div class="settings-section">
+                        <h3>Tags</h3>
+                        <p class="settings-description">Create and manage tags to categorize jobs and timelapses. Tags assigned to a job are automatically inherited by its captures and timelapse builds.</p>
+                        <div class="tag-manager">
+                            <div class="tag-create-row">
+                                <input type="text" id="tag-create-name" class="form-control" placeholder="New tag name..." maxlength="50">
+                                <div class="color-swatch-row" id="tag-create-swatches"></div>
+                                <button class="btn btn-purple btn-sm" onclick="createTag()">Add Tag</button>
+                            </div>
+                            <div id="tag-list" class="tag-list">
+                                <!-- Populated dynamically -->
                             </div>
                         </div>
                     </div>
@@ -330,6 +326,16 @@
                         </div>
                     </div>
 
+                    <!-- Default Naming Pattern Section -->
+                    <div class="settings-section">
+                        <h3>Default Naming Pattern</h3>
+                        <p class="settings-description">Default file naming pattern for new capture jobs. Available tokens: <code>{job_name}</code>, <code>{count}</code>, <code>{timestamp}</code>, <code>{num}</code></p>
+                        <div style="display:flex;gap:0.75rem;align-items:center;margin-top:0.75rem;">
+                            <input type="text" id="default-naming-pattern" class="form-control" style="max-width:20rem;" placeholder="{job_name}_{count}_{timestamp}">
+                            <button class="btn btn-sm btn-purple" onclick="saveNamingPattern()">Save</button>
+                        </div>
+                    </div>
+
                     <!-- Export Retention Section -->
                     <div class="settings-section">
                         <h3>Export Retention</h3>
@@ -338,16 +344,6 @@
                             <input type="number" id="export-retention-days" class="form-control" min="0" step="1" style="width:5rem;text-align:center;">
                             <span style="color:var(--text-secondary);font-size:0.85rem;">days</span>
                             <button class="btn btn-sm btn-purple" onclick="saveExportRetention()" style="margin-left:0.5rem;">Save</button>
-                        </div>
-                    </div>
-
-                    <!-- Default Naming Pattern Section -->
-                    <div class="settings-section">
-                        <h3>Default Naming Pattern</h3>
-                        <p class="settings-description">Default file naming pattern for new capture jobs. Available tokens: <code>{job_name}</code>, <code>{count}</code>, <code>{timestamp}</code>, <code>{num}</code></p>
-                        <div style="display:flex;gap:0.75rem;align-items:center;margin-top:0.75rem;">
-                            <input type="text" id="default-naming-pattern" class="form-control" style="max-width:20rem;" placeholder="{job_name}_{count}_{timestamp}">
-                            <button class="btn btn-sm btn-purple" onclick="saveNamingPattern()">Save</button>
                         </div>
                     </div>
 
@@ -401,27 +397,31 @@
                         </div>
                     </div>
 
-                    <!-- Tags Manager Section -->
-                    <div class="settings-section">
-                        <h3>Tags</h3>
-                        <p class="settings-description">Create and manage tags to categorize jobs and timelapses. Tags assigned to a job are automatically inherited by its captures and timelapse builds.</p>
-                        <div class="tag-manager">
-                            <div class="tag-create-row">
-                                <input type="text" id="tag-create-name" class="form-control" placeholder="New tag name..." maxlength="50">
-                                <div class="color-swatch-row" id="tag-create-swatches"></div>
-                                <button class="btn btn-purple btn-sm" onclick="createTag()">Add Tag</button>
-                            </div>
-                            <div id="tag-list" class="tag-list">
-                                <!-- Populated dynamically -->
-                            </div>
-                        </div>
-                    </div>
-                    
                     <div class="settings-section">
                         <h3>Shared Videos</h3>
                         <p class="settings-description">Videos with sharing enabled. Each shared video has a public URL that can be accessed without authentication.</p>
                         <div id="shared-videos-list" class="shared-videos-list">
                             <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- API Key Section -->
+                    <div class="settings-section">
+                        <h3>API Key</h3>
+                        <p class="settings-description">
+                            Use this API key to authenticate external requests to the API. 
+                            <a href="/docs" 
+                               target="_blank" 
+                               class="api-docs-link">
+                                View API Documentation
+                            </a>
+                        </p>
+                        <div class="api-key-container">
+                            <input type="text" id="api-key-display" class="form-control api-key-input" readonly>
+                            <button class="btn-icon" onclick="copyApiKey()" title="Copy" style="padding: 0.4rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            </button>
+                            <button class="btn btn-secondary compare-btn" onclick="regenerateApiKey()">Regenerate</button>
                         </div>
                     </div>
                     
