@@ -1940,7 +1940,7 @@ function shareToggleHTML(videoId, shareToken) {
             ${isShared ? `
             <div class="share-link-url">
                 <input type="text" value="${url}" readonly onclick="this.select()">
-                <button class="btn btn-secondary btn-sm" onclick="copyShareLink(this, '${url}')" title="Copy">
+                <button class="btn-icon" onclick="copyShareLink(this, '${url}')" title="Copy">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 </button>
             </div>` : ''}
@@ -1989,7 +1989,7 @@ async function loadSharedVideosList() {
                     <span class="shared-video-name">${escapeHtml(link.video_name || 'Unknown')}</span>
                     <div class="share-link-url">
                         <input type="text" value="${url}" readonly onclick="this.select()">
-                        <button class="btn btn-secondary btn-sm" onclick="copyShareLink(this, '${url}')" title="Copy">
+                        <button class="btn-icon" onclick="copyShareLink(this, '${url}')" title="Copy">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                         </button>
                     </div>
