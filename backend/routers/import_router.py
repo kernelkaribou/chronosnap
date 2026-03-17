@@ -2,7 +2,7 @@
 Import API endpoints — upload, browse, scan, analyze, execute, cleanup.
 """
 from fastapi import APIRouter, HTTPException, UploadFile, File, Query, Form
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import os
@@ -445,6 +445,25 @@ async def import_progress(session_id: str):
             'file_count': 0,
             'total_size': 0,
         }
+
+
+@router.get("/{session_id}/thumbnail/{file_name}")
+async def get_staging_thumbnail(session_id: str, file_name: str):
+    """Serve a staging video thumbnail."""
+    try:
+        staging_dir = get_staging_dir(session_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Sanitize file_name to prevent path traversal
+    safe_name = sanitize_filename(file_name)
+    thumb_name = os.path.splitext(safe_name)[0] + '_thumb.jpg'
+    thumb_path = os.path.join(staging_dir, thumb_name)
+    
+    if not os.path.isfile(thumb_path):
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+    
+    return FileResponse(thumb_path, media_type='image/jpeg')
 
 
 # ---------------------------------------------------------------------------

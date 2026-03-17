@@ -782,6 +782,11 @@ def analyze_staging(session_id: str) -> Dict[str, Any]:
                 elif file_type == 'video':
                     meta = probe_video(file_path)
                     if meta:
+                        # Generate staging thumbnail
+                        thumb_name = os.path.splitext(filename)[0] + '_thumb.jpg'
+                        thumb_path = os.path.join(staging_dir, thumb_name)
+                        _generate_staging_thumbnail(file_path, thumb_path)
+                        
                         videos.append({
                             'file_path': file_path,
                             'file_name': filename,
@@ -792,6 +797,7 @@ def analyze_staging(session_id: str) -> Dict[str, Any]:
                             'fps': meta['fps'],
                             'codec': meta['codec'],
                             'frame_count': meta['frame_count'],
+                            'has_thumbnail': os.path.isfile(thumb_path),
                         })
                     else:
                         errors.append({
@@ -1092,6 +1098,24 @@ def _generate_video_thumbnail(video_id: int, video_path: str):
             logger.warning(f"Thumbnail generation failed for video {video_id}: {result.stderr[:200]}")
     except Exception as e:
         logger.warning(f"Thumbnail error for video {video_id}: {e}")
+
+
+def _generate_staging_thumbnail(video_path: str, thumb_path: str) -> bool:
+    """Generate a small thumbnail from a video for staging preview."""
+    try:
+        cmd = [
+            'ffmpeg', '-loglevel', 'error',
+            '-i', video_path,
+            '-ss', '0.5',
+            '-frames:v', '1',
+            '-vf', 'scale=120:-1',
+            '-q:v', '4',
+            '-y', thumb_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        return result.returncode == 0 and os.path.exists(thumb_path)
+    except Exception:
+        return False
 
 
 # ===========================================================================

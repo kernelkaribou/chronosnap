@@ -3295,6 +3295,10 @@ function resetImportModal() {
     document.getElementById('import-upload-progress').style.display = 'none';
     document.getElementById('import-file-input').value = '';
     document.getElementById('import-folder-input').value = '';
+    document.getElementById('import-job-name').value = '';
+    const execBtn = document.getElementById('import-execute-btn');
+    execBtn.disabled = false;
+    execBtn.textContent = 'Import';
 }
 
 // --- Upload handling ---
@@ -3462,7 +3466,6 @@ function browseImportParent() {
 
 async function scanImportCurrentPath() {
     try {
-        showNotification('Scanning...', 'info');
         const result = await apiRequest('/import/scan', {
             method: 'POST',
             body: { path: _importBrowsePath }
@@ -3504,9 +3507,12 @@ function showImportPreview() {
                 Range: ${formatDateTimeNoSeconds(a.image_first)} → ${formatDateTimeNoSeconds(a.image_last)}
             </small>
         `;
-        // Auto-suggest job name
+        // Auto-suggest job name from folder name
         const nameInput = document.getElementById('import-job-name');
-        if (!nameInput.value) nameInput.value = 'Imported';
+        if (!nameInput.value) {
+            const folderName = _importBrowsePath ? _importBrowsePath.split('/').filter(Boolean).pop() : '';
+            nameInput.value = folderName || 'Imported';
+        }
     } else {
         imgSection.style.display = 'none';
     }
@@ -3525,13 +3531,21 @@ function showImportPreview() {
                 const dupe = dupes[v.file_name];
                 const res = v.width && v.height ? `${v.width}×${v.height}` : '';
                 const dur = v.duration ? formatDuration(v.duration) : '';
-                return `<div class="import-video-card">
-                    <span style="font-size:1.5rem;">🎬</span>
-                    <div class="video-meta">
+                const thumbUrl = v.has_thumbnail
+                    ? `${API_BASE}/import/${_importSessionId}/thumbnail/${encodeURIComponent(v.file_name)}`
+                    : '';
+                return `<div class="import-video-card" data-filename="${escapeHtml(v.file_name)}">
+                    ${thumbUrl
+                        ? `<img src="${thumbUrl}" alt="" style="width:60px;height:44px;object-fit:cover;border-radius:4px;flex-shrink:0;">`
+                        : '<span style="font-size:1.5rem;flex-shrink:0;">🎬</span>'}
+                    <div class="video-meta" style="flex:1;min-width:0;">
                         <input type="text" class="form-control" value="${escapeHtml(baseName)}" data-file="${escapeHtml(v.file_name)}" style="font-size:0.85rem;padding:0.25rem 0.5rem;margin-bottom:0.25rem;">
                         <small>${[res, dur, formatBytes(v.file_size), v.codec].filter(Boolean).join(' · ')}</small>
                     </div>
-                    ${dupe ? `<span class="duplicate-badge">⚠ Possible duplicate</span>` : ''}
+                    ${dupe ? `<span class="duplicate-badge">⚠ Duplicate</span>` : ''}
+                    <button class="btn-icon" onclick="removeImportVideo(this)" title="Remove" style="flex-shrink:0;color:var(--danger);padding:0.25rem;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
                 </div>`;
             }).join('')}
         `;
@@ -3555,7 +3569,29 @@ function showImportPreview() {
     }
 
     // Disable execute if nothing to import
-    document.getElementById('import-execute-btn').disabled = (a.image_count === 0 && a.video_count === 0);
+    const hasImages = a.image_count > 0;
+    const hasVideos = document.querySelectorAll('.import-video-card').length > 0;
+    document.getElementById('import-execute-btn').disabled = (!hasImages && !hasVideos);
+}
+
+function removeImportVideo(btn) {
+    const card = btn.closest('.import-video-card');
+    if (!card) return;
+    card.remove();
+    
+    // Update video count display
+    const remaining = document.querySelectorAll('.import-video-card').length;
+    const vidSection = document.getElementById('import-preview-videos');
+    if (remaining === 0) {
+        vidSection.style.display = 'none';
+    } else {
+        const infoBox = vidSection.querySelector('.info-box');
+        if (infoBox) infoBox.innerHTML = `<strong>${remaining} video(s)</strong>`;
+    }
+    
+    // Update execute button state
+    const hasImages = _importAnalysis && _importAnalysis.image_count > 0;
+    document.getElementById('import-execute-btn').disabled = (!hasImages && remaining === 0);
 }
 
 // --- Execute import ---
@@ -3571,9 +3607,9 @@ async function executeImport() {
         body.image_job_name = jobName;
     }
 
-    // Video configs
-    if (_importAnalysis.video_count > 0) {
-        const videoCards = document.querySelectorAll('.import-video-card input[data-file]');
+    // Video configs — only include remaining (non-removed) cards
+    const videoCards = document.querySelectorAll('.import-video-card input[data-file]');
+    if (videoCards.length > 0) {
         body.videos = Array.from(videoCards).map(input => ({
             file_name: input.dataset.file,
             name: input.value.trim() || input.dataset.file.replace(/\.[^.]+$/, ''),
@@ -3583,7 +3619,6 @@ async function executeImport() {
     try {
         document.getElementById('import-execute-btn').disabled = true;
         document.getElementById('import-execute-btn').textContent = 'Importing...';
-        showNotification('Importing...', 'info');
 
         const result = await apiRequest(`/import/${_importSessionId}/execute`, {
             method: 'POST',
