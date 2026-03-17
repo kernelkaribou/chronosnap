@@ -24,12 +24,15 @@ logger = logging.getLogger(__name__)
 
 
 def enrich_job_with_next_capture(job_dict: dict) -> dict:
-    """Add next_capture_at and next_auto_build_at fields to job dict"""
+    """Add next_capture_at and next_auto_build_at fields to job dict, compute warning status"""
     now = get_now()
     pending = parse_iso(job_dict['next_scheduled_capture_at']) if job_dict.get('next_scheduled_capture_at') else None
     status, next_capture, reason = calculate_job_state(job_dict, now, pending)
     job_dict['next_capture_at'] = to_iso(next_capture) if next_capture else None
     job_dict['next_auto_build_at'] = get_next_auto_build_at(job_dict)
+    # Surface warning as a status when the job has a warning_message
+    if job_dict.get('warning_message') and job_dict['status'] not in ('disabled', 'completed'):
+        job_dict['status'] = 'warning'
     return job_dict
 
 
