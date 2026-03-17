@@ -345,6 +345,7 @@ async def execute_import(session_id: str, request: ExecuteRequest):
     results = {
         'images': None,
         'videos': [],
+        'skipped_duplicates': [],
         'errors': [],
     }
     
@@ -376,6 +377,20 @@ async def execute_import(session_id: str, request: ExecuteRequest):
             selected_set = set(request.selected_videos)
             videos_to_import = [v for v in videos_to_import if v['file_name'] in selected_set]
         
+        # Block duplicates from being imported
+        video_duplicates = analysis.get('video_duplicates', {})
+        skipped_dupes = []
+        if video_duplicates:
+            filtered = []
+            for v in videos_to_import:
+                if v['file_name'] in video_duplicates:
+                    dupe_info = video_duplicates[v['file_name']]
+                    skipped_dupes.append(f"'{v['file_name']}' (matches existing '{dupe_info['existing_name']}')")
+                    logger.info(f"Skipping duplicate video: {v['file_name']} -> {dupe_info}")
+                else:
+                    filtered.append(v)
+            videos_to_import = filtered
+        
         # Build video config lookup
         video_configs = {}
         if request.videos:
@@ -398,6 +413,8 @@ async def execute_import(session_id: str, request: ExecuteRequest):
             except Exception as e:
                 results['errors'].append(f"Video '{video['file_name']}' import failed: {e}")
                 logger.error(f"Video import failed for {video['file_name']}: {e}", exc_info=True)
+        
+        results['skipped_duplicates'] = skipped_dupes
         
         # Clean up source files from /imports
         cleanup_import_source(session_id)

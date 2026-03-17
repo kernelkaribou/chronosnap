@@ -7,6 +7,7 @@ import uuid
 import time
 import shutil
 import struct
+import hashlib
 import logging
 import zipfile
 import tarfile
@@ -144,6 +145,22 @@ def check_disk_space(path: str, required_bytes: int) -> bool:
         return stat.free >= required_bytes * 2
     except Exception:
         return False
+
+
+def compute_file_hash(file_path: str) -> str:
+    """Compute SHA-256 hash of a file. Reads in 8MB chunks for efficiency."""
+    sha256 = hashlib.sha256()
+    try:
+        with open(file_path, 'rb') as f:
+            while True:
+                chunk = f.read(8 * 1024 * 1024)
+                if not chunk:
+                    break
+                sha256.update(chunk)
+        return sha256.hexdigest()
+    except Exception as e:
+        logger.warning(f"Failed to compute hash for {file_path}: {e}")
+        return ''
 
 
 # ===========================================================================
@@ -787,10 +804,14 @@ def analyze_staging(session_id: str) -> Dict[str, Any]:
                         thumb_path = os.path.join(staging_dir, thumb_name)
                         _generate_staging_thumbnail(file_path, thumb_path)
                         
+                        # Compute content hash for duplicate detection
+                        file_hash = compute_file_hash(file_path)
+                        
                         videos.append({
                             'file_path': file_path,
                             'file_name': filename,
                             'file_size': meta['file_size'],
+                            'file_hash': file_hash,
                             'duration': meta['duration'],
                             'width': meta['width'],
                             'height': meta['height'],
@@ -837,7 +858,13 @@ def analyze_staging(session_id: str) -> Dict[str, Any]:
 
 
 def _check_video_duplicates(videos: List[Dict]) -> Dict[str, Any]:
-    """Check if any videos already exist in the database by name+size."""
+    """Check if any videos already exist in the database.
+    
+    Uses a multi-tier check:
+    1. SHA-256 hash match (definitive — same content)
+    2. File size + duration match (strong signal — likely same file)
+    Returns a dict of file_name -> duplicate info for any matches.
+    """
     if not videos:
         return {}
     
@@ -847,17 +874,39 @@ def _check_video_duplicates(videos: List[Dict]) -> Dict[str, Any]:
         with get_db() as conn:
             cursor = conn.cursor()
             for v in videos:
-                name_base = os.path.splitext(v['file_name'])[0]
-                cursor.execute(
-                    "SELECT id, name, file_size FROM processed_videos WHERE name = ? AND file_size = ?",
-                    (name_base, v['file_size'])
-                )
-                row = cursor.fetchone()
-                if row:
-                    duplicates[v['file_name']] = {
-                        'existing_id': row[0],
-                        'existing_name': row[1],
-                    }
+                file_hash = v.get('file_hash', '')
+                
+                # Tier 1: exact hash match (strongest)
+                if file_hash:
+                    cursor.execute(
+                        "SELECT id, name FROM processed_videos WHERE file_hash = ?",
+                        (file_hash,)
+                    )
+                    row = cursor.fetchone()
+                    if row:
+                        duplicates[v['file_name']] = {
+                            'existing_id': row[0],
+                            'existing_name': row[1],
+                            'match_type': 'hash',
+                        }
+                        continue
+                
+                # Tier 2: size + duration match (very likely same file)
+                duration = v.get('duration', 0)
+                if v['file_size'] and duration:
+                    cursor.execute(
+                        "SELECT id, name FROM processed_videos WHERE file_size = ? AND ABS(duration_seconds - ?) < 0.5",
+                        (v['file_size'], duration)
+                    )
+                    row = cursor.fetchone()
+                    if row:
+                        duplicates[v['file_name']] = {
+                            'existing_id': row[0],
+                            'existing_name': row[1],
+                            'match_type': 'size_duration',
+                        }
+                        continue
+        
         return duplicates
     except Exception as e:
         logger.warning(f"Duplicate check failed: {e}")
@@ -1038,6 +1087,7 @@ def execute_video_import(
     duration = meta.get('duration', 0)
     frame_count = meta.get('frame_count', 0)
     file_size = os.path.getsize(dest_path)
+    file_hash = video.get('file_hash', '') or compute_file_hash(dest_path)
     
     # Determine job_name for DB
     db_job_name = job_name if job_id else 'Imported'
@@ -1046,12 +1096,12 @@ def execute_video_import(
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO processed_videos (
-                job_id, job_name, name, file_path, file_size, resolution,
+                job_id, job_name, name, file_path, file_size, file_hash, resolution,
                 framerate, quality, total_frames, duration_seconds,
                 status, progress, build_source, created_at, completed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'high', ?, ?, 'completed', 100, 'imported', ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'high', ?, ?, 'completed', 100, 'imported', ?, ?)
         """, (
-            job_id, db_job_name, video_name, dest_path, file_size,
+            job_id, db_job_name, video_name, dest_path, file_size, file_hash,
             resolution, fps, frame_count, duration,
             now, now
         ))

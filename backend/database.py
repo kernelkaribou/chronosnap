@@ -300,6 +300,7 @@ def init_db():
         # Remaining processed_videos columns
         ensure_column(cursor, 'processed_videos', 'thumbnail_path', 'TEXT')
         ensure_column(cursor, 'processed_videos', 'build_source', "TEXT DEFAULT 'manual'")
+        ensure_column(cursor, 'processed_videos', 'file_hash', 'TEXT')
         ensure_column(cursor, 'processed_videos', 'error_message', 'TEXT')
         ensure_column(cursor, 'processed_videos', 'is_favorite', 'BOOLEAN DEFAULT 0')
         ensure_column(cursor, 'processed_videos', 'text_overlay', 'TEXT')

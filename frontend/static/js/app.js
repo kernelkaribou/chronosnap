@@ -3540,9 +3540,12 @@ function showImportPreview() {
     if (a.video_count > 0) {
         vidSection.style.display = 'block';
         const dupes = a.video_duplicates || {};
+        const dupeCount = Object.keys(dupes).length;
+        const importableCount = a.video_count - dupeCount;
         document.getElementById('import-videos-list').innerHTML = `
             <div class="info-box" style="margin-bottom:0.75rem;">
-                <strong>${a.video_count} video(s)</strong> · ${formatBytes(a.video_total_size)}
+                <strong>${importableCount} video(s)</strong> · ${formatBytes(a.video_total_size)}
+                ${dupeCount ? `<br><small style="color:var(--warning);">⚠ ${dupeCount} duplicate(s) will be skipped</small>` : ''}
             </div>
             ${a.videos.map(v => {
                 const baseName = v.file_name.replace(/\.[^.]+$/, '');
@@ -3552,6 +3555,19 @@ function showImportPreview() {
                 const thumbUrl = v.has_thumbnail
                     ? `${API_BASE}/import/${_importSessionId}/thumbnail/${encodeURIComponent(v.file_name)}`
                     : '';
+                if (dupe) {
+                    const matchLabel = dupe.match_type === 'hash' ? 'Exact match' : 'Size + duration match';
+                    return `<div class="import-video-card" data-filename="${escapeHtml(v.file_name)}" data-duplicate="true" style="opacity:0.5;pointer-events:none;">
+                        ${thumbUrl
+                            ? `<img src="${thumbUrl}" alt="" style="width:60px;height:44px;object-fit:cover;border-radius:4px;flex-shrink:0;">`
+                            : '<span style="font-size:1.5rem;flex-shrink:0;">🎬</span>'}
+                        <div class="video-meta" style="flex:1;min-width:0;">
+                            <div style="font-size:0.85rem;padding:0.25rem 0;font-weight:500;">${escapeHtml(baseName)}</div>
+                            <small>${[res, dur, formatBytes(v.file_size), v.codec].filter(Boolean).join(' · ')}</small>
+                        </div>
+                        <span class="duplicate-badge" title="${matchLabel}: '${escapeHtml(dupe.existing_name)}'">⚠ Duplicate</span>
+                    </div>`;
+                }
                 return `<div class="import-video-card" data-filename="${escapeHtml(v.file_name)}">
                     ${thumbUrl
                         ? `<img src="${thumbUrl}" alt="" style="width:60px;height:44px;object-fit:cover;border-radius:4px;flex-shrink:0;">`
@@ -3560,7 +3576,6 @@ function showImportPreview() {
                         <input type="text" class="form-control" value="${escapeHtml(baseName)}" data-file="${escapeHtml(v.file_name)}" style="font-size:0.85rem;padding:0.25rem 0.5rem;margin-bottom:0.25rem;">
                         <small>${[res, dur, formatBytes(v.file_size), v.codec].filter(Boolean).join(' · ')}</small>
                     </div>
-                    ${dupe ? `<span class="duplicate-badge">⚠ Duplicate</span>` : ''}
                     <button class="btn-icon" onclick="removeImportVideo(this)" title="Remove" style="flex-shrink:0;color:var(--danger);padding:0.25rem;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
@@ -3586,9 +3601,9 @@ function showImportPreview() {
         errSection.style.display = 'none';
     }
 
-    // Disable execute if nothing to import
+    // Disable execute if nothing importable
     const hasImages = a.image_count > 0;
-    const hasVideos = document.querySelectorAll('.import-video-card').length > 0;
+    const hasVideos = document.querySelectorAll('.import-video-card:not([data-duplicate])').length > 0;
     document.getElementById('import-execute-btn').disabled = (!hasImages && !hasVideos);
 }
 
@@ -3597,11 +3612,17 @@ function removeImportVideo(btn) {
     if (!card) return;
     card.remove();
     
-    // Update video count display
-    const remaining = document.querySelectorAll('.import-video-card').length;
+    // Update video count display (exclude duplicates)
+    const remaining = document.querySelectorAll('.import-video-card:not([data-duplicate])').length;
     const vidSection = document.getElementById('import-preview-videos');
     if (remaining === 0) {
-        vidSection.style.display = 'none';
+        // Hide only if no duplicates either
+        const dupeCards = document.querySelectorAll('.import-video-card[data-duplicate]').length;
+        if (dupeCards === 0) vidSection.style.display = 'none';
+        else {
+            const infoBox = vidSection.querySelector('.info-box');
+            if (infoBox) infoBox.innerHTML = `<strong>0 video(s)</strong>`;
+        }
     } else {
         const infoBox = vidSection.querySelector('.info-box');
         if (infoBox) infoBox.innerHTML = `<strong>${remaining} video(s)</strong>`;
