@@ -1011,16 +1011,16 @@ async function showJobDetails(jobId) {
                 
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: space-between; align-items: center; padding-top: 1rem; border-top: 2px solid var(--border-color);">
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-                        <button class="btn btn-primary" onclick="event.stopPropagation(); closeModal('job-details-modal'); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')">
+                        <button class="btn btn-secondary compare-btn" onclick="event.stopPropagation(); closeModal('job-details-modal'); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')">
                             Build Timelapse
                         </button>
                         ${job.status !== 'completed' ? 
-                            `<button class="btn btn-secondary" onclick="confirmCompleteJob(${job.id}, '${escapeHtml(job.name)}')">Complete</button>` : ''
+                            `<button class="btn btn-secondary compare-btn" onclick="confirmCompleteJob(${job.id}, '${escapeHtml(job.name)}')">Complete</button>` : ''
                         }
                         ${job.status === 'active' || job.status === 'sleeping' ? 
-                            `<button class="btn btn-warning" onclick="confirmDisableJob(${job.id}, '${escapeHtml(job.name)}')">Disable</button>` :
+                            `<button class="btn btn-secondary compare-btn" onclick="confirmDisableJob(${job.id}, '${escapeHtml(job.name)}')">Disable</button>` :
                             job.status === 'disabled' ?
-                            `<button class="btn btn-success" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')">Enable</button>` : ''
+                            `<button class="btn btn-secondary compare-btn" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')">Enable</button>` : ''
                         }
                         <button class="btn-icon" onclick="duplicateJob(${job.id})" title="Duplicate Job" style="padding: 0.5rem;">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
