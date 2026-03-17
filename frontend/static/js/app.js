@@ -3774,6 +3774,31 @@ async function saveServerPath(type) {
     }
 }
 
+// --- Export retention setting ---
+async function loadExportRetention() {
+    try {
+        const result = await apiRequest('/settings/export-retention');
+        document.getElementById('export-retention-days').value = result.export_retention_days;
+    } catch (e) {
+        document.getElementById('export-retention-days').value = 7;
+    }
+}
+
+async function saveExportRetention() {
+    const input = document.getElementById('export-retention-days');
+    const days = parseInt(input.value, 10);
+    if (isNaN(days) || days < 0) {
+        showNotification('Retention must be 0 (indefinite) or a positive number of days', 'error');
+        return;
+    }
+    try {
+        await apiRequest('/settings/export-retention', { method: 'PUT', body: { export_retention_days: days } });
+        showNotification(days === 0 ? 'Export retention: keep indefinitely' : `Export retention: ${days} day${days !== 1 ? 's' : ''}`, 'success');
+    } catch (error) {
+        showNotification(error.message || 'Failed to update export retention', 'error');
+    }
+}
+
 let _createPathBackup = '';
 
 function toggleCreatePathEdit(editing) {
@@ -5276,6 +5301,7 @@ async function loadSettings() {
     loadTagManager();
     loadSharedVideosList();
     loadServerPaths();
+    loadExportRetention();
     
     // Load version
     try {

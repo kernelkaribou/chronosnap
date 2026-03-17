@@ -81,9 +81,25 @@ def get_timelapses_path() -> str:
 
 
 def cleanup_old_exports(max_age_days: int = None):
-    """Remove export archives older than max_age_days."""
+    """Remove export archives older than max_age_days. 0 = keep indefinitely."""
     if max_age_days is None:
-        max_age_days = config.EXPORT_RETENTION_DAYS
+        # Read from DB setting, fall back to config default
+        try:
+            from ..database import get_db
+            with get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT value FROM settings WHERE key = 'export_retention_days'")
+                row = cursor.fetchone()
+                if row and row[0] is not None:
+                    max_age_days = int(row[0])
+                else:
+                    max_age_days = config.EXPORT_RETENTION_DAYS
+        except Exception:
+            max_age_days = config.EXPORT_RETENTION_DAYS
+
+    if max_age_days == 0:
+        return 0
+
     export_path = get_export_path()
     if not os.path.isdir(export_path):
         return 0
