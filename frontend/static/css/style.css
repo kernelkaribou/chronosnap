@@ -2560,14 +2560,33 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 }
 .tag-picker .tag-chip.selected { opacity: 1; }
 .tag-picker .tag-chip:hover { opacity: 0.8; }
-.tag-inline-form {
-    display: flex; align-items: center; gap: 0.3rem;
-    padding: 0.25rem 0.4rem;
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    flex-basis: 100%;
+
+/* "+New Tag" button and inline creator below tag picker */
+.tag-picker-footer {
+    margin-top: 0.5rem;
 }
+.tag-create-btn {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.75rem; font-weight: 500;
+    cursor: pointer;
+    background: var(--accent-purple);
+    color: #fff;
+    border: none;
+    transition: opacity 0.15s;
+}
+.tag-create-btn:hover { opacity: 0.85; }
+.tag-inline-form {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin-top: 0.4rem;
+    flex-wrap: wrap;
+}
+.tag-inline-form .form-control {
+    flex: 1; max-width: 220px;
+}
+.tag-inline-form .color-swatch-row { gap: 3px; }
+.tag-inline-form .color-swatch { width: 18px; height: 18px; }
 
 .tag-picker-inline {
     display: flex; align-items: center; gap: 0.35rem;

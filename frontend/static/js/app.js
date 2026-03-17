@@ -4919,11 +4919,10 @@ function renderTagPicker(containerId, selectedTagIds = [], onToggle = null) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    // Store callback and containerId for toggle/inline-create to reference
     container._tagOnToggle = onToggle;
     container._tagPickerId = containerId;
 
-    let html = allTags.map(tag => {
+    container.innerHTML = allTags.map(tag => {
         const isSelected = selectedTagIds.includes(tag.id);
         return `<span class="tag-chip ${isSelected ? 'selected' : ''}" data-tag-id="${tag.id}"
             style="background:${tag.color}22;color:${tag.color};border:1px solid ${tag.color}44;cursor:pointer;opacity:${isSelected ? '1' : '0.4'};"
@@ -4932,33 +4931,35 @@ function renderTagPicker(containerId, selectedTagIds = [], onToggle = null) {
             ${escapeHtml(tag.name)}</span>`;
     }).join('');
 
-    // Inline create button
-    html += `<span class="tag-chip tag-inline-create" onclick="showInlineTagCreate('${containerId}')" title="Create new tag"
-        style="cursor:pointer;opacity:0.5;border:1px dashed var(--border-color);color:var(--text-secondary);background:transparent;">＋ New</span>`;
-
-    container.innerHTML = html;
+    // Render "+New Tag" button below the tag grid
+    let footer = container.parentElement.querySelector('.tag-picker-footer');
+    if (!footer) {
+        footer = document.createElement('div');
+        footer.className = 'tag-picker-footer';
+        container.parentElement.appendChild(footer);
+    }
+    footer.innerHTML = `<span class="tag-create-btn" onclick="showInlineTagCreate('${containerId}')" title="Create new tag">＋ New Tag</span>`;
 }
 
 function showInlineTagCreate(containerId) {
     const container = document.getElementById(containerId);
-    if (!container || container.querySelector('.tag-inline-form')) return;
+    if (!container) return;
+    const footer = container.parentElement.querySelector('.tag-picker-footer');
+    if (!footer || footer.querySelector('.tag-inline-form')) return;
 
-    const createBtn = container.querySelector('.tag-inline-create');
-    if (createBtn) createBtn.remove();
-
-    const form = document.createElement('div');
-    form.className = 'tag-inline-form';
-    form.innerHTML = `
-        <input type="text" class="form-control" placeholder="Tag name..." maxlength="50" style="width:100px;font-size:0.75rem;padding:0.2rem 0.4rem;">
-        <div class="color-swatch-row" style="gap:2px;">${TAG_COLORS.slice(0, 10).map(c =>
-            `<span class="color-swatch${c === '#6366f1' ? ' selected' : ''}" style="background:${c};width:16px;height:16px;" data-color="${c}" onclick="selectSwatch(this)"></span>`
-        ).join('')}</div>
-        <button class="btn btn-purple btn-sm" style="font-size:0.7rem;padding:0.15rem 0.5rem;" onclick="submitInlineTag('${containerId}')">Add</button>
-        <button class="btn btn-secondary btn-sm" style="font-size:0.7rem;padding:0.15rem 0.4rem;" onclick="cancelInlineTagCreate('${containerId}')">✕</button>
+    footer.innerHTML = `
+        <div class="tag-inline-form">
+            <input type="text" class="form-control" placeholder="New tag name..." maxlength="50">
+            <div class="color-swatch-row">${TAG_COLORS.map(c =>
+                `<span class="color-swatch${c === '#6366f1' ? ' selected' : ''}" style="background:${c};" data-color="${c}" onclick="selectSwatch(this)"></span>`
+            ).join('')}</div>
+            <button class="btn btn-purple btn-sm" onclick="submitInlineTag('${containerId}')">Add Tag</button>
+            <button class="btn btn-secondary btn-sm" onclick="cancelInlineTagCreate('${containerId}')">Cancel</button>
+        </div>
     `;
-    container.appendChild(form);
-    form.querySelector('input').focus();
-    form.querySelector('input').addEventListener('keydown', e => {
+    const input = footer.querySelector('.tag-inline-form input');
+    input.focus();
+    input.addEventListener('keydown', e => {
         if (e.key === 'Enter') submitInlineTag(containerId);
         if (e.key === 'Escape') cancelInlineTagCreate(containerId);
     });
@@ -4972,7 +4973,8 @@ function cancelInlineTagCreate(containerId) {
 
 async function submitInlineTag(containerId) {
     const container = document.getElementById(containerId);
-    const form = container?.querySelector('.tag-inline-form');
+    const footer = container?.parentElement.querySelector('.tag-picker-footer');
+    const form = footer?.querySelector('.tag-inline-form');
     if (!form) return;
     const name = form.querySelector('input').value.trim();
     const swatchRow = form.querySelector('.color-swatch-row');
@@ -4986,7 +4988,6 @@ async function submitInlineTag(containerId) {
         currentIds.push(newTag.id);
         const onToggle = container._tagOnToggle || null;
         renderTagPicker(containerId, currentIds, onToggle);
-        // Fire callback for the newly added tag
         if (onToggle) onToggle(currentIds);
         showNotification(`Tag "${name}" created`);
     } catch (error) {
