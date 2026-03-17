@@ -2551,7 +2551,7 @@ function generateOverlayHTML(prefix, opts = {}) {
             <div style="display:flex; gap:0.5rem; align-items:flex-start;">
                 <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.4rem;">
                     <div style="display:flex; gap:0.5rem; align-items:flex-end;">
-                        <div style="flex: 1 1 0; min-width:0;">
+                        <div style="flex: 0 0 40%; min-width:0;">
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Text</label>
                             <input type="text" id="${prefix}-overlay-text" class="form-control" value="{job_name}" placeholder="{job_name}"${inputEvent}>
                             <small style="color: var(--text-secondary); font-size:0.6rem;"><code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code></small>
