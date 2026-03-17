@@ -1261,8 +1261,17 @@ body {
     justify-content: center;
 }
 
-.duration-estimate:empty {
-    display: none;
+.duration-estimate:empty::before {
+    content: '—';
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.duration-estimate-inline {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.25rem;
+    min-height: 2.25rem;
 }
 
 /* Info Box */

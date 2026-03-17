@@ -2196,7 +2196,7 @@ async function showProcessVideoModal(jobId, jobName) {
         document.getElementById('process-video-form').reset();
         document.getElementById('use_range').checked = false;
         document.getElementById('capture-range-fields').classList.add('disabled');
-        document.getElementById('video-duration-estimate').innerHTML = '';
+        document.getElementById('video-duration-estimate').innerHTML = '<span style="color: var(--text-secondary); font-size: 0.85rem;">No job selected</span>';
         document.getElementById('available-range-info').style.display = 'none';
         // Reset text overlay
         const buildOverlayContainer = document.getElementById('build-overlay-container');
@@ -2292,7 +2292,7 @@ async function onJobSelectChange() {
     
     if (!jobId) {
         document.getElementById('process_job_id').value = '';
-        document.getElementById('video-duration-estimate').innerHTML = '';
+        document.getElementById('video-duration-estimate').innerHTML = '<span style="color: var(--text-secondary); font-size: 0.85rem;">No job selected</span>';
         document.getElementById('available-range-info').style.display = 'none';
         const createBtn = document.getElementById('create-video-btn');
         if (createBtn) {
