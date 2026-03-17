@@ -4931,7 +4931,7 @@ function renderTagPicker(containerId, selectedTagIds = [], onToggle = null) {
             ${escapeHtml(tag.name)}</span>`;
     }).join('');
 
-    // Render footer with button + hidden form (reserves full height)
+    // Render footer: form always in flow (reserves height), button overlays it
     let footer = container.parentElement.querySelector('.tag-picker-footer');
     if (!footer) {
         footer = document.createElement('div');
@@ -4943,7 +4943,7 @@ function renderTagPicker(containerId, selectedTagIds = [], onToggle = null) {
     ).join('');
     footer.innerHTML = `
         <span class="tag-create-btn" onclick="showInlineTagCreate('${containerId}')" title="Create new tag">＋ New Tag</span>
-        <div class="tag-inline-form" style="visibility:hidden;position:absolute;">
+        <div class="tag-inline-form" style="visibility:hidden;">
             <input type="text" class="form-control" placeholder="New tag name..." maxlength="50" tabindex="-1">
             <div class="color-swatch-row">${swatchesHTML}</div>
             <button class="btn btn-purple btn-sm" tabindex="-1">Add Tag</button>
@@ -4963,7 +4963,6 @@ function showInlineTagCreate(containerId) {
 
     btn.style.display = 'none';
     form.style.visibility = 'visible';
-    form.style.position = 'static';
 
     // Wire up the buttons now that form is active
     const input = form.querySelector('input');
@@ -4989,7 +4988,6 @@ function cancelInlineTagCreate(containerId) {
     if (btn) btn.style.display = '';
     if (form) {
         form.style.visibility = 'hidden';
-        form.style.position = 'absolute';
         form.querySelector('input').value = '';
     }
 }

@@ -2565,9 +2565,9 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .tag-picker-footer {
     margin-top: 0.5rem;
     position: relative;
-    min-height: 2rem;
 }
 .tag-create-btn {
+    position: absolute; top: 0; left: 0; z-index: 1;
     display: inline-flex; align-items: center; gap: 0.25rem;
     padding: 0.2rem 0.65rem;
     border-radius: 999px;
