@@ -981,7 +981,6 @@ body {
 .overlay-position-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    grid-template-rows: repeat(3, 1fr);
     gap: 3px;
     width: 105px;
 }
@@ -1045,6 +1044,7 @@ body {
 
 .overlay-position-grid .pos-btn {
     width: 100%;
+    aspect-ratio: 1.5;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     background: var(--bg-secondary);
@@ -1055,7 +1055,7 @@ body {
     align-items: center;
     justify-content: center;
     transition: all var(--transition-fast);
-    padding: 4px 0;
+    padding: 0;
 }
 
 .overlay-position-grid .pos-btn:hover {
