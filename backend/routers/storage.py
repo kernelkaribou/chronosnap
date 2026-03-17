@@ -59,7 +59,7 @@ async def get_storage_stats():
             GROUP BY j.id, j.name
         """).fetchall()
 
-        # Per-job video stats
+        # Per-job video stats (only job-linked videos)
         video_stats = db.execute("""
             SELECT j.id as job_id,
                    COUNT(v.id) as video_count,
@@ -68,6 +68,14 @@ async def get_storage_stats():
             LEFT JOIN processed_videos v ON v.job_id = j.id AND v.status = 'completed'
             GROUP BY j.id
         """).fetchall()
+
+        # Standalone videos (imported or orphaned with no job link)
+        standalone = db.execute("""
+            SELECT COUNT(id) as video_count,
+                   COALESCE(SUM(file_size), 0) as video_size
+            FROM processed_videos
+            WHERE job_id IS NULL AND status = 'completed'
+        """).fetchone()
 
     video_map = {row['job_id']: dict_from_row(row) for row in video_stats}
 
@@ -94,6 +102,10 @@ async def get_storage_stats():
         captures_total_count += cap['capture_count']
         videos_total_size += vid['video_size']
         videos_total_count += vid['video_count']
+
+    # Include standalone videos in totals
+    videos_total_count += standalone['video_count']
+    videos_total_size += standalone['video_size']
 
     # Sort by total size descending
     jobs.sort(key=lambda j: j.total_size, reverse=True)
