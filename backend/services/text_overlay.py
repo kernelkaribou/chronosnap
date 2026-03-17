@@ -221,7 +221,7 @@ def render_preview_bytes(
     image_data: Optional[str] = None,
     config: Dict[str, Any] = None,
     variables: Optional[Dict[str, str]] = None,
-    max_width: int = 800,
+    max_width: int = 1920,
 ) -> bytes:
     """Render a preview image with overlay and return as JPEG bytes.
 
