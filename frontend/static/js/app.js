@@ -2551,11 +2551,11 @@ function generateOverlayHTML(prefix, opts = {}) {
             <div style="display:flex; gap:0.75rem; align-items:center;">
                 <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.35rem;">
                     <div style="display:flex; gap:0.5rem; align-items:flex-end;">
-                        <div style="flex: 0 0 35%; min-width:0;">
+                        <div style="flex: 1 1 0; min-width:0;">
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Text</label>
                             <input type="text" id="${prefix}-overlay-text" class="form-control" value="{job_name}" placeholder="{job_name}"${inputEvent}>
                         </div>
-                        <div style="flex: 0 0 auto; max-width:130px; min-width:0;">
+                        <div style="flex: 0 0 145px;">
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Font</label>
                             <select id="${prefix}-overlay-font" class="form-control"${inputEvent}>${fontOpts}</select>
                         </div>
@@ -2563,9 +2563,11 @@ function generateOverlayHTML(prefix, opts = {}) {
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Size</label>
                             <input type="number" id="${prefix}-overlay-size" class="form-control" value="5" min="1" max="20" step="1"${inputEvent}>
                         </div>
-                        <div style="flex:0 0 auto; display:flex; flex-direction:column; align-items:center;">
+                        <div style="flex:0 0 36px;">
                             <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Bold</label>
-                            <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr} style="margin-top:auto; margin-bottom:auto;">
+                            <div style="height:38px; display:flex; align-items:center; justify-content:center;">
+                                <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr}>
+                            </div>
                         </div>
                     </div>
                     <small style="color: var(--text-secondary); font-size:0.6rem;"><code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code></small>
