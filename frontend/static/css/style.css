@@ -2762,6 +2762,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     padding: 0.4rem 0.75rem;
     border-radius: var(--radius-sm);
     z-index: 0;
+    cursor: pointer;
 }
 .compare-btn::before {
     content: '';
