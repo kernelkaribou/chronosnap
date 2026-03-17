@@ -29,7 +29,7 @@ def get_db():
         conn.close()
 
 
-def generate_api_key(length: int = 16) -> str:
+def generate_api_key(length: int = 32) -> str:
     """Generate a random alphanumeric API key"""
     alphabet = string.ascii_letters + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(length))
