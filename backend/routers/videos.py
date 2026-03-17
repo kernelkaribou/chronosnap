@@ -246,6 +246,86 @@ async def get_video(video_id: int):
         return video_dict
 
 
+class VideoRenameRequest(BaseModel):
+    name: str
+
+
+@router.patch("/{video_id}", response_model=VideoResponse)
+async def rename_video(video_id: int, body: VideoRenameRequest):
+    """Rename a video: updates display name, file, and thumbnail on disk and in DB."""
+    new_name = body.name.strip()
+    if not new_name:
+        raise HTTPException(status_code=400, detail="Name must not be empty")
+    
+    # Sanitize: remove characters unsafe for filenames
+    sanitized = "".join(c for c in new_name if c not in r'\/:*?"<>|').strip()
+    if not sanitized:
+        raise HTTPException(status_code=400, detail="Name contains only invalid characters")
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        video = get_or_404(cursor,
+            "SELECT * FROM processed_videos WHERE id = ?",
+            (video_id,), "Video not found")
+        
+        if video['name'] == new_name:
+            # No change needed
+            video_dict = dict_from_row(cursor.execute("""
+                SELECT v.*, COALESCE(v.job_name, j.name) as job_name
+                FROM processed_videos v LEFT JOIN jobs j ON v.job_id = j.id
+                WHERE v.id = ?
+            """, (video_id,)).fetchone())
+            normalize_favorite(video_dict)
+            video_dict['tags'] = fetch_tags_for_videos(cursor, [video_id]).get(video_id, [])
+            video_dict['share_token'] = fetch_share_tokens(cursor, [video_id]).get(video_id)
+            return video_dict
+        
+        old_file_path = video['file_path']
+        old_thumb_path = video['thumbnail_path']
+        
+        # Build new paths: keep same directory, change filename
+        old_dir = os.path.dirname(old_file_path)
+        old_ext = os.path.splitext(old_file_path)[1]  # .mp4
+        new_file_path = os.path.join(old_dir, f"{sanitized}{old_ext}")
+        new_thumb_path = os.path.join(old_dir, f"{sanitized}_thumb.jpg") if old_thumb_path else None
+        
+        # Check for duplicate filename in same directory
+        abs_new_file = resolve_video_path(new_file_path)
+        if os.path.exists(abs_new_file):
+            raise HTTPException(status_code=409, detail=f"A file named '{sanitized}{old_ext}' already exists in this directory")
+        
+        # Rename files on disk
+        abs_old_file = resolve_video_path(old_file_path)
+        if os.path.exists(abs_old_file):
+            os.rename(abs_old_file, abs_new_file)
+        
+        if old_thumb_path and new_thumb_path:
+            abs_old_thumb = resolve_video_path(old_thumb_path)
+            abs_new_thumb = resolve_video_path(new_thumb_path)
+            if os.path.exists(abs_old_thumb):
+                os.rename(abs_old_thumb, abs_new_thumb)
+        
+        # Update database
+        cursor.execute("""
+            UPDATE processed_videos
+            SET name = ?, file_path = ?, thumbnail_path = ?
+            WHERE id = ?
+        """, (new_name, new_file_path, new_thumb_path, video_id))
+        
+        logger.info(f"Renamed video {video_id}: '{video['name']}' -> '{new_name}'")
+        
+        # Return updated video
+        video_dict = dict_from_row(cursor.execute("""
+            SELECT v.*, COALESCE(v.job_name, j.name) as job_name
+            FROM processed_videos v LEFT JOIN jobs j ON v.job_id = j.id
+            WHERE v.id = ?
+        """, (video_id,)).fetchone())
+        normalize_favorite(video_dict)
+        video_dict['tags'] = fetch_tags_for_videos(cursor, [video_id]).get(video_id, [])
+        video_dict['share_token'] = fetch_share_tokens(cursor, [video_id]).get(video_id)
+        return video_dict
+
+
 @router.get("/{video_id}/check")
 async def check_video_file(video_id: int):
     """Check if video file exists and is accessible"""

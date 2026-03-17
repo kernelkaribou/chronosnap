@@ -1822,9 +1822,12 @@ function renderVideos(videos, isEmpty) {
     container.insertAdjacentHTML('beforeend', html);
 }
 
+let _currentVideoDetailId = null;
+
 async function openVideoDetail(videoId) {
     try {
         const video = await apiRequest(`/videos/${videoId}`);
+        _currentVideoDetailId = video.id;
         
         const modal = document.getElementById('video-detail-modal');
         const title = document.getElementById('video-detail-title');
@@ -1834,6 +1837,7 @@ async function openVideoDetail(videoId) {
         const source = document.getElementById('video-detail-source');
         
         title.textContent = video.name;
+        cancelVideoRename();
         
         // Set up video player
         if (video.status === 'completed') {
@@ -1937,6 +1941,61 @@ async function deleteVideoFromDetail(videoId, videoName) {
             }
         }
     );
+}
+
+function startVideoRename() {
+    const title = document.getElementById('video-detail-title');
+    const input = document.getElementById('video-rename-input');
+    const btn = document.getElementById('video-rename-btn');
+    const saveBtn = document.getElementById('video-rename-save');
+    const cancelBtn = document.getElementById('video-rename-cancel');
+    
+    input.value = title.textContent;
+    title.style.display = 'none';
+    btn.style.display = 'none';
+    input.style.display = '';
+    saveBtn.style.display = '';
+    cancelBtn.style.display = '';
+    input.focus();
+    input.select();
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') saveVideoRename();
+        if (e.key === 'Escape') cancelVideoRename();
+    };
+}
+
+function cancelVideoRename() {
+    const title = document.getElementById('video-detail-title');
+    const input = document.getElementById('video-rename-input');
+    const btn = document.getElementById('video-rename-btn');
+    const saveBtn = document.getElementById('video-rename-save');
+    const cancelBtn = document.getElementById('video-rename-cancel');
+    
+    title.style.display = '';
+    btn.style.display = '';
+    input.style.display = 'none';
+    saveBtn.style.display = 'none';
+    cancelBtn.style.display = 'none';
+}
+
+async function saveVideoRename() {
+    const input = document.getElementById('video-rename-input');
+    const newName = input.value.trim();
+    if (!newName) {
+        showNotification('Name cannot be empty', 'error');
+        return;
+    }
+    try {
+        const updated = await apiRequest(`/videos/${_currentVideoDetailId}`, {
+            method: 'PATCH', body: { name: newName }
+        });
+        document.getElementById('video-detail-title').textContent = updated.name;
+        cancelVideoRename();
+        loadVideos();
+        showNotification(`Video renamed to "${updated.name}"`);
+    } catch (error) {
+        showNotification(error.message || 'Failed to rename video', 'error');
+    }
 }
 
 async function cancelVideoBuild(videoId, videoName) {
