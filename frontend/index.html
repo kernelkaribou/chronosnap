@@ -585,27 +585,30 @@
 
                 <div class="form-section">
                     <div class="form-section-title">Storage</div>
-                    <div class="form-group">
-                        <label>Capture Path</label>
-                        <div style="display:flex;gap:0.5rem;align-items:center;">
-                            <input type="text" id="capture_path" class="form-control" style="flex:1;opacity:0.6;" readonly>
-                            <button type="button" class="btn-icon" id="capture-path-edit-btn" onclick="toggleCreatePathEdit(true)" title="Edit">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            </button>
-                            <button type="button" class="btn-icon" id="capture-path-save-btn" onclick="toggleCreatePathEdit(false)" title="Confirm" style="display:none;color:var(--success-color);">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                            </button>
-                            <button type="button" class="btn-icon" id="capture-path-cancel-btn" onclick="cancelCreatePathEdit()" title="Cancel" style="display:none;color:var(--danger-color);">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                            </button>
+                    <div style="display:flex;gap:1rem;">
+                        <div class="form-group" style="flex:1;min-width:0;">
+                            <label>Capture Path</label>
+                            <div style="display:flex;gap:0.5rem;align-items:center;">
+                                <input type="text" id="capture_path" class="form-control" style="flex:1;opacity:0.6;" readonly>
+                                <button type="button" class="btn-icon" id="capture-path-edit-btn" onclick="toggleCreatePathEdit(true)" title="Edit">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                </button>
+                                <button type="button" class="btn-icon" id="capture-path-save-btn" onclick="toggleCreatePathEdit(false)" title="Confirm" style="display:none;color:var(--success-color);">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                </button>
+                                <button type="button" class="btn-icon" id="capture-path-cancel-btn" onclick="cancelCreatePathEdit()" title="Cancel" style="display:none;color:var(--danger-color);">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                            </div>
                         </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Capture Naming Pattern</label>
-                        <input type="text" id="naming_pattern" class="form-control" oninput="updateNamingPreview()">
-                        <small>Available: <code>{job_name}</code>, <code>{count}</code>, <code>{timestamp}</code></small>
-                        <div id="naming-preview" style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.25rem;font-family:monospace;"></div>
+                        <div class="form-group" style="flex:1;min-width:0;">
+                            <label>Naming Pattern</label>
+                            <input type="text" id="naming_pattern" class="form-control" oninput="updateNamingPreview()">
+                            <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.25rem;">
+                                <span>Variables: <code>{job_name}</code> <code>{count}</code> <code>{timestamp}</code></span>
+                                <span id="naming-preview" style="font-family:monospace;display:block;margin-top:0.15rem;"></span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
