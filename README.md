@@ -139,17 +139,8 @@ Five volumes are required for persistent data:
 | `MAX_UPLOAD_SIZE` | `10737418240` | Maximum upload size in bytes (default 10 GB). |
 | `FFMPEG_TIMEOUT` | `30` | FFmpeg capture timeout in seconds. Increase for slow networks. |
 | `APP_VERSION` | Read from `VERSION` file | Override the application version string. Optional. If not set, the version is read from the `VERSION` file at the repository root. |
-| `CAPTURES_PATH` | `/captures` | Default captures storage directory. Seeds the DB setting on first run. |
-| `TIMELAPSES_PATH` | `/timelapses` | Default timelapse video storage directory. Seeds the DB setting on first run. |
-| `IMPORT_PATH` | `/imports` | Default import directory. Seeds the DB setting on first run. |
-| `EXPORT_PATH` | `/exports` | Default export directory. Seeds the DB setting on first run. |
-| `EXPORT_RETENTION_DAYS` | `7` | Days to keep export archives before auto-cleanup. 0 = keep indefinitely. Seeds the DB setting on first run. |
-| `DEFAULT_NAMING_PATTERN` | `{job_name}_{count}_{timestamp}` | Default capture file naming pattern. Seeds the DB setting on first run. |
-| `WEBHOOK_URL` | *(none)* | Webhook endpoint URL. Seeds the DB setting on first run. |
-| `WEBHOOK_ENABLED` | *(none)* | Enable webhooks (`true`/`false`). Seeds the DB setting on first run. |
-| `WEBHOOK_EVENTS` | *(none)* | Comma-separated webhook event types. Seeds the DB setting on first run. |
 
-> **Note:** Environment variables that seed DB settings (paths, retention, naming pattern, webhooks) only take effect on first startup when no value exists in the database. Once you change a setting via the UI, the env var is ignored on future restarts.
+All other application settings (storage paths, naming patterns, webhooks, export retention) are managed through the Settings page in the UI. For automated deployments, these can also be configured via the REST API after startup -- see [API Configuration](#api-configuration) below.
 
 ### Example docker-compose.yml
 
@@ -263,6 +254,34 @@ Interactive API documentation is available at `/docs` (Swagger UI) when the appl
 | `/api/import` | Import images and videos from server paths or browser uploads. Browse directories, analyze staged files, execute imports. |
 | `/api/settings` | View and regenerate the API key. Configure webhook notifications (URL, template, event filtering), server paths (captures, timelapses, import, export), export retention, and check for version updates. |
 | `/api/storage` | Storage statistics and disk usage. |
+
+### API Configuration
+
+For automated or scripted deployments, application settings can be configured via the API after the container starts. First retrieve your API key from the Settings page or the database, then use it to configure settings programmatically:
+
+```bash
+API_KEY="your-api-key"
+BASE="http://localhost:8080/api"
+
+# Configure storage paths
+curl -X PUT "$BASE/import/settings/path/captures" -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" -d '{"path": "/captures"}'
+
+# Set export retention (days, 0 = indefinite)
+curl -X PUT "$BASE/settings/export-retention" -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" -d '{"export_retention_days": 14}'
+
+# Set default naming pattern
+curl -X PUT "$BASE/settings/naming-pattern" -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" -d '{"naming_pattern": "{job_name}_{timestamp}"}'
+
+# Configure webhooks
+curl -X PUT "$BASE/settings/webhook" -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"webhook_enabled": true, "webhook_url": "https://example.com/hook", "webhook_events": ["warning", "completed"]}'
+```
+
+See `/docs` for the full interactive API reference.
 
 ## Considerations
 
