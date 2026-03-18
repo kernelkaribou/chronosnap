@@ -2866,7 +2866,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     background: linear-gradient(135deg, #a78bfa, #e8457e);
     color: #fff;
     border: none;
-    padding: 0.35rem 0.6rem;
+    padding: 0.4rem 1rem;
     border-radius: var(--radius-sm, 4px);
     cursor: pointer;
     display: flex;
