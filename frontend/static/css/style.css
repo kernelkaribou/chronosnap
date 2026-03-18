@@ -2399,7 +2399,6 @@ body {
 /* ===== Source Type Icon Toggle ===== */
 .source-icon-toggle {
     display: flex;
-    flex-direction: column;
     gap: 2px;
 }
 .source-icon {
