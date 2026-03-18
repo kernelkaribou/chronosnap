@@ -716,6 +716,12 @@ function setupNavigation() {
 }
 
 function switchView(view, pushState = true) {
+    // Clean up video detail polling when leaving that view
+    if (view !== 'video-detail' && _videoDetailPollInterval) {
+        clearInterval(_videoDetailPollInterval);
+        _videoDetailPollInterval = null;
+    }
+    
     // Update navigation highlights (Jobs active for job-detail, Timelapses for video-detail)
     const navView = (view === 'job-detail') ? 'jobs' : (view === 'video-detail') ? 'videos' : view;
     document.querySelectorAll('.nav-link').forEach(link => {
@@ -2229,6 +2235,7 @@ function renderVideos(videos, isEmpty) {
 }
 
 let _currentVideoDetailId = null;
+let _videoDetailPollInterval = null;
 
 async function loadVideoDetail(videoId) {
     try {
@@ -2251,6 +2258,44 @@ async function loadVideoDetail(videoId) {
             player.style.display = 'block';
         } else {
             player.style.display = 'none';
+        }
+        
+        // Show progress bar for processing videos
+        let progressContainer = document.getElementById('video-detail-progress');
+        if (!progressContainer) {
+            progressContainer = document.createElement('div');
+            progressContainer.id = 'video-detail-progress';
+            meta.parentNode.insertBefore(progressContainer, meta);
+        }
+        if (video.status === 'processing') {
+            progressContainer.innerHTML = `
+                <div style="margin-bottom: 1rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
+                        <span style="font-size:0.85rem;color:var(--text-secondary);">Building timelapse...</span>
+                        <span style="font-size:0.85rem;font-weight:600;color:var(--primary-color);">${Math.round(video.progress)}%</span>
+                    </div>
+                    <div class="progress-bar" style="height:6px;">
+                        <div class="progress-fill" style="width:${video.progress}%;"></div>
+                    </div>
+                </div>`;
+            // Auto-refresh while processing
+            if (!_videoDetailPollInterval) {
+                _videoDetailPollInterval = setInterval(() => {
+                    const route = parseRoute();
+                    if (route.view === 'video-detail' && route.id) {
+                        loadVideoDetail(route.id);
+                    } else {
+                        clearInterval(_videoDetailPollInterval);
+                        _videoDetailPollInterval = null;
+                    }
+                }, 3000);
+            }
+        } else {
+            progressContainer.innerHTML = '';
+            if (_videoDetailPollInterval) {
+                clearInterval(_videoDetailPollInterval);
+                _videoDetailPollInterval = null;
+            }
         }
         
         // Build metadata in 3 dense rows of 4 columns each
@@ -2324,6 +2369,10 @@ function openVideoDetail(videoId) {
 }
 
 function closeVideoDetail() {
+    if (_videoDetailPollInterval) {
+        clearInterval(_videoDetailPollInterval);
+        _videoDetailPollInterval = null;
+    }
     const player = document.getElementById('video-detail-player');
     if (player) {
         player.pause();
@@ -3601,12 +3650,11 @@ async function processVideo(event) {
     };
     
     try {
-        await apiRequest('/videos/', { method: 'POST', body: formData });
-        // Close modal without history.back() since we're navigating to videos view
+        const video = await apiRequest('/videos/', { method: 'POST', body: formData });
         document.getElementById('process-video-modal').classList.remove('active');
         if (_modalHistoryDepth > 0) _modalHistoryDepth--;
         document.getElementById('process-video-form').reset();
-        navigateTo('/timelapses');
+        navigateTo(`/timelapses/${video.id}`);
         showNotification('Video processing started');
     } catch (error) {
         console.error('Failed to process video:', error);
