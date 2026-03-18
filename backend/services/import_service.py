@@ -63,7 +63,17 @@ def get_timelapses_path() -> str:
 
 def get_default_naming_pattern() -> str:
     """Get the configured default naming pattern from settings or default."""
-    return _get_setting_path('default_naming_pattern', config.DEFAULT_CAPTURE_PATTERN)
+    try:
+        from ..database import get_db
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM settings WHERE key = ?", ('default_naming_pattern',))
+            row = cursor.fetchone()
+            if row and row[0]:
+                return row[0]
+    except Exception as e:
+        logger.warning(f"Failed to read naming pattern setting: {e}")
+    return config.DEFAULT_CAPTURE_PATTERN
 
 
 def validate_path_within(path: str, allowed_prefix: str) -> str:
