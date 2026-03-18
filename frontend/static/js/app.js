@@ -377,8 +377,6 @@ function setButtonState(btnOrId, disabled) {
     const btn = typeof btnOrId === 'string' ? document.getElementById(btnOrId) : btnOrId;
     if (!btn) return;
     btn.disabled = disabled;
-    btn.style.opacity = disabled ? '0.5' : '1';
-    btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
 }
 
 // =============================================================================
@@ -1241,16 +1239,16 @@ async function loadJobDetail(jobId) {
                 
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: space-between; align-items: center; padding-top: 1rem; border-top: 2px solid var(--border-color);">
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-                        <button class="btn btn-secondary compare-btn" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')">
+                        <button class="btn btn-accent btn-sm" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')">
                             Build Timelapse
                         </button>
                         ${job.status !== 'completed' ? 
-                            `<button class="btn btn-secondary compare-btn" onclick="confirmCompleteJob(${job.id}, '${escapeHtml(job.name)}')">Complete</button>` : ''
+                            `<button class="btn btn-secondary btn-sm" onclick="confirmCompleteJob(${job.id}, '${escapeHtml(job.name)}')">Complete</button>` : ''
                         }
                         ${job.status === 'active' || job.status === 'sleeping' ? 
-                            `<button class="btn btn-secondary compare-btn" onclick="confirmDisableJob(${job.id}, '${escapeHtml(job.name)}')">Disable</button>` :
+                            `<button class="btn btn-secondary btn-sm" onclick="confirmDisableJob(${job.id}, '${escapeHtml(job.name)}')">Disable</button>` :
                             job.status === 'disabled' ?
-                            `<button class="btn btn-secondary compare-btn" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')">Enable</button>` : ''
+                            `<button class="btn btn-secondary btn-sm" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')">Enable</button>` : ''
                         }
                         <button class="btn-icon" onclick="duplicateJob(${job.id})" title="Duplicate Job" style="padding: 0.5rem;">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1272,7 +1270,7 @@ async function loadJobDetail(jobId) {
                             </svg>
                         </button>
                     </div>
-                    <button id="save-job-btn" class="btn btn-purple" onclick="saveJobChanges(${job.id})" style="font-weight: 600;" disabled>
+                    <button id="save-job-btn" class="btn btn-accent" onclick="saveJobChanges(${job.id})" style="font-weight: 600;" disabled>
                         Save
                     </button>
                 </div>
@@ -2225,7 +2223,7 @@ function renderVideos(videos, isEmpty) {
             ` : ''}
             <div class="video-gallery-info">
                 <div class="video-gallery-name">${escapeHtml(video.name)}</div>
-                <div class="video-gallery-job">${video.build_source === 'imported' ? '<span class="auto-build-badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;">Imported</span>' : (video.job_name ? escapeHtml(video.job_name) : 'No job')}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}</div>
+                <div class="video-gallery-job">${video.build_source === 'imported' ? '<span class="auto-build-badge imported">Imported</span>' : (video.job_name ? escapeHtml(video.job_name) : 'No job')}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}</div>
                 ${video.tags && video.tags.length ? `<div class="card-tags">${video.tags.map(t => tagChipHTML(t, true)).join('')}</div>` : ''}
             </div>
         </div>`;
@@ -2303,7 +2301,7 @@ async function loadVideoDetail(videoId) {
         
         // Row 1: Job, Duration, Size, Status
         const jobVal = video.build_source === 'imported'
-            ? '<span class="auto-build-badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;">Imported</span>'
+            ? '<span class="auto-build-badge imported">Imported</span>'
             : (video.job_name
                 ? (video.job_id
                     ? `<a href="/jobs/${video.job_id}" class="job-link" onclick="event.preventDefault(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a>`
@@ -2545,7 +2543,7 @@ async function loadSharedVideosList() {
             `;
         }).join('');
     } catch (error) {
-        container.innerHTML = '<span style="color:#ef4444;font-size:0.85rem;">Failed to load shared videos</span>';
+        container.innerHTML = '<span class="text-danger text-sm">Failed to load shared videos</span>';
     }
 }
 
@@ -2979,8 +2977,6 @@ async function populateVideoFormFromJob(jobId, jobName) {
     const createBtn = document.getElementById('create-video-btn');
     if (createBtn) {
         createBtn.disabled = false;
-        createBtn.style.opacity = '1';
-        createBtn.style.cursor = 'pointer';
     }
     
     // Update tag picker with job's tags
@@ -5998,7 +5994,7 @@ function editTagInline(tagId) {
     item.innerHTML = `
         <input type="text" class="form-control" value="${escapeHtml(tag.name)}" id="tag-edit-name-${tagId}" style="flex:1;max-width:150px;font-size:0.85rem;padding:0.25rem 0.5rem;">
         ${colorSwatchHTML(`tag-edit-swatches-${tagId}`, tag.color)}
-        <button class="btn btn-sm btn-purple" onclick="saveTagEdit(${tagId})">Save</button>
+        <button class="btn btn-sm btn-accent" onclick="saveTagEdit(${tagId})">Save</button>
         <button class="btn btn-sm btn-secondary" onclick="renderTagList()">Cancel</button>
     `;
     document.getElementById(`tag-edit-name-${tagId}`).focus();
@@ -6076,7 +6072,7 @@ function renderTagPicker(containerId, selectedTagIds = [], onToggle = null) {
         <div class="tag-inline-form" style="visibility:hidden;">
             <input type="text" class="form-control" placeholder="New tag name..." maxlength="50" tabindex="-1">
             <div class="color-swatch-row">${swatchesHTML}</div>
-            <button type="button" class="btn btn-purple btn-sm" tabindex="-1">Add Tag</button>
+            <button type="button" class="btn btn-accent btn-sm" tabindex="-1">Add Tag</button>
             <button type="button" class="btn btn-secondary btn-sm" tabindex="-1">Cancel</button>
         </div>
     `;
@@ -6428,7 +6424,7 @@ const captureSelection = new SelectionManager({
     name: 'captures',
     cardSelector: '.capture-card',
     dataAttr: 'data-capture-id',
-    controlsId: 'captures-selection-controls',
+    controlsId: 'selection-controls',
     countId: 'captures-selected-count',
     toggleBtnId: 'toggle-selection-btn',
     deleteEndpoint: '/captures/delete-multiple',

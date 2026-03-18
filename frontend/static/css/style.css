@@ -964,6 +964,11 @@ body {
     color: var(--primary-color);
 }
 
+.auto-build-badge.imported {
+    background: var(--primary-glow);
+    color: var(--primary-color);
+}
+
 [data-theme="light"] .auto-build-badge {
     color: #0e7490;
 }
@@ -2143,7 +2148,7 @@ body {
 
 /* ===== Captures View ===== */
 /* Captures selection controls */
-.captures-selection-controls {
+.selection-controls {
     display: flex;
     gap: 1rem;
     align-items: center;
@@ -2154,11 +2159,11 @@ body {
     border-radius: var(--radius-sm);
 }
 
-.captures-selection-controls span {
+.selection-controls span {
     font-weight: 500;
 }
 
-.captures-selection-controls span:not(.selection-clear) {
+.selection-controls span:not(.selection-clear) {
     flex: 1;
 }
 
