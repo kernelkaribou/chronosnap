@@ -707,22 +707,28 @@ body {
     max-width: 100%;
 }
 
-/* Sticky detail header (back button + title) below navbar */
-.detail-view-header {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    background: var(--bg-color);
-    margin: -2rem -2rem 2rem -2rem;
-    padding: 1rem 2rem;
-    border-bottom: 1px solid var(--border-color);
+/* Detail view: fixed header + scrollable content filling viewport */
+#job-detail-view.active,
+#video-detail-view.active {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 60px);
+    overflow: hidden;
 }
 
-@media (max-width: 768px) {
-    .detail-view-header {
-        margin: -1rem -1rem 1.5rem -1rem;
-        padding: 0.75rem 1rem;
-    }
+.detail-view-header {
+    flex-shrink: 0;
+    background: var(--bg-color);
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 0;
+}
+
+.detail-view-body {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    padding-top: var(--space-xl);
 }
 
 /* Job detail: sidebar (preview + meta) + main (settings) */
@@ -734,6 +740,8 @@ body {
 }
 
 .detail-sidebar {
+    position: sticky;
+    top: 0;
     align-self: start;
 }
 

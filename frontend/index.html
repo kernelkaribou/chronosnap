@@ -114,7 +114,9 @@
                         <h2 id="job-detail-title">Job Details</h2>
                     </div>
                 </div>
-                <div id="job-detail-content" class="detail-page-content"></div>
+                <div class="detail-view-body">
+                    <div id="job-detail-content" class="detail-page-content"></div>
+                </div>
             </div>
 
             <!-- Timelapses View -->
@@ -199,16 +201,18 @@
                         </h2>
                     </div>
                 </div>
-                <div class="detail-page-content">
-                    <div class="video-detail-layout">
-                        <div class="video-detail-player">
-                            <video id="video-detail-player" controls>
-                                <source id="video-detail-source" type="video/mp4">
-                            </video>
+                <div class="detail-view-body">
+                    <div class="detail-page-content">
+                        <div class="video-detail-layout">
+                            <div class="video-detail-player">
+                                <video id="video-detail-player" controls>
+                                    <source id="video-detail-source" type="video/mp4">
+                                </video>
+                            </div>
+                            <dl class="video-detail-meta" id="video-detail-meta"></dl>
+                            <div id="video-detail-tags"></div>
+                            <div class="video-detail-actions" id="video-detail-actions"></div>
                         </div>
-                        <dl class="video-detail-meta" id="video-detail-meta"></dl>
-                        <div id="video-detail-tags"></div>
-                        <div class="video-detail-actions" id="video-detail-actions"></div>
                     </div>
                 </div>
             </div>
