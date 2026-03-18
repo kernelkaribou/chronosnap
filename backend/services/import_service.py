@@ -1115,9 +1115,12 @@ def execute_video_import(
     if not os.path.exists(src_path):
         raise ValueError(f"Video file not found: {src_path}")
     
-    # Determine destination directory
+    sanitized_video = re.sub(r'[^\w\s-]', '', video_name).strip() or video_name
+    original_ext = os.path.splitext(video['file_name'])[1].lower() or '.mp4'
+    
+    # Determine job folder and job_name for DB
+    db_job_name = 'Imported'
     if job_id:
-        # Link to job — use job's timelapse folder
         with get_db() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT name FROM jobs WHERE id = ?", (job_id,))
@@ -1125,49 +1128,26 @@ def execute_video_import(
             if not row:
                 raise ValueError(f"Job {job_id} not found")
             job_name = row[0]
-            sanitized = re.sub(r'[^\w\s-]', '', job_name).strip()
-            video_dir = os.path.join(get_timelapses_path(), f"{job_id}_{sanitized}", video_name)
+            db_job_name = job_name
+            sanitized_job = re.sub(r'[^\w\s-]', '', job_name).strip()
+            job_folder = f"{job_id}_{sanitized_job}"
     else:
-        # Standalone — use imported folder
-        video_dir = os.path.join(get_timelapses_path(), 'imported', video_name)
+        job_folder = 'imported'
     
-    os.makedirs(video_dir, exist_ok=True)
-    os.chmod(video_dir, 0o755)
-    
-    original_ext = os.path.splitext(video['file_name'])[1].lower() or '.mp4'
-    dest_path = os.path.join(video_dir, f"{video_name}{original_ext}")
-    
-    # Handle collision
-    if os.path.exists(dest_path):
-        counter = 1
-        while os.path.exists(dest_path):
-            dest_path = os.path.join(video_dir, f"{video_name}_{counter}{original_ext}")
-            counter += 1
-    
-    # Move the video
-    shutil.move(src_path, dest_path)
-    os.chmod(dest_path, 0o644)
-    
-    # Get metadata
-    meta = probe_video(dest_path)
+    # Get metadata before moving
+    meta = probe_video(src_path)
     if not meta:
-        meta = video  # Fall back to pre-probed metadata
+        meta = video
     
     now = to_iso(get_now())
     resolution = f"{meta.get('width', 0)}x{meta.get('height', 0)}"
     fps = int(meta.get('fps', 30))
     duration = meta.get('duration', 0)
     frame_count = meta.get('frame_count', 0)
-    file_size = os.path.getsize(dest_path)
-    file_hash = video.get('file_hash', '') or compute_file_hash(dest_path)
+    file_size = os.path.getsize(src_path)
+    file_hash = video.get('file_hash', '') or compute_file_hash(src_path)
     
-    # Determine job_name for DB
-    db_job_name = 'Imported'
-    if job_id:
-        db_job_name = job_name
-    
-    rel_dest = os.path.relpath(dest_path, get_timelapses_path())
-    
+    # Insert with placeholder path to get the video ID
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -1175,13 +1155,33 @@ def execute_video_import(
                 job_id, job_name, name, file_path, file_size, file_hash, resolution,
                 framerate, quality, total_frames, duration_seconds,
                 status, progress, build_source, created_at, completed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'high', ?, ?, 'completed', 100, 'imported', ?, ?)
+            ) VALUES (?, ?, ?, '', ?, ?, ?, ?, 'high', ?, ?, 'completed', 100, 'imported', ?, ?)
         """, (
-            job_id, db_job_name, video_name, rel_dest, file_size, file_hash,
+            job_id, db_job_name, video_name, file_size, file_hash,
             resolution, fps, frame_count, duration,
             now, now
         ))
         video_id = cursor.lastrowid
+    
+    # Create folder: {job_folder}/{video_id}_{video_name}/
+    video_folder = f"{video_id}_{sanitized_video}"
+    video_dir = os.path.join(get_timelapses_path(), job_folder, video_folder)
+    os.makedirs(video_dir, exist_ok=True)
+    os.chmod(video_dir, 0o755)
+    
+    dest_path = os.path.join(video_dir, f"{sanitized_video}{original_ext}")
+    
+    # Move the video
+    shutil.move(src_path, dest_path)
+    os.chmod(dest_path, 0o644)
+    
+    # Update DB with final path
+    rel_dest = os.path.relpath(dest_path, get_timelapses_path())
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE processed_videos SET file_path = ? WHERE id = ?",
+            (rel_dest, video_id)
+        )
     
     # Generate thumbnail (pass absolute path for filesystem ops)
     _generate_video_thumbnail(video_id, dest_path)
