@@ -139,10 +139,10 @@
                 <div class="captures-selection-controls" id="video-selection-controls" style="display: none;">
                     <span class="selection-clear" onclick="videoSelection.clear()" title="Clear selection">&times;</span>
                     <span id="video-selected-count">0 selected</span>
+                    <button class="btn btn-purple btn-sm" id="video-compare-selected-btn" style="display:none;" onclick="openComparison()">Compare</button>
                     <button class="btn btn-secondary btn-sm" id="video-toggle-selection-btn" onclick="videoSelection.toggleAll()">Select Visible</button>
                     <button class="btn btn-sm btn-fav-bulk" onclick="videoSelection.favoriteSelected(true)" title="Favorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Favorite</button>
                     <button class="btn btn-sm btn-unfav-bulk" onclick="videoSelection.favoriteSelected(false)" title="Unfavorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Unfavorite</button>
-                    <button class="btn btn-purple btn-sm" id="video-compare-selected-btn" style="display:none;" onclick="openComparison()">Compare</button>
                     <button class="btn btn-danger btn-sm" onclick="videoSelection.deleteSelected()">Delete Selected</button>
                 </div>
                 <div id="videos-list" class="videos-grid"></div>
