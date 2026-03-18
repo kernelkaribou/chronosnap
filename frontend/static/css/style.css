@@ -441,6 +441,10 @@ body {
     letter-spacing: -0.02em;
 }
 
+.detail-page-content {
+    max-width: 900px;
+}
+
 @media (max-width: 640px) {
     .view-header h2 {
         font-size: 1.5rem;

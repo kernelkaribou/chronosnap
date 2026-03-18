@@ -32,11 +32,11 @@
                 <h1>TimeLapse-Manager</h1>
             </div>
             <div class="nav-links">
-                <a href="#" data-view="jobs" class="nav-link active">Jobs</a>
-                <a href="#" data-view="videos" class="nav-link">Timelapses</a>
-                <a href="#" data-view="captures" class="nav-link">Captures</a>
-                <a href="#" data-view="storage" class="nav-link">Storage</a>
-                <a href="#" data-view="settings" class="nav-link">Settings</a>
+                <a href="/jobs" data-view="jobs" class="nav-link active">Jobs</a>
+                <a href="/timelapses" data-view="videos" class="nav-link">Timelapses</a>
+                <a href="/captures" data-view="captures" class="nav-link">Captures</a>
+                <a href="/storage" data-view="storage" class="nav-link">Storage</a>
+                <a href="/settings" data-view="settings" class="nav-link">Settings</a>
             </div>
             <div class="nav-actions">
                 <button class="event-bell" onclick="toggleEventPanel()" title="Event log">
@@ -103,6 +103,20 @@
                 <div id="jobs-list" class="jobs-grid"></div>
             </div>
 
+            <!-- Job Detail View -->
+            <div id="job-detail-view" class="view">
+                <div class="view-header">
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <button class="btn btn-secondary btn-sm" onclick="navigateTo('/jobs')" title="Back to Jobs">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                            Jobs
+                        </button>
+                        <h2 id="job-detail-title">Job Details</h2>
+                    </div>
+                </div>
+                <div id="job-detail-content" class="detail-page-content"></div>
+            </div>
+
             <!-- Timelapses View -->
             <div id="videos-view" class="view">
                 <div class="view-header">
@@ -164,6 +178,39 @@
                     <button class="btn btn-danger btn-sm" onclick="videoSelection.deleteSelected()">Delete Selected</button>
                 </div>
                 <div id="videos-list" class="videos-grid"></div>
+            </div>
+
+            <!-- Video Detail View -->
+            <div id="video-detail-view" class="view">
+                <div class="view-header">
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <button class="btn btn-secondary btn-sm" onclick="navigateTo('/timelapses')" title="Back to Timelapses">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                            Timelapses
+                        </button>
+                        <h2 class="video-detail-title-row">
+                            <span id="video-detail-title">Video Details</span>
+                            <button id="video-rename-btn" class="btn-icon" title="Rename" onclick="startVideoRename()" style="padding:0.2rem;margin-left:0.4rem;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                            </button>
+                            <input type="text" id="video-rename-input" class="form-control" style="display:none;font-size:1rem;padding:0.2rem 0.5rem;max-width:20rem;">
+                            <button id="video-rename-save" class="btn btn-sm btn-purple" style="display:none;" onclick="saveVideoRename()">Save</button>
+                            <button id="video-rename-cancel" class="btn btn-sm btn-secondary" style="display:none;" onclick="cancelVideoRename()">Cancel</button>
+                        </h2>
+                    </div>
+                </div>
+                <div class="detail-page-content">
+                    <div class="video-detail-layout">
+                        <div class="video-detail-player">
+                            <video id="video-detail-player" controls>
+                                <source id="video-detail-source" type="video/mp4">
+                            </video>
+                        </div>
+                        <dl class="video-detail-meta" id="video-detail-meta"></dl>
+                        <div id="video-detail-tags"></div>
+                        <div class="video-detail-actions" id="video-detail-actions"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- Captures View -->
@@ -669,17 +716,6 @@
         </div>
     </div>
 
-    <!-- Job Details Modal -->
-    <div id="job-details-modal" class="modal">
-        <div class="modal-content large">
-            <div class="modal-header">
-                <h3 id="job-details-title">Job Details</h3>
-                <span class="close" onclick="closeModal('job-details-modal')">&times;</span>
-            </div>
-            <div id="job-details-content"></div>
-        </div>
-    </div>
-
     <!-- Process Video Modal -->
     <div id="process-video-modal" class="modal">
         <div class="modal-content large">
@@ -790,36 +826,6 @@
                     <button type="submit" id="create-video-btn" class="btn btn-purple">Create</button>
                 </div>
             </form>
-        </div>
-    </div>
-
-    <!-- Video Player Modal -->
-    <div id="video-detail-modal" class="modal">
-        <div class="modal-content xlarge">
-            <div class="modal-header">
-                <h3 class="video-detail-title-row">
-                    <span id="video-detail-title">Video Details</span>
-                    <button id="video-rename-btn" class="btn-icon" title="Rename" onclick="startVideoRename()" style="padding:0.2rem;margin-left:0.4rem;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                    </button>
-                    <input type="text" id="video-rename-input" class="form-control" style="display:none;font-size:1rem;padding:0.2rem 0.5rem;max-width:20rem;">
-                    <button id="video-rename-save" class="btn btn-sm btn-purple" style="display:none;" onclick="saveVideoRename()">Save</button>
-                    <button id="video-rename-cancel" class="btn btn-sm btn-secondary" style="display:none;" onclick="cancelVideoRename()">Cancel</button>
-                </h3>
-                <span class="close" onclick="closeVideoDetail()">&times;</span>
-            </div>
-            <div style="padding: 1rem;">
-                <div class="video-detail-layout">
-                    <div class="video-detail-player">
-                        <video id="video-detail-player" controls>
-                            <source id="video-detail-source" type="video/mp4">
-                        </video>
-                    </div>
-                    <dl class="video-detail-meta" id="video-detail-meta"></dl>
-                    <div id="video-detail-tags"></div>
-                    <div class="video-detail-actions" id="video-detail-actions"></div>
-                </div>
-            </div>
         </div>
     </div>
 

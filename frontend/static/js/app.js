@@ -565,14 +565,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Start event log polling
     startEventPolling();
     
-    // Load initial view based on URL hash or default to jobs
-    const hash = window.location.hash.slice(1); // Remove #
-    const validViews = ['jobs', 'videos', 'settings'];
-    const initialView = validViews.includes(hash) ? hash : 'jobs';
-    switchView(initialView, false); // false = don't push, use replaceState from setupNavigation
+    // Route based on current URL path (with hash fallback for old bookmarks)
+    handleRoute();
     
     // Setup refresh intervals
-    refreshIntervals.push(setInterval(loadJobs, 5000)); // Refresh jobs every 5s
+    refreshIntervals.push(setInterval(() => {
+        if (currentView === 'jobs') loadJobs();
+    }, 5000));
     
     // Setup event listeners for job creation form
     const startInput = document.getElementById('start_datetime');
@@ -632,13 +631,64 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// Navigation
+// Navigation & Routing
+const _routeMap = {
+    '/': 'jobs', '/jobs': 'jobs', '/timelapses': 'videos',
+    '/captures': 'captures', '/storage': 'storage', '/settings': 'settings',
+};
+const _viewToPath = {
+    'jobs': '/jobs', 'videos': '/timelapses', 'captures': '/captures',
+    'storage': '/storage', 'settings': '/settings',
+    'job-detail': '/jobs', 'video-detail': '/timelapses',
+};
+
+function parseRoute(pathname) {
+    pathname = pathname || window.location.pathname;
+    // Direct view match
+    if (_routeMap[pathname]) return { view: _routeMap[pathname], id: null };
+    // Detail routes: /jobs/:id, /timelapses/:id
+    const jobMatch = pathname.match(/^\/jobs\/(\d+)$/);
+    if (jobMatch) return { view: 'job-detail', id: parseInt(jobMatch[1]) };
+    const videoMatch = pathname.match(/^\/timelapses\/(\d+)$/);
+    if (videoMatch) return { view: 'video-detail', id: parseInt(videoMatch[1]) };
+    // Unknown route falls back to jobs
+    return { view: 'jobs', id: null };
+}
+
+function handleRoute(pushState = false) {
+    // Legacy hash redirect
+    const hash = window.location.hash.slice(1);
+    if (hash && !window.location.pathname.match(/^\/(jobs|timelapses|captures|storage|settings)/)) {
+        const hashMap = { 'jobs': '/jobs', 'videos': '/timelapses', 'captures': '/captures', 'storage': '/storage', 'settings': '/settings' };
+        if (hashMap[hash]) { history.replaceState(null, '', hashMap[hash]); }
+    }
+
+    const route = parseRoute();
+    if (route.view === 'job-detail' && route.id) {
+        switchView('job-detail', pushState);
+        loadJobDetail(route.id);
+    } else if (route.view === 'video-detail' && route.id) {
+        switchView('video-detail', pushState);
+        loadVideoDetail(route.id);
+    } else {
+        switchView(route.view, pushState);
+    }
+}
+
+function navigateTo(path, replace = false) {
+    if (replace) {
+        history.replaceState({ path }, '', path);
+    } else {
+        history.pushState({ path }, '', path);
+    }
+    handleRoute(false);
+}
+
 function setupNavigation() {
     document.querySelectorAll('.nav-link').forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
-            const view = e.currentTarget.dataset.view;
-            switchView(view, true); // true = push to history
+            navigateTo(e.currentTarget.getAttribute('href'));
         });
     });
     
@@ -650,9 +700,7 @@ function setupNavigation() {
             _closingFromPopstate = true;
             _modalHistoryDepth = Math.max(0, _modalHistoryDepth - 1);
             const topModal = activeModals[activeModals.length - 1];
-            if (topModal.id === 'video-detail-modal') {
-                closeVideoDetail();
-            } else if (topModal.id === 'comparison-modal') {
+            if (topModal.id === 'comparison-modal') {
                 closeComparison();
             } else if (topModal.id === 'confirm-modal') {
                 topModal.classList.remove('active');
@@ -663,20 +711,15 @@ function setupNavigation() {
             return;
         }
         
-        if (e.state && e.state.view) {
-            switchView(e.state.view, false);
-        }
+        handleRoute(false);
     });
-    
-    // Set initial history state
-    const initialView = currentView || 'jobs';
-    history.replaceState({ view: initialView }, '', `#${initialView}`);
 }
 
 function switchView(view, pushState = true) {
-    // Update navigation
+    // Update navigation highlights (Jobs active for job-detail, Timelapses for video-detail)
+    const navView = (view === 'job-detail') ? 'jobs' : (view === 'video-detail') ? 'videos' : view;
     document.querySelectorAll('.nav-link').forEach(link => {
-        link.classList.toggle('active', link.dataset.view === view);
+        link.classList.toggle('active', link.dataset.view === navView);
     });
     
     // Update content
@@ -687,11 +730,11 @@ function switchView(view, pushState = true) {
     currentView = view;
     
     // Push to browser history if requested
-    if (pushState) {
-        history.pushState({ view: view }, '', `#${view}`);
+    if (pushState && _viewToPath[view]) {
+        history.pushState({ path: _viewToPath[view] }, '', _viewToPath[view]);
     }
     
-    // Load data for view
+    // Load data for list views
     if (view === 'jobs') loadJobs();
     if (view === 'videos') loadVideos();
     if (view === 'storage') loadStorage();
@@ -836,7 +879,7 @@ function renderJobs(jobs) {
         }
         
         return `
-        <div class="job-card" style="--i:${idx}" onclick="showJobDetails(${job.id})">
+        <div class="job-card" style="--i:${idx}" onclick="navigateTo('/jobs/${job.id}')">
             ${thumbnailHtml}
             <div class="job-card-header">
                 <div class="job-card-title">${escapeHtml(job.name)}</div>
@@ -870,19 +913,18 @@ function renderJobs(jobs) {
     }).join('');
 }
 
-async function showJobDetails(jobId) {
+async function loadJobDetail(jobId) {
     try {
         const [job, capturesData] = await Promise.all([
             apiRequest(`/jobs/${jobId}`),
             apiRequest('/captures/', { query: { job_id: jobId, page: 1, page_size: 1, sort_order: 'desc' } })
         ]);
         
-        const modal = document.getElementById('job-details-modal');
-        const content = document.getElementById('job-details-content');
-        const title = document.getElementById('job-details-title');
+        const content = document.getElementById('job-detail-content');
+        const title = document.getElementById('job-detail-title');
         
-        // Update modal title with job name
-        title.textContent = `${job.name} - Details`;
+        // Update page title
+        title.textContent = job.name;
         
         let latestImageHtml = '';
         if (capturesData.captures && capturesData.captures.length > 0) {
@@ -990,7 +1032,7 @@ async function showJobDetails(jobId) {
                                     <circle cx="12" cy="13" r="4"></circle>
                                 </svg>
                             </button>
-                            <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); openCompareModal(${job.id})" title="Compare Captures" style="padding: 0.25rem;">
+                            <button class="btn-icon" onclick="event.stopPropagation(); openCompareModal(${job.id})" title="Compare Captures" style="padding: 0.25rem;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <rect x="2" y="2" width="20" height="20" rx="2"/>
                                     <path d="M12 2v20"/>
@@ -999,7 +1041,7 @@ async function showJobDetails(jobId) {
                                     <rect x="12" y="2" width="10" height="20" rx="2" fill="currentColor" opacity="0.15" stroke="none"/>
                                 </svg>
                             </button>
-                            <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); performMaintenanceScan(${job.id}, '${escapeHtml(job.name)}')" title="Sync" style="padding: 0.25rem;">
+                            <button class="btn-icon" onclick="event.stopPropagation(); performMaintenanceScan(${job.id}, '${escapeHtml(job.name)}')" title="Sync" style="padding: 0.25rem;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <polyline points="23 4 23 10 17 10"></polyline>
                                     <polyline points="1 20 1 14 7 14"></polyline>
@@ -1193,7 +1235,7 @@ async function showJobDetails(jobId) {
                 
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: space-between; align-items: center; padding-top: 1rem; border-top: 2px solid var(--border-color);">
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-                        <button class="btn btn-secondary compare-btn" onclick="event.stopPropagation(); closeModal('job-details-modal'); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')">
+                        <button class="btn btn-secondary compare-btn" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')">
                             Build Timelapse
                         </button>
                         ${job.status !== 'completed' ? 
@@ -1231,7 +1273,8 @@ async function showJobDetails(jobId) {
             </div>
         `;
         
-        showModal('job-details-modal');
+        // Scroll to top of detail page
+        content.scrollTop = 0;
         
         // Initialize custom time pickers for edit modal
         initializeEditTimePickers(job);
@@ -1284,7 +1327,13 @@ async function showJobDetails(jobId) {
     } catch (error) {
         console.error('Failed to load job details:', error);
         showNotification('Failed to load job details', 'error');
+        navigateTo('/jobs');
     }
+}
+
+// Compatibility wrapper for internal calls that need to navigate to job detail
+function showJobDetails(jobId) {
+    navigateTo(`/jobs/${jobId}`);
 }
 
 async function createJob(event) {
@@ -1498,24 +1547,21 @@ function setupJobEditChangeTracking(originalJob) {
 function confirmDisableJob(jobId, jobName) {
     confirmAction(
         `Are you sure you want to disable the job "${jobName}"? The job will stop capturing images until re-enabled.`,
-        () => updateJobStatus(jobId, 'disabled', jobName),
-        { closeModalId: 'job-details-modal' }
+        () => updateJobStatus(jobId, 'disabled', jobName)
     );
 }
 
 function confirmEnableJob(jobId, jobName) {
     confirmAction(
         `Are you sure you want to enable the job "${jobName}"? The job will start capturing images according to its schedule.`,
-        () => updateJobStatus(jobId, 'active', jobName),
-        { closeModalId: 'job-details-modal' }
+        () => updateJobStatus(jobId, 'active', jobName)
     );
 }
 
 function confirmCompleteJob(jobId, jobName) {
     confirmAction(
         `Are you sure you want to complete the job "${jobName}"? This will set the job's end time to now and mark it as completed.`,
-        () => completeJob(jobId, jobName),
-        { closeModalId: 'job-details-modal' }
+        () => completeJob(jobId, jobName)
     );
 }
 
@@ -1526,6 +1572,7 @@ async function completeJob(jobId, jobName) {
             body: { status: 'completed', end_datetime: new Date().toISOString() }
         });
         loadJobs();
+        loadJobDetail(jobId);
         showNotification(`Job "${jobName}" completed successfully`);
         refreshEventsSoon();
     } catch (error) {
@@ -1538,6 +1585,7 @@ async function updateJobStatus(jobId, status, jobName) {
     try {
         await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { status } });
         loadJobs();
+        loadJobDetail(jobId);
         const action = status === 'active' ? 'enabled' : 'disabled';
         showNotification(`Job "${jobName}" ${action} successfully`);
     } catch (error) {
@@ -1561,7 +1609,7 @@ async function updateJobEndTime(jobId) {
     
     try {
         await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { end_datetime: endDatetime } });
-        closeModal('job-details-modal');
+        loadJobDetail(jobId);
         loadJobs();
         showNotification('End time updated successfully');
     } catch (error) {
@@ -1591,7 +1639,7 @@ async function updateJobUrl(jobId) {
     try {
         await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { url, stream_type } });
         showNotification('Stream URL updated successfully');
-        showJobDetails(jobId);
+        loadJobDetail(jobId);
     } catch (error) {
         console.error('Failed to update URL:', error);
         showNotification(error.message || 'Failed to update URL', 'error');
@@ -1609,7 +1657,7 @@ async function updateJobInterval(jobId) {
     try {
         await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { interval_seconds: interval } });
         showNotification('Capture interval updated successfully');
-        showJobDetails(jobId);
+        loadJobDetail(jobId);
     } catch (error) {
         console.error('Failed to update interval:', error);
         showNotification(error.message || 'Failed to update interval', 'error');
@@ -1724,7 +1772,7 @@ async function saveJobChanges(jobId) {
     try {
         await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: updateData });
         await loadJobs();
-        closeModal('job-details-modal');
+        loadJobDetail(jobId);
         showNotification('Job settings updated successfully');
     } catch (error) {
         console.error('Failed to update job:', error);
@@ -1738,6 +1786,7 @@ async function deleteJob(jobId, jobName) {
         async () => {
             try {
                 await apiRequest(`/jobs/${jobId}`, { method: 'DELETE' });
+                navigateTo('/jobs');
                 loadJobs();
                 showNotification(`Job "${jobName}" and all captures deleted successfully`);
                 refreshEventsSoon();
@@ -1745,8 +1794,7 @@ async function deleteJob(jobId, jobName) {
                 console.error('Failed to delete job:', error);
                 showNotification(`Failed to delete job "${jobName}"`, 'error');
             }
-        },
-        { closeModalId: 'job-details-modal' }
+        }
     );
 }
 
@@ -2182,12 +2230,11 @@ function renderVideos(videos, isEmpty) {
 
 let _currentVideoDetailId = null;
 
-async function openVideoDetail(videoId) {
+async function loadVideoDetail(videoId) {
     try {
         const video = await apiRequest(`/videos/${videoId}`);
         _currentVideoDetailId = video.id;
         
-        const modal = document.getElementById('video-detail-modal');
         const title = document.getElementById('video-detail-title');
         const meta = document.getElementById('video-detail-meta');
         const actions = document.getElementById('video-detail-actions');
@@ -2214,7 +2261,7 @@ async function openVideoDetail(videoId) {
             ? '<span class="auto-build-badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;">Imported</span>'
             : (video.job_name
                 ? (video.job_id
-                    ? `<a href="#" class="job-link" onclick="event.preventDefault(); closeVideoDetail(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a>`
+                    ? `<a href="/jobs/${video.job_id}" class="job-link" onclick="event.preventDefault(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a>`
                     : escapeHtml(video.job_name))
                 : 'None');
         const sizeVal = (video.status === 'completed' && video.file_size) ? formatBytes(video.file_size) : 'N/A';
@@ -2264,25 +2311,25 @@ async function openVideoDetail(videoId) {
             actionsHtml += shareToggleHTML(video.id, video.share_token || null);
         }
         actions.innerHTML = actionsHtml;
-        
-        showModal('video-detail-modal');
     } catch (error) {
         console.error('Failed to load video details:', error);
+        showNotification('Failed to load video details', 'error');
+        navigateTo('/timelapses');
     }
 }
 
+// Compatibility wrapper
+function openVideoDetail(videoId) {
+    navigateTo(`/timelapses/${videoId}`);
+}
+
 function closeVideoDetail() {
-    const modal = document.getElementById('video-detail-modal');
-    const wasActive = modal.classList.contains('active');
     const player = document.getElementById('video-detail-player');
-    player.pause();
-    player.currentTime = 0;
-    modal.classList.remove('active');
-    
-    if (wasActive && _modalHistoryDepth > 0 && !_closingFromPopstate) {
-        _modalHistoryDepth--;
-        history.back();
+    if (player) {
+        player.pause();
+        player.currentTime = 0;
     }
+    navigateTo('/timelapses');
 }
 
 async function deleteVideoFromDetail(videoId, videoName) {
@@ -3559,7 +3606,7 @@ async function processVideo(event) {
         document.getElementById('process-video-modal').classList.remove('active');
         if (_modalHistoryDepth > 0) _modalHistoryDepth--;
         document.getElementById('process-video-form').reset();
-        switchView('videos');
+        navigateTo('/timelapses');
         showNotification('Video processing started');
     } catch (error) {
         console.error('Failed to process video:', error);
@@ -3576,10 +3623,7 @@ function closeVideoPlayer() {
 }
 
 function navigateToJob(jobId) {
-    // Switch to jobs view
-    switchView('jobs');
-    // Open job details modal
-    setTimeout(() => showJobDetails(jobId), 100);
+    navigateTo(`/jobs/${jobId}`);
 }
 
 async function deleteVideo(videoId, videoName) {
@@ -3658,13 +3702,7 @@ document.addEventListener('keydown', function(e) {
             return;
         }
         
-        // Check custom modals first (video detail, confirm dialog)
-        const videoDetail = document.getElementById('video-detail-modal');
-        if (videoDetail && videoDetail.classList.contains('active')) {
-            closeVideoDetail();
-            return;
-        }
-        
+        // Check custom modals first (confirm dialog)
         const confirmModal = document.getElementById('confirm-modal');
         if (confirmModal && confirmModal.classList.contains('active')) {
             confirmModal.classList.remove('active');
@@ -4227,8 +4265,6 @@ async function duplicateJob(jobId) {
     try {
         const job = await apiRequest(`/jobs/${jobId}`);
         
-        closeModal('job-details-modal');
-        
         // Open create modal and pre-fill with job data
         document.getElementById('create-job-form').reset();
         document.getElementById('test-result').innerHTML = '';
@@ -4715,7 +4751,7 @@ async function manualCapture(jobId, jobName) {
                 showNotification('Snapshot captured successfully!', 'success');
                 
                 // Refresh job details to show updated capture count
-                await showJobDetails(jobId);
+                await loadJobDetail(jobId);
             } catch (error) {
                 console.error('Manual capture failed:', error);
                 showNotification(`Snapshot failed: ${error.message}`, 'error');
@@ -6733,7 +6769,7 @@ async function showCapturePreview(captureId) {
         
         // Populate modal
         document.getElementById('capture-preview-image').src = `${API_BASE}/captures/${captureId}/image`;
-        document.getElementById('capture-detail-job').innerHTML = `<a href="#" onclick="showJobDetails(${capture.job_id}); closeModal('capture-preview-modal'); return false;" style="color: var(--primary-color); text-decoration: underline;">${escapeHtml(capture.job_name || 'Unknown Job')}</a>`;
+        document.getElementById('capture-detail-job').innerHTML = `<a href="/jobs/${capture.job_id}" onclick="event.preventDefault(); closeModal('capture-preview-modal'); navigateTo('/jobs/${capture.job_id}');" style="color: var(--primary-color); text-decoration: underline;">${escapeHtml(capture.job_name || 'Unknown Job')}</a>`;
         document.getElementById('capture-detail-time').textContent = formatDateTime(capture.captured_at);
         document.getElementById('capture-detail-size').textContent = formatBytes(capture.file_size);
         document.getElementById('capture-detail-path').textContent = capture.file_path;
@@ -6828,12 +6864,6 @@ function toggleVideoSharedFilter() {
 }
 
 async function viewJobCaptures(jobId) {
-    // Close job details modal if open
-    const modal = document.getElementById('job-details-modal');
-    if (modal) {
-        modal.classList.remove('active');
-    }
-    
     // Set the job filter in state AND dropdown BEFORE switching view
     capturesState.jobFilter = jobId;
     capturesState.currentPage = 1;
@@ -6841,7 +6871,6 @@ async function viewJobCaptures(jobId) {
     // Ensure dropdown is populated and set to the correct value
     const jobSelect = document.getElementById('captures-job-filter');
     if (jobSelect && jobSelect.options.length === 1) {
-        // Need to populate dropdown first
         const jobs = await apiRequest('/jobs/');
         jobs.forEach(job => {
             const option = document.createElement('option');
@@ -6855,7 +6884,7 @@ async function viewJobCaptures(jobId) {
     setValue('captures-job-filter', jobId);
     
     // Switch to captures view (this calls loadCaptures which will use the filter we just set)
-    switchView('captures', true);
+    navigateTo('/captures');
 }
 
 
