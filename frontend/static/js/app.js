@@ -9,15 +9,24 @@ let videoRefreshInterval = null;
 let confirmCallback = null;
 
 // =============================================================================
-// Theme Toggle
+// Theme Toggle & Presets
 // =============================================================================
+
+const THEME_PRESETS = {
+    cosmic:  { name: 'Cosmic',  colors: ['#56b8d6', '#a78bfa', '#e8457e'] },
+    ocean:   { name: 'Ocean',   colors: ['#38bdf8', '#818cf8', '#a78bfa'] },
+    forest:  { name: 'Forest',  colors: ['#4ade80', '#a3e635', '#f59e0b'] },
+    sunset:  { name: 'Sunset',  colors: ['#fb923c', '#f472b6', '#c084fc'] },
+    minimal: { name: 'Minimal', colors: ['#a1a1aa', '#d4d4d8', '#f4f4f5'] },
+};
 
 function initTheme() {
     const saved = localStorage.getItem('theme');
     if (saved) {
         document.documentElement.setAttribute('data-theme', saved);
     }
-    // Default is dark (handled by :root CSS)
+    const preset = localStorage.getItem('themePreset') || 'cosmic';
+    document.documentElement.setAttribute('data-preset', preset);
 }
 
 function toggleTheme() {
@@ -25,8 +34,29 @@ function toggleTheme() {
     const next = current === 'light' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', next);
     localStorage.setItem('theme', next);
-    // Re-render storage charts with updated theme colors
     if (currentView === 'storage') loadStorage();
+    renderThemePresets();
+}
+
+function setThemePreset(preset) {
+    document.documentElement.setAttribute('data-preset', preset);
+    localStorage.setItem('themePreset', preset);
+    if (currentView === 'storage') loadStorage();
+    renderThemePresets();
+}
+
+function renderThemePresets() {
+    const grid = document.getElementById('theme-preset-grid');
+    if (!grid) return;
+    const current = localStorage.getItem('themePreset') || 'cosmic';
+    grid.innerHTML = Object.entries(THEME_PRESETS).map(([key, preset]) => `
+        <div class="theme-preset-card ${key === current ? 'active' : ''}" onclick="setThemePreset('${key}')">
+            <div class="theme-preset-swatches">
+                ${preset.colors.map(c => `<span style="background:${c};"></span>`).join('')}
+            </div>
+            <div class="theme-preset-name">${preset.name}</div>
+        </div>
+    `).join('');
 }
 
 function getTimeFormat() {
@@ -5391,7 +5421,7 @@ function getChartColors() {
     const style = getComputedStyle(document.documentElement);
     const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
     return {
-        purple: style.getPropertyValue('--accent-purple').trim() || '#8b5cf6',
+        purple: style.getPropertyValue('--purple-mid').trim() || '#8b5cf6',
         blue: '#3b82f6',
         green: '#22c55e',
         amber: '#f59e0b',
@@ -5672,6 +5702,9 @@ async function loadSettings() {
     
     // Sync time format toggle state
     updateTimeFormatButtons();
+
+    // Load theme presets
+    renderThemePresets();
 
     // Load webhook settings
     loadWebhookSettings();
