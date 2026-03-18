@@ -587,6 +587,15 @@ function toggleTimeWindow() {
 document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
     
+    // Measure navbar height for detail view layout calculations
+    const navbar = document.querySelector('.navbar');
+    if (navbar) {
+        const updateNavbarHeight = () => {
+            document.documentElement.style.setProperty('--navbar-height', navbar.offsetHeight + 'px');
+        };
+        updateNavbarHeight();
+        window.addEventListener('resize', updateNavbarHeight);
+    }
     // Load tags globally (needed by tag pickers in modals)
     loadTagManager();
     
@@ -1016,22 +1025,6 @@ async function loadJobDetail(jobId) {
         }
         
         content.innerHTML = `
-            <div style="padding: 1.5rem;">
-                ${job.status === 'warning' && job.warning_message ? `
-                <div class="info-box" style="margin-bottom: 1rem; border-left-color: var(--warning-color);">
-                    <div class="info-box">
-                        <span style="font-size: 1.25rem;">⚠</span>
-                        <div>
-                            <strong>Capture Warning</strong>
-                            <p class="mt-sm text-base">${escapeHtml(job.warning_message)}</p>
-                            <p class="mt-sm text-xs" style="opacity: 0.8;">Verify settings for the job. The job will continue attempting captures in case this is a temporary issue.</p>
-                        </div>
-                    </div>
-                </div>
-                ` : ''}
-                
-                ${timeWindowHtml}
-                
                 <div class="detail-layout">
                     <div class="detail-sidebar">
                         ${capturesData.captures && capturesData.captures.length > 0 ? `
@@ -1076,9 +1069,56 @@ async function loadJobDetail(jobId) {
                                 </button>
                             </div>
                         </div>
+                        <div class="detail-actions">
+                            <button class="btn btn-accent btn-sm" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')">
+                                Build Timelapse
+                            </button>
+                            ${job.status !== 'completed' ? 
+                                `<button class="btn btn-secondary btn-sm" onclick="confirmCompleteJob(${job.id}, '${escapeHtml(job.name)}')">Complete</button>` : ''
+                            }
+                            ${job.status === 'active' || job.status === 'sleeping' ? 
+                                `<button class="btn btn-secondary btn-sm" onclick="confirmDisableJob(${job.id}, '${escapeHtml(job.name)}')">Disable</button>` :
+                                job.status === 'disabled' ?
+                                `<button class="btn btn-secondary btn-sm" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')">Enable</button>` : ''
+                            }
+                            <div class="detail-actions-group">
+                                <button class="btn-icon" onclick="duplicateJob(${job.id})" title="Duplicate Job">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                </button>
+                                <button class="btn-icon" onclick="exportJob(${job.id}, '${escapeHtml(job.name)}')" title="Export Job">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                </button>
+                                <button class="btn-icon" onclick="deleteJob(${job.id}, '${escapeHtml(job.name)}')" title="Delete Job">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="detail-main">
+                        ${job.status === 'warning' && job.warning_message ? `
+                        <div class="info-box" style="margin-bottom: 1rem; border-left-color: var(--warning-color);">
+                            <div class="info-box">
+                                <span style="font-size: 1.25rem;">⚠</span>
+                                <div>
+                                    <strong>Capture Warning</strong>
+                                    <p class="mt-sm text-base">${escapeHtml(job.warning_message)}</p>
+                                    <p class="mt-sm text-xs" style="opacity: 0.8;">Verify settings for the job. The job will continue attempting captures in case this is a temporary issue.</p>
+                                </div>
+                            </div>
+                        </div>
+                        ` : ''}
+                        ${timeWindowHtml}
                         <!-- Source -->
                         <div class="form-section">
                             <div class="form-section-title">Source</div>
@@ -1255,49 +1295,16 @@ async function loadJobDetail(jobId) {
                     </div>
                 </div>
 
+                <div class="detail-save-bar">
+                    <button id="save-job-btn" class="btn btn-accent" onclick="saveJobChanges(${job.id})" disabled>
+                        Save Changes
+                    </button>
+                </div>
+
                     </div><!-- /detail-main -->
                 </div><!-- /detail-layout -->
 
                 <input type="hidden" id="edit_start_datetime" value="${job.start_datetime}">
-                
-                <div class="detail-actions">
-                    <div class="detail-actions-group">
-                        <button class="btn btn-accent btn-sm" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')">
-                            Build Timelapse
-                        </button>
-                        ${job.status !== 'completed' ? 
-                            `<button class="btn btn-secondary btn-sm" onclick="confirmCompleteJob(${job.id}, '${escapeHtml(job.name)}')">Complete</button>` : ''
-                        }
-                        ${job.status === 'active' || job.status === 'sleeping' ? 
-                            `<button class="btn btn-secondary btn-sm" onclick="confirmDisableJob(${job.id}, '${escapeHtml(job.name)}')">Disable</button>` :
-                            job.status === 'disabled' ?
-                            `<button class="btn btn-secondary btn-sm" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')">Enable</button>` : ''
-                        }
-                        <button class="btn-icon" onclick="duplicateJob(${job.id})" title="Duplicate Job">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                            </svg>
-                        </button>
-                        <button class="btn-icon" onclick="exportJob(${job.id}, '${escapeHtml(job.name)}')" title="Export Job">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                            </svg>
-                        </button>
-                        <button class="btn-icon" onclick="deleteJob(${job.id}, '${escapeHtml(job.name)}')" title="Delete Job">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="3 6 5 6 21 6"></polyline>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                <line x1="10" y1="11" x2="10" y2="17"></line>
-                                <line x1="14" y1="11" x2="14" y2="17"></line>
-                            </svg>
-                        </button>
-                    </div>
-                    <button id="save-job-btn" class="btn btn-accent" onclick="saveJobChanges(${job.id})" disabled>
-                        Save
-                    </button>
-                </div>
-            </div>
         `;
         
         // Scroll to top of detail page

@@ -705,15 +705,24 @@ body {
 
 .detail-page-content {
     max-width: 100%;
+    height: 100%;
 }
 
-/* Detail view: fixed header + scrollable content filling viewport */
+/* Detail view: fixed header + sidebar, only settings scroll */
 #job-detail-view.active,
 #video-detail-view.active {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 60px);
+    height: 100%;
     overflow: hidden;
+}
+
+/* Prevent main-content from scrolling when detail view is active */
+.main-content:has(#job-detail-view.active),
+.main-content:has(#video-detail-view.active) {
+    overflow: hidden;
+    height: calc(100vh - var(--navbar-height, 52px));
+    padding-bottom: 0;
 }
 
 .detail-view-header {
@@ -726,23 +735,23 @@ body {
 
 .detail-view-body {
     flex: 1;
-    overflow-y: auto;
     min-height: 0;
-    padding-top: var(--space-xl);
+    overflow: hidden;
 }
 
-/* Job detail: sidebar (preview + meta) + main (settings) */
+/* Job detail: sidebar (preview + meta + actions) fixed, main scrolls */
 .detail-layout {
     display: grid;
     grid-template-columns: 320px 1fr;
     gap: var(--space-xl);
-    margin-bottom: var(--space-xl);
+    height: 100%;
+    min-height: 0;
 }
 
 .detail-sidebar {
-    position: sticky;
-    top: 0;
-    align-self: start;
+    overflow-y: auto;
+    padding-top: var(--space-lg);
+    padding-bottom: var(--space-xl);
 }
 
 .detail-sidebar img {
@@ -774,6 +783,24 @@ body {
 
 .detail-main {
     min-width: 0;
+    overflow-y: auto;
+    padding-top: var(--space-lg);
+    padding-bottom: var(--space-xl);
+    padding-right: var(--space-sm);
+}
+
+.detail-save-bar {
+    position: sticky;
+    bottom: 0;
+    background: var(--bg-color);
+    padding: var(--space-md) 0;
+    border-top: 1px solid var(--border-color);
+    margin-top: var(--space-lg);
+    z-index: 5;
+}
+
+.detail-save-bar .btn {
+    min-width: 140px;
 }
 
 /* Detail page layout helpers */
@@ -792,15 +819,20 @@ body {
     display: flex;
     gap: var(--space-sm);
     flex-wrap: wrap;
-    justify-content: space-between;
     align-items: center;
     padding-top: var(--space-lg);
-    border-top: 2px solid var(--border-color);
+    margin-top: var(--space-lg);
+    border-top: 1px solid var(--border-color);
+}
+
+.detail-actions .btn {
+    flex: 1;
+    min-width: 0;
 }
 
 .detail-actions-group {
     display: flex;
-    gap: var(--space-sm);
+    gap: var(--space-xs);
     flex-wrap: wrap;
     align-items: center;
 }
@@ -837,14 +869,38 @@ body {
 }
 
 @media (max-width: 900px) {
+    /* On mobile, revert to normal scrolling page */
+    #job-detail-view.active,
+    #video-detail-view.active {
+        height: auto;
+        overflow: visible;
+    }
+    .main-content:has(#job-detail-view.active),
+    .main-content:has(#video-detail-view.active) {
+        overflow: visible;
+        height: auto;
+        padding-bottom: 2rem;
+    }
+    .detail-view-body {
+        overflow: visible;
+    }
     .detail-layout {
         grid-template-columns: 1fr;
+        height: auto;
     }
     .detail-sidebar {
+        overflow-y: visible;
         position: static;
     }
     .detail-sidebar img {
         max-width: 400px;
+    }
+    .detail-main {
+        overflow-y: visible;
+        padding-right: 0;
+    }
+    .detail-save-bar {
+        position: static;
     }
 }
 
@@ -1339,6 +1395,10 @@ body {
 }
 
 /* Video detail modal */
+#video-detail-view .detail-view-body {
+    overflow-y: auto;
+}
+
 .video-detail-layout {
     display: flex;
     flex-direction: column;
