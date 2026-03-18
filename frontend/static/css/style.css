@@ -2823,11 +2823,20 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     gap: 1rem;
     margin-bottom: 0.75rem;
 }
+.comparison-players.compare-grid-3,
+.comparison-players.compare-grid-4 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+}
 .comparison-side video {
     width: 100%;
     max-height: 50vh;
     border-radius: 6px;
     background: #000;
+}
+.compare-grid-3 .comparison-side video,
+.compare-grid-4 .comparison-side video {
+    max-height: 35vh;
 }
 .comparison-label {
     margin-top: 0.4rem;
@@ -2850,8 +2859,24 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.5rem 0;
+    padding: 0.5rem 0.25rem 0.5rem 0.75rem;
     border-top: 1px solid var(--border-color);
+}
+.comparison-controls .btn-compare-play {
+    background: linear-gradient(135deg, #a78bfa, #e8457e);
+    color: #fff;
+    border: none;
+    padding: 0.4rem 1rem;
+    border-radius: var(--radius-sm, 4px);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.comparison-controls .btn-compare-play:hover {
+    opacity: 0.9;
+    box-shadow: 0 2px 8px rgba(167, 139, 250, 0.4);
 }
 .compare-scrubber {
     flex: 1;

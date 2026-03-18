@@ -90,7 +90,7 @@
                 <div class="view-header">
                     <h2>Timelapses</h2>
                     <div style="display:flex;gap:0.5rem;">
-                        <button class="btn btn-secondary compare-btn" id="compare-mode-btn" onclick="toggleCompareMode()" title="Compare two timelapses">
+                        <button class="btn btn-secondary compare-btn" id="compare-mode-btn" onclick="toggleCompareMode()" title="Compare timelapses">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="10" height="18" rx="1"/><rect x="13" y="3" width="10" height="18" rx="1"/><polyline points="3,17 6,12 9,17"/><polyline points="15,17 18,12 21,17"/></svg>
                             Compare
                         </button>
@@ -132,12 +132,14 @@
                 </div>
                 <div class="compare-mode-banner" id="compare-mode-banner" style="display:none;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="10" height="18" rx="1"/><rect x="13" y="3" width="10" height="18" rx="1"/><polyline points="3,17 6,12 9,17"/><polyline points="15,17 18,12 21,17"/></svg>
-                    <span id="compare-mode-text">Select 2 timelapses to compare</span>
+                    <span id="compare-mode-text">Select 2-4 timelapses to compare</span>
+                    <button class="btn btn-purple btn-sm" id="compare-launch-btn" style="display:none;" onclick="openComparison()">Compare</button>
                     <button class="btn btn-secondary btn-sm" onclick="toggleCompareMode()">Cancel</button>
                 </div>
                 <div class="captures-selection-controls" id="video-selection-controls" style="display: none;">
                     <span class="selection-clear" onclick="videoSelection.clear()" title="Clear selection">&times;</span>
                     <span id="video-selected-count">0 selected</span>
+                    <button class="btn btn-purple btn-sm" id="video-compare-selected-btn" style="display:none;" onclick="openComparison()">Compare</button>
                     <button class="btn btn-secondary btn-sm" id="video-toggle-selection-btn" onclick="videoSelection.toggleAll()">Select Visible</button>
                     <button class="btn btn-sm btn-fav-bulk" onclick="videoSelection.favoriteSelected(true)" title="Favorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Favorite</button>
                     <button class="btn btn-sm btn-unfav-bulk" onclick="videoSelection.favoriteSelected(false)" title="Unfavorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Unfavorite</button>
@@ -791,22 +793,9 @@
                 <h3>Compare Timelapses</h3>
                 <span class="close" onclick="closeComparison()">&times;</span>
             </div>
-            <div class="comparison-players">
-                <div class="comparison-side">
-                    <video id="compare-player-a" preload="metadata">
-                        <source id="compare-source-a" type="video/mp4">
-                    </video>
-                    <div class="comparison-label" id="compare-label-a"></div>
-                </div>
-                <div class="comparison-side">
-                    <video id="compare-player-b" preload="metadata">
-                        <source id="compare-source-b" type="video/mp4">
-                    </video>
-                    <div class="comparison-label" id="compare-label-b"></div>
-                </div>
-            </div>
+            <div class="comparison-players" id="comparison-players"></div>
             <div class="comparison-controls">
-                <button class="btn btn-secondary btn-sm" id="compare-play-btn" onclick="toggleComparisonPlay()">
+                <button class="btn-compare-play" id="compare-play-btn" onclick="toggleComparisonPlay()">
                     <svg id="compare-play-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                     <svg id="compare-pause-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
                 </button>
