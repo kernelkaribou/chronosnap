@@ -2859,7 +2859,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.5rem 0.25rem;
+    padding: 0.5rem 0.25rem 0.5rem 0.75rem;
     border-top: 1px solid var(--border-color);
 }
 .comparison-controls .btn-compare-play {
