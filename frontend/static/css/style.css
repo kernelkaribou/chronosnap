@@ -260,9 +260,8 @@ body {
 
 .event-bell.has-unseen {
     border-color: transparent;
-    background: linear-gradient(135deg, #a78bfa, #e8457e, #a78bfa, #e8457e);
-    background-size: 300% 300%;
-    animation: event-shimmer 3.3s ease infinite;
+    background: linear-gradient(135deg, #a78bfa, #e8457e);
+    animation: event-pulse 3s ease-in-out infinite;
     color: #fff;
 }
 
@@ -270,10 +269,9 @@ body {
     filter: brightness(1.15);
 }
 
-@keyframes event-shimmer {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
+@keyframes event-pulse {
+    0%, 100% { filter: brightness(0.85); }
+    50% { filter: brightness(1.2); }
 }
 
 /* Event log panel */
