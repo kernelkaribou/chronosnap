@@ -5585,9 +5585,10 @@ async function loadWebhookSettings() {
 }
 
 function isValidWebhookUrl(url) {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
     try {
         const parsed = new URL(url);
-        return ['http:', 'https:'].includes(parsed.protocol) && parsed.hostname.length > 0;
+        return parsed.hostname.length > 0;
     } catch { return false; }
 }
 

@@ -231,13 +231,19 @@ async def get_webhook_settings():
         raise HTTPException(status_code=500, detail="Failed to retrieve webhook settings")
 
 
+def _validate_webhook_url(url: str) -> bool:
+    """Check that URL starts with http:// or https:// and has a hostname."""
+    if not url.startswith(('http://', 'https://')):
+        return False
+    parsed = urlparse(url)
+    return bool(parsed.hostname)
+
+
 @router.put("/webhook", response_model=WebhookSettings)
 async def update_webhook_settings(settings: WebhookSettings):
     """Update webhook notification settings"""
-    if settings.webhook_url:
-        parsed = urlparse(settings.webhook_url)
-        if parsed.scheme not in ('http', 'https') or not parsed.hostname:
-            raise HTTPException(status_code=400, detail="Webhook URL must be a valid http:// or https:// URL")
+    if settings.webhook_url and not _validate_webhook_url(settings.webhook_url):
+        raise HTTPException(status_code=400, detail="Webhook URL must be a valid http:// or https:// URL")
 
     try:
         now = to_iso(get_now())
@@ -269,8 +275,7 @@ async def test_webhook(request: WebhookTestRequest):
     if not request.url:
         return WebhookTestResponse(success=False, message="Webhook URL is required")
 
-    parsed = urlparse(request.url)
-    if parsed.scheme not in ('http', 'https') or not parsed.hostname:
+    if not _validate_webhook_url(request.url):
         return WebhookTestResponse(success=False, message="Webhook URL must be a valid http:// or https:// URL")
 
     success, message = send_test_webhook(request.url, request.payload_template)
