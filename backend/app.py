@@ -170,5 +170,14 @@ async def health_check():
     return {"status": "healthy", "scheduler": scheduler.is_running() if scheduler else False}
 
 
+@app.get("/{path:path}")
+async def frontend_catchall(path: str):
+    """Catch-all route for frontend SPA paths (e.g., /jobs/42, /timelapses/5)."""
+    from fastapi.responses import HTMLResponse
+    with open("frontend/index.html") as f:
+        html = f.read().replace("__APP_VERSION__", app.version)
+    return HTMLResponse(html)
+
+
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=8080, reload=True)
