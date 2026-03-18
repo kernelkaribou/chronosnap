@@ -12,15 +12,16 @@ A self-hosted web application for creating automated timelapse captures from HTT
 - Capture timing uses grid-based arithmetic aligned to the job start time, so intervals remain consistent regardless of when the scheduler checks
 - All scheduling is DST-aware through UTC intermediate calculations
 
-### Stream Support
+### Capture Sources
 
-- RTSP and RTSPS streams captured via FFmpeg with TCP transport
-- HTTP/HTTPS snapshot URLs captured via FFmpeg
-- Local camera support for USB webcams (V4L2) and Raspberry Pi CSI cameras (libcamera)
-- Automatic device detection and enumeration via the Devices API
-- URL validation with a preview capture before committing to a job
-- Preview button on existing jobs to verify camera connectivity and angle at any time
-- Manual snapshot trigger for on-demand captures outside the schedule
+Timelapse Manager supports four types of capture sources. Each source type captures a single image per interval using FFmpeg or rpicam-apps.
+
+- **HTTP/HTTPS** -- Snapshot URLs that return a JPEG or image frame. Common with IP cameras that expose a `/snap.jpeg` or similar endpoint. Captured via FFmpeg.
+- **RTSP/RTSPS** -- Real-time streaming protocol feeds. Used by most IP cameras and NVR systems (including UniFi Protect). Captured via FFmpeg with TCP transport for reliability.
+- **USB Webcam** -- Local USB cameras accessed through the V4L2 (Video4Linux2) interface. Supported out of the box in the Docker image. Captured via FFmpeg with `-f v4l2`.
+- **Raspberry Pi CSI Camera (Experimental)** -- Pi Camera Modules connected via the CSI ribbon cable. Requires rpicam-apps from the host. Captured via `rpicam-still`.
+
+All source types support preview before creating a job, per-job capture quality and resolution settings, and manual snapshot triggers.
 
 ### Video Processing
 
@@ -173,11 +174,11 @@ services:
 
 ### Local Camera Support
 
-Local cameras (USB webcams and Raspberry Pi CSI cameras) can be used as capture sources instead of network streams. This requires passing hardware devices from the host into the Docker container.
+Local cameras can be used as capture sources instead of network streams. This requires passing hardware devices from the host into the Docker container.
 
 #### USB Webcams (V4L2)
 
-USB webcams are supported out of the box. The container includes `v4l-utils` and uses FFmpeg's V4L2 input for capture. You just need to map the device into the container.
+USB webcams are supported out of the box. The container includes `v4l-utils` and uses FFmpeg's V4L2 input for capture. Most USB webcams that work on Linux will work here, and the application automatically detects the camera's maximum resolution.
 
 **1. Identify your camera on the host:**
 
@@ -215,37 +216,28 @@ The major number `81` corresponds to V4L2 video devices. This grants access to a
 
 **3. Create a job** using the camera icon toggle in the Create Job modal. Your devices will appear in the dropdown.
 
-#### Raspberry Pi CSI Cameras (libcamera) -- Experimental
+#### Raspberry Pi CSI Cameras (rpicam-apps) -- Experimental
 
-> **Experimental:** CSI camera support via libcamera is functional but depends heavily on the host OS and kernel configuration. USB webcams via V4L2 are the recommended and fully tested path for local cameras. CSI support has been verified on Raspberry Pi OS Bookworm but may have issues on Trixie due to ongoing libcamera packaging changes.
+> **Experimental:** CSI camera support depends on the host OS, kernel version, and rpicam-apps packaging. The libcamera/rpicam ecosystem on Raspberry Pi is under active development and behavior may vary across OS versions. USB webcams via V4L2 are the recommended and fully tested path for local cameras.
 
-Pi Camera Modules (v1, v2, v3, HQ Camera) connected via the CSI ribbon cable use the libcamera stack instead of standard V4L2. These cameras expose raw Bayer sensor data that FFmpeg cannot capture from directly, so the application uses `rpicam-still` (or `libcamera-still` on older systems) for image capture.
+Pi Camera Modules (v1, v2, v3, HQ Camera) connected via the CSI ribbon cable use the libcamera stack instead of standard V4L2. These cameras expose raw Bayer sensor data that FFmpeg cannot capture from directly, so the application uses `rpicam-still` from the [rpicam-apps](https://github.com/raspberrypi/rpicam-apps) project for image capture.
 
-> **This is an advanced setup.** It requires installing libcamera tools on the host, mounting their binaries into the container, and is intended for users comfortable with Raspberry Pi hardware and Docker device passthrough.
+> **This is an advanced setup.** It requires installing rpicam-apps on the host, mounting the binaries into the container, and is intended for users comfortable with Raspberry Pi hardware and Docker device passthrough.
 
 **Prerequisites:**
 
 - Raspberry Pi running Raspberry Pi OS (Bookworm or later)
-- Pi Camera Module connected and enabled
+- Pi Camera Module connected and enabled in `/boot/firmware/config.txt` (`camera_auto_detect=1`)
 - Docker installed on the Pi
 
-**1. Install libcamera tools on the host (if not already present):**
-
-Raspberry Pi OS does not always include the camera tools by default. The package names differ by OS version:
+**1. Install rpicam-apps on the host:**
 
 ```bash
-# Raspberry Pi OS Trixie (Debian 13) and later:
+sudo apt update
 sudo apt install rpicam-apps
-
-# Raspberry Pi OS Bookworm (Debian 12):
-sudo apt install rpicam-apps
-# Or on older Bookworm images:
-sudo apt install libcamera-apps
 ```
 
-The `rpicam-apps` package provides `rpicam-still` and `rpicam-hello`. The older `libcamera-apps` package provides `libcamera-still` and `libcamera-hello`. The application supports both naming conventions and will use whichever is available.
-
-If the packages are not found, you may need to add the Raspberry Pi apt repository:
+If the package is not found, you may need to add the Raspberry Pi apt repository:
 
 ```bash
 echo "deb http://archive.raspberrypi.com/debian $(lsb_release -cs) main" | \
@@ -259,29 +251,29 @@ sudo apt install rpicam-apps
 **2. Verify the camera works on the host:**
 
 ```bash
-# Trixie+:
 rpicam-hello --list-cameras
-# Or Bookworm:
-libcamera-hello --list-cameras
-
 # Should show your camera, e.g.:
 # 0 : imx219 [3280x2464 10-bit RGGB] (/base/soc/i2c0mux/i2c@1/imx219@10)
+
+# Test a capture:
+rpicam-still --immediate -o /tmp/test.jpg
 ```
+
+If `rpicam-hello` fails, check that the camera module is properly seated and that `/boot/firmware/config.txt` contains `camera_auto_detect=1`. A reboot may be required after enabling the camera.
 
 **3. Find the binary and library paths:**
 
 ```bash
-# Find the binaries (use whichever exists on your system)
-which rpicam-still rpicam-hello 2>/dev/null || which libcamera-still libcamera-hello
+which rpicam-still rpicam-hello
 
-# Find shared libraries the binaries depend on
-ldd $(which rpicam-still 2>/dev/null || which libcamera-still) | grep -E "libcamera|libpisp|librpicam"
+# Find shared libraries needed by the binaries
+ldd $(which rpicam-still) | grep -E "libcamera|libpisp|librpicam"
 # Note the paths, typically under /usr/lib/aarch64-linux-gnu/
 ```
 
 **4. Configure docker-compose.yml:**
 
-Map the camera device, binaries, and their shared libraries into the container. Adjust the binary names and library paths to match what you found in step 3:
+Map the camera device, rpicam binaries, and their shared libraries into the container:
 
 ```yaml
 services:
@@ -298,7 +290,7 @@ services:
       - ./data:/app/data
       - ./imports:/imports
       - ./exports:/exports
-      # Rpicam/libcamera binaries (read-only) - use the paths from step 3
+      # Rpicam binaries (read-only)
       - /usr/bin/rpicam-still:/usr/bin/rpicam-still:ro
       - /usr/bin/rpicam-hello:/usr/bin/rpicam-hello:ro
       # Shared libraries (read-only) - adjust paths based on ldd output
@@ -313,17 +305,16 @@ If the binaries fail inside the container with a "shared library not found" erro
 
 ```bash
 docker exec timelapse-manager rpicam-hello --list-cameras
-# Or: docker exec timelapse-manager libcamera-hello --list-cameras
 docker exec timelapse-manager curl -s http://localhost:8080/api/devices/ | python3 -m json.tool
 ```
 
 The camera should appear in the API response with `"driver": "libcamera"`. In the Create Job modal, click the camera icon and select the device from the dropdown.
 
-**How it works under the hood:**
+**How it works:**
 
-- At startup, the application checks for `rpicam-still` first, then falls back to `libcamera-still`. If neither is found, Pi CSI camera support is silently disabled and only V4L2 (USB) cameras are available.
-- When both a USB webcam and a Pi CSI camera are connected, the application uses libcamera for the CSI camera and V4L2 for the USB webcam automatically.
-- Captures use `rpicam-still --immediate` (or `libcamera-still --immediate`) which takes a single still image without a preview window.
+- At startup, the application checks for `rpicam-still`. If not found, Pi CSI camera support is silently disabled and only V4L2 (USB) cameras are available.
+- When both a USB webcam and a Pi CSI camera are connected, the application routes each to the correct backend automatically. The Pi CSI camera uses rpicam-apps while USB cameras use V4L2/FFmpeg.
+- Captures use `rpicam-still --immediate` which takes a single still image without a preview window.
 - Resolution is detected from `rpicam-hello --list-cameras` output and the maximum supported resolution is used by default.
 
 ## Job Configuration

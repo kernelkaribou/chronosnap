@@ -1,17 +1,18 @@
 """
 Libcamera capture backend - handles Raspberry Pi CSI cameras.
 
-Uses rpicam-still/libcamera-still for capture and rpicam-hello/libcamera-hello
-for device detection. Required for Pi Camera Modules (v1, v2, v3, HQ) connected
-via CSI ribbon cable, which expose raw Bayer formats through V4L2
-that ffmpeg cannot directly capture from.
+Uses rpicam-still for capture and rpicam-hello for device detection.
+Required for Pi Camera Modules (v1, v2, v3, HQ) connected via CSI
+ribbon cable, which expose raw Bayer formats through V4L2 that ffmpeg
+cannot directly capture from.
 
-On Raspberry Pi OS Trixie (Debian 13) and later, the tools were renamed from
-libcamera-* to rpicam-*. This backend detects and uses whichever is available.
+Rpicam-apps is the current toolset maintained by the Raspberry Pi
+Foundation (https://github.com/raspberrypi/rpicam-apps). The older
+libcamera-apps naming is no longer supported.
 
-Libcamera tools are not installed by default in the Docker image.
-They must be available from the host (via volume mount or Pi OS base
-image). This backend gracefully degrades when neither toolset is present.
+Rpicam tools are not installed by default in the Docker image.
+They must be available from the host (via volume mount). This backend
+gracefully degrades when rpicam tools are not present.
 """
 import subprocess
 import os
@@ -21,46 +22,34 @@ from typing import List, Dict, Set, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
-# Binary name pairs: (still capture, camera listing)
-# Checked in order: rpicam-* first (Trixie+), then libcamera-* (Bookworm)
-_TOOL_CANDIDATES = [
-    ('rpicam-still', 'rpicam-hello'),
-    ('libcamera-still', 'libcamera-hello'),
-]
-
 
 class LibcameraBackend:
-    """Capture backend for Pi CSI cameras via libcamera/rpicam."""
+    """Capture backend for Pi CSI cameras via rpicam-apps."""
     
     name = "libcamera"
     _available = None
     _camera_list_cache = None
-    _still_bin = None
-    _hello_bin = None
     
     def is_available(self) -> bool:
-        """Check if rpicam-still or libcamera-still is installed."""
+        """Check if rpicam-still is installed and functional."""
         if self._available is not None:
             return self._available
         
-        for still_bin, hello_bin in _TOOL_CANDIDATES:
-            try:
-                result = subprocess.run(
-                    [still_bin, '--version'],
-                    capture_output=True, timeout=5, check=False
-                )
-                if result.returncode == 0:
-                    self._still_bin = still_bin
-                    self._hello_bin = hello_bin
-                    self._available = True
-                    logger.info(f"Libcamera backend available (using {still_bin})")
-                    return True
-            except (FileNotFoundError, subprocess.TimeoutExpired):
-                continue
+        try:
+            result = subprocess.run(
+                ['rpicam-still', '--version'],
+                capture_output=True, timeout=5, check=False
+            )
+            self._available = result.returncode == 0
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            self._available = False
         
-        self._available = False
-        logger.debug("Libcamera not available, Pi CSI cameras will not be detected")
-        return False
+        if self._available:
+            logger.info("Libcamera backend available (rpicam-apps)")
+        else:
+            logger.debug("rpicam-apps not available, Pi CSI cameras will not be detected")
+        
+        return self._available
     
     def list_devices(self, exclude_paths: Set[str] = None) -> List[Dict[str, str]]:
         """
@@ -123,7 +112,7 @@ class LibcameraBackend:
         max_w, max_h = self.get_max_resolution(path)
         camera_index = self._get_camera_index(path)
         
-        cmd = [self._still_bin, '--immediate', '-n']
+        cmd = ['rpicam-still', '--immediate', '-n']
         
         if camera_index is not None:
             cmd.extend(['--camera', str(camera_index)])
@@ -170,7 +159,7 @@ class LibcameraBackend:
         cameras = []
         try:
             result = subprocess.run(
-                [self._hello_bin, '--list-cameras', '-n'],
+                ['rpicam-hello', '--list-cameras', '-n'],
                 capture_output=True, timeout=10, check=False
             )
             if result.returncode != 0:
