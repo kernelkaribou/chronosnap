@@ -2426,6 +2426,26 @@ body {
     background: rgba(99, 102, 241, 0.1);
 }
 
+/* ===== Warn After Compact Group ===== */
+.warn-after-group {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+}
+.warn-after-group label {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+.warn-after-group input {
+    width: 52px;
+    padding: 0.35rem 0.3rem;
+    text-align: center;
+    font-size: 0.8rem;
+}
+
 /* ===== Spinner ===== */
 .spinner {
     display: inline-block;

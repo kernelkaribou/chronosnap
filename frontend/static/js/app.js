@@ -1024,40 +1024,38 @@ async function showJobDetails(jobId) {
                                 <option value="${escapeHtml(job.url)}" selected>${escapeHtml(job.url)}</option>
                             </select>
                             <input type="hidden" id="edit_url" value="${escapeHtml(job.url)}">
-                            <button type="button" class="btn btn-secondary" onclick="refreshDevices('edit_device_path')" title="Refresh device list" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <button type="button" class="compare-btn" onclick="refreshDevices('edit_device_path')" title="Refresh devices" style="padding: 0.4rem 0.5rem;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <polyline points="23 4 23 10 17 10"></polyline>
                                     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
                                 </svg>
                             </button>
-                            <button type="button" class="btn btn-secondary" onclick="previewStream('edit_device_path', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
+                            <button type="button" class="compare-btn" onclick="previewStream('edit_device_path', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                     <circle cx="12" cy="12" r="3"></circle>
                                 </svg>
                                 Preview
                             </button>
-                            <div style="flex: 0 0 auto; text-align: center;">
-                                <label style="font-size: 0.75rem; white-space: nowrap;">Warn After</label>
-                                <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50" style="width: 72px;">
-                                <small style="font-size: 0.65rem;">failures</small>
+                            <div class="warn-after-group">
+                                <label>Warn After</label>
+                                <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50">
                             </div>
                         </div>
                         ` : `
                         <label>Stream URL *</label>
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
                             <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required style="flex: 1; min-width: 0;">
-                            <button type="button" class="btn btn-secondary" onclick="previewStream('edit_url', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
+                            <button type="button" class="compare-btn" onclick="previewStream('edit_url', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                     <circle cx="12" cy="12" r="3"></circle>
                                 </svg>
                                 Preview
                             </button>
-                            <div style="flex: 0 0 auto; text-align: center;">
-                                <label style="font-size: 0.75rem; white-space: nowrap;">Warn After</label>
-                                <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50" style="width: 72px;">
-                                <small style="font-size: 0.65rem;">failures</small>
+                            <div class="warn-after-group">
+                                <label>Warn After</label>
+                                <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50">
                             </div>
                         </div>
                         `}
