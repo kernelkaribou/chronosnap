@@ -19,7 +19,7 @@ DEFAULT_IMPORT_PATH = "/imports"
 
 # Import settings
 IMPORT_STAGING_DIR = str(DATA_DIR / "import-staging")
-MAX_UPLOAD_SIZE = 100 * 1024 * 1024 * 1024  # 100GB
+MAX_UPLOAD_SIZE = 25 * 1024 * 1024 * 1024  # 25GB
 
 # Default naming patterns
 DEFAULT_CAPTURE_PATTERN = "{job_name}_{count}_{timestamp}"

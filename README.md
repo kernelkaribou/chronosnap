@@ -41,13 +41,43 @@ All source types support preview before creating a job, per-job capture quality 
 
 The import feature allows bringing in existing images and videos from outside the normal capture workflow. This is useful for consolidating footage from other sources, importing archives from previous setups, or managing standalone timelapse videos.
 
-**Server Path Import**: Place files in the `/imports` directory (or any configured import path) on the host, then browse and select them from within the web interface. The default import path is configurable in Settings.
+#### Browser Upload
 
-**Browser Upload**: Drag and drop files or folders directly into the import modal, or use the Browse button to select a folder. Uploads support recursive folder traversal for nested directory structures.
+Drag and drop files or folders directly into the import modal, or use the Browse button to select files. Uploads support recursive folder traversal for nested directory structures. Files are streamed to disk in 1 MB chunks so large uploads do not consume application memory. When uploading many files at once, they are sent in batches of 50 and grouped into the same import session automatically.
 
-**How it works**: Each import operation goes through a staging pipeline. Files are scanned, analyzed (classified as images or videos, checked for duplicates), and previewed before confirming. Once confirmed, images are moved into the standard capture directory structure and a new job is created for them. Videos are imported as standalone timelapses in the gallery.
+**Limits:**
+- 25 GB maximum per upload session
+- 100 GB maximum per individual file (server path only)
+- 100,000 files per import
+- Archives are capped at a 20x extraction ratio to prevent zip bombs
 
-**Important**: Each import creates a single job. If you need to import images into separate jobs, perform separate imports. Videos are imported individually and do not require a job. They appear directly in the timelapse gallery with an "Imported" badge.
+Browser uploads work well for typical imports up to a few gigabytes. For very large transfers, the server path method below is more reliable since it avoids browser session timeouts.
+
+#### Server Path Import (Optional)
+
+For bulk imports or large file sets, place files in the `/imports` directory on the host, then browse and select them from within the web interface. This avoids browser upload limits and network interruptions since the files are already on disk. The import path is configurable in Settings.
+
+To enable server path imports, add the volume mount to your `docker-compose.yml`:
+
+```yaml
+volumes:
+  - ./imports:/imports
+```
+
+This volume is optional. If you only use browser uploads, you can omit it entirely.
+
+#### Import Pipeline
+
+Each import goes through a staging pipeline:
+
+1. **Stage** -- files are uploaded or copied into a temporary staging area
+2. **Analyze** -- files are classified (images, videos, archives), archives are extracted, and duplicates are detected
+3. **Preview** -- you review the staged files and select which to import
+4. **Execute** -- selected images are moved into the capture directory structure and a new job is created. Videos are imported as standalone entries in the timelapse gallery with an "Imported" badge.
+
+Each import creates a single job. To import images into separate jobs, perform separate imports. Videos do not require a job and appear directly in the gallery.
+
+After a successful server path import, source files are removed from the import directory to prevent accidental re-imports. Browser uploads are cleaned up from staging automatically.
 
 **Supported formats**:
 - **Images**: JPEG, PNG, BMP, TIFF, WebP
@@ -55,8 +85,6 @@ The import feature allows bringing in existing images and videos from outside th
 - **Archives**: ZIP, TAR, GZ, TGZ, BZ2, RAR, 7Z (automatically extracted during analysis)
 
 **Duplicate detection**: Videos are checked against existing imports using SHA-256 content hashing and file size with duration matching. Duplicates are identified during the preview stage and blocked from being imported again, even if the filename has changed.
-
-After a successful import, source files are removed from the import directory to prevent accidental re-imports.
 
 ### Exporting
 
