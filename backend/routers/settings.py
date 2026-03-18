@@ -130,44 +130,6 @@ async def regenerate_api_key():
         raise HTTPException(status_code=500, detail="Failed to regenerate API key")
 
 
-@router.get("/export-retention")
-async def get_export_retention():
-    """Get export retention setting (days). 0 = keep indefinitely."""
-    try:
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT value FROM settings WHERE key = 'export_retention_days'")
-            row = cursor.fetchone()
-            days = int(row[0]) if row and row[0] is not None else config.EXPORT_RETENTION_DAYS
-            return {'export_retention_days': days}
-    except Exception as e:
-        logger.error(f"Error reading export retention: {e}")
-        return {'export_retention_days': config.EXPORT_RETENTION_DAYS}
-
-
-@router.put("/export-retention")
-async def update_export_retention(body: dict):
-    """Update export retention setting. 0 = keep indefinitely, min 1 day otherwise."""
-    days = body.get('export_retention_days')
-    if days is None or not isinstance(days, int) or days < 0:
-        raise HTTPException(status_code=400, detail="export_retention_days must be a non-negative integer")
-    try:
-        now = to_iso(get_now())
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) "
-                "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
-                ('export_retention_days', str(days), now)
-            )
-            conn.commit()
-        logger.info(f"Export retention updated to {days} days")
-        return {'export_retention_days': days}
-    except Exception as e:
-        logger.error(f"Error updating export retention: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update export retention")
-
-
 @router.get("/naming-pattern")
 async def get_naming_pattern():
     """Get default capture naming pattern."""

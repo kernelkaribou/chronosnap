@@ -66,11 +66,6 @@ def get_import_path() -> str:
     return _get_setting_path('import_path', config.DEFAULT_IMPORT_PATH)
 
 
-def get_export_path() -> str:
-    """Get the configured export path from settings or default."""
-    return _get_setting_path('export_path', config.DEFAULT_EXPORTS_PATH)
-
-
 def get_captures_path() -> str:
     """Get the configured captures path from settings or default."""
     return _get_setting_path('captures_path', config.DEFAULT_CAPTURES_PATH)
@@ -84,51 +79,6 @@ def get_timelapses_path() -> str:
 def get_default_naming_pattern() -> str:
     """Get the configured default naming pattern from settings or default."""
     return _get_setting_path('default_naming_pattern', config.DEFAULT_CAPTURE_PATTERN)
-
-
-def cleanup_old_exports(max_age_days: int = None):
-    """Remove export archives older than max_age_days. 0 = keep indefinitely."""
-    if max_age_days is None:
-        # Read from DB setting, fall back to config default
-        try:
-            from ..database import get_db
-            with get_db() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT value FROM settings WHERE key = 'export_retention_days'")
-                row = cursor.fetchone()
-                if row and row[0] is not None:
-                    max_age_days = int(row[0])
-                else:
-                    max_age_days = config.EXPORT_RETENTION_DAYS
-        except Exception:
-            max_age_days = config.EXPORT_RETENTION_DAYS
-
-    if max_age_days == 0:
-        return 0
-
-    export_path = get_export_path()
-    if not os.path.isdir(export_path):
-        return 0
-
-    import time
-    now = time.time()
-    deleted = 0
-
-    for entry in os.scandir(export_path):
-        if not entry.is_file() or not entry.name.endswith('.zip'):
-            continue
-        age_days = (now - entry.stat().st_mtime) / 86400
-        if age_days > max_age_days:
-            try:
-                os.remove(entry.path)
-                deleted += 1
-                logger.info(f"Cleaned up old export ({age_days:.0f}d old): {entry.name}")
-            except OSError as e:
-                logger.error(f"Failed to cleanup export {entry.name}: {e}")
-
-    if deleted:
-        logger.info(f"Cleaned up {deleted} old export(s)")
-    return deleted
 
 
 def validate_path_within(path: str, allowed_prefix: str) -> str:

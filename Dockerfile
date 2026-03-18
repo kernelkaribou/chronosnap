@@ -33,7 +33,7 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Create necessary directories
-RUN mkdir -p /app/data /captures /timelapses /imports /exports
+RUN mkdir -p /app/data /captures /timelapses /imports
 
 # Add build metadata
 LABEL org.opencontainers.image.title="Timelapse Manager" \

@@ -3857,7 +3857,6 @@ const _pathTypes = [
     { key: 'captures', label: 'Captures Path', apiField: 'captures_path' },
     { key: 'timelapses', label: 'Timelapses Path', apiField: 'timelapses_path' },
     { key: 'import', label: 'Import Path', apiField: 'import_path' },
-    { key: 'export', label: 'Export Path', apiField: 'export_path' },
 ];
 
 function renderPathRow(type) {
@@ -3932,37 +3931,12 @@ async function saveServerPath(type) {
     }
 }
 
-// --- Export retention setting ---
-async function loadExportRetention() {
-    try {
-        const result = await apiRequest('/settings/export-retention');
-        document.getElementById('export-retention-days').value = result.export_retention_days;
-    } catch (e) {
-        document.getElementById('export-retention-days').value = 7;
-    }
-}
-
 async function loadNamingPattern() {
     try {
         const result = await apiRequest('/settings/naming-pattern');
         document.getElementById('default-naming-pattern').value = result.naming_pattern;
     } catch (e) {
         document.getElementById('default-naming-pattern').value = '{job_name}_{count}_{timestamp}';
-    }
-}
-
-async function saveExportRetention() {
-    const input = document.getElementById('export-retention-days');
-    const days = parseInt(input.value, 10);
-    if (isNaN(days) || days < 0) {
-        showNotification('Retention must be 0 (indefinite) or a positive number of days', 'error');
-        return;
-    }
-    try {
-        await apiRequest('/settings/export-retention', { method: 'PUT', body: { export_retention_days: days } });
-        showNotification(days === 0 ? 'Export retention: keep indefinitely' : `Export retention: ${days} day${days !== 1 ? 's' : ''}`, 'success');
-    } catch (error) {
-        showNotification(error.message || 'Failed to update export retention', 'error');
     }
 }
 
@@ -4040,7 +4014,6 @@ async function showCreateJobModal() {
 
 async function exportJob(jobId, jobName) {
     try {
-        // Get estimate first
         const estimate = await apiRequest(`/jobs/${jobId}/export/estimate`);
         const totalSize = formatBytes(estimate.total_size);
         const details = [];
@@ -4052,47 +4025,29 @@ async function exportJob(jobId, jobName) {
             return;
         }
         
-        const desc = `${details.join(', ')} — estimated ${totalSize}`;
-        const msg = estimate.method === 'file'
-            ? `Export "${jobName}"? ${desc} (large export — saved to /exports)`
-            : `Export "${jobName}"? ${desc}`;
-        
         confirmAction(
-            msg,
+            `Export "${jobName}"? ${details.join(', ')} — estimated ${totalSize}`,
             async () => {
                 showNotification('Building export...', 'info');
                 try {
-                    if (estimate.method === 'stream') {
-                        // Small export — stream directly
-                        const response = await fetch(`${API_BASE}/jobs/${jobId}/export`, {
-                            method: 'POST',
-                        });
-                        if (!response.ok) {
-                            const err = await response.json().catch(() => ({ detail: 'Export failed' }));
-                            throw new Error(err.detail || 'Export failed');
-                        }
-                        const blob = await response.blob();
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = response.headers.get('content-disposition')?.match(/filename="(.+)"/)?.[1] || `${jobId}_export.zip`;
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-                        URL.revokeObjectURL(url);
-                        showNotification('Export downloaded', 'success');
-                    } else {
-                        // Large export — built to disk
-                        const result = await apiRequest(`/jobs/${jobId}/export`, { method: 'POST' });
-                        const a = document.createElement('a');
-                        a.href = `${API_BASE}${result.download_url}`;
-                        a.download = result.file_name;
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-                        showNotification(`Export ready: ${result.file_name} (${formatBytes(result.file_size)})`, 'success');
-                        refreshEventsSoon();
+                    const response = await fetch(`${API_BASE}/jobs/${jobId}/export`, {
+                        method: 'POST',
+                    });
+                    if (!response.ok) {
+                        const err = await response.json().catch(() => ({ detail: 'Export failed' }));
+                        throw new Error(err.detail || 'Export failed');
                     }
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = response.headers.get('content-disposition')?.match(/filename="(.+)"/)?.[1] || `${jobId}_export.zip`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                    showNotification('Export downloaded', 'success');
+                    refreshEventsSoon();
                 } catch (error) {
                     showNotification(error.message || 'Export failed', 'error');
                 }
@@ -5457,7 +5412,6 @@ async function loadSettings() {
     loadTagManager();
     loadSharedVideosList();
     loadServerPaths();
-    loadExportRetention();
     loadNamingPattern();
     
     // Load version and check for updates
