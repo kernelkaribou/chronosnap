@@ -291,6 +291,10 @@ function startEventPolling() {
     _eventPollTimer = setInterval(fetchEvents, 30000);
 }
 
+function refreshEventsSoon() {
+    setTimeout(fetchEvents, 500);
+}
+
 // Close event panel on outside click
 document.addEventListener('click', (e) => {
     if (!_eventPanelOpen) return;
@@ -500,6 +504,7 @@ class SelectionManager {
                     this.selected.clear();
                     this.onReload();
                     this.updateControls();
+                    refreshEventsSoon();
                 } catch (error) {
                     showNotification(`Failed to delete ${this.itemLabel}s`, 'error');
                 }
@@ -1300,6 +1305,7 @@ async function createJob(event) {
         document.getElementById('create-job-form').reset();
         loadJobs();
         showNotification(`Job "${formData.name}" created successfully!`);
+        refreshEventsSoon();
     } catch (error) {
         console.error('Failed to create job:', error);
         showNotification(`Failed to create job: ${error.message}`, 'error');
@@ -1429,6 +1435,7 @@ async function completeJob(jobId, jobName) {
         });
         loadJobs();
         showNotification(`Job "${jobName}" completed successfully`);
+        refreshEventsSoon();
     } catch (error) {
         console.error('Failed to complete job:', error);
         showNotification('Failed to complete job', 'error');
@@ -1620,6 +1627,7 @@ async function deleteJob(jobId, jobName) {
                 await apiRequest(`/jobs/${jobId}`, { method: 'DELETE' });
                 loadJobs();
                 showNotification(`Job "${jobName}" and all captures deleted successfully`);
+                refreshEventsSoon();
             } catch (error) {
                 console.error('Failed to delete job:', error);
                 showNotification(`Failed to delete job "${jobName}"`, 'error');
@@ -2046,6 +2054,7 @@ async function deleteVideoFromDetail(videoId, videoName) {
                 closeVideoDetail();
                 loadVideos();
                 showNotification(`Video "${videoName}" deleted successfully`);
+                refreshEventsSoon();
             } catch (error) {
                 showNotification(`Failed to delete video "${videoName}"`, 'error');
             }
@@ -3831,6 +3840,7 @@ async function executeImport() {
         closeModal('import-modal');
         _importSessionId = null; // Already cleaned by execute
         showNotification(`Imported ${parts.join(' and ')}`, 'success');
+        refreshEventsSoon();
         loadJobs();
         loadVideos();
     } catch (error) {
@@ -4080,6 +4090,7 @@ async function exportJob(jobId, jobName) {
                         a.click();
                         a.remove();
                         showNotification(`Export ready: ${result.file_name} (${formatBytes(result.file_size)})`, 'success');
+                        refreshEventsSoon();
                     }
                 } catch (error) {
                     showNotification(error.message || 'Export failed', 'error');

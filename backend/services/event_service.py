@@ -12,7 +12,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 EVENTS_FILE = "/tmp/timelapse-events.json"
-MAX_EVENTS = 10
+MAX_EVENTS = 12
 _lock = threading.Lock()
 
 
