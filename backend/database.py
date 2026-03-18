@@ -231,6 +231,13 @@ def init_db():
         ensure_column(cursor, 'jobs', 'last_auto_build_at', 'TEXT')
         ensure_column(cursor, 'jobs', 'auto_build_in_progress', 'INTEGER DEFAULT 0')
         ensure_column(cursor, 'jobs', 'auto_build_text_overlay', 'TEXT')
+        ensure_column(cursor, 'jobs', 'capture_quality', "TEXT DEFAULT 'maximum'")
+        ensure_column(cursor, 'jobs', 'capture_resolution', "TEXT DEFAULT 'native'")
+        ensure_column(cursor, 'jobs', 'source_width', 'INTEGER')
+        ensure_column(cursor, 'jobs', 'source_height', 'INTEGER')
+        # Rename lossless -> maximum for capture and video quality
+        cursor.execute("UPDATE jobs SET capture_quality = 'maximum' WHERE capture_quality = 'lossless'")
+        cursor.execute("UPDATE jobs SET auto_build_quality = 'maximum' WHERE auto_build_quality = 'lossless'")
         
         # Migrations: processed_videos table columns
         ensure_column(cursor, 'processed_videos', 'start_time', 'TEXT')

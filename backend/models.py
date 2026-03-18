@@ -43,9 +43,13 @@ class JobCreate(BaseModel):
     auto_build_enabled: bool = Field(default=False, description="Enable automatic timelapse builds")
     auto_build_interval_hours: int = Field(default=168, ge=1, le=8760, description="Hours between auto-builds")
     auto_build_fps: int = Field(default=30, gt=0, le=120, description="FPS for auto-built videos")
-    auto_build_quality: str = Field(default="medium", pattern=r"^(low|medium|high|lossless)$")
+    auto_build_quality: str = Field(default="medium", pattern=r"^(low|medium|high|maximum)$")
     auto_build_resolution: str = Field(default="1920x1080", pattern=r"^\d+x\d+$")
     auto_build_text_overlay: Optional[str] = None  # JSON string of TextOverlayConfig
+    capture_quality: str = Field(default="maximum", pattern=r"^(maximum|high|medium|low)$", description="Capture image quality preset")
+    capture_resolution: str = Field(default="native", pattern=r"^(native|\d+x\d+)$", description="Capture resolution: 'native' or 'WxH'")
+    source_width: Optional[int] = None
+    source_height: Optional[int] = None
     tag_ids: Optional[List[int]] = None
     
     @field_validator('url')
@@ -105,9 +109,11 @@ class JobUpdate(BaseModel):
     auto_build_enabled: Optional[bool] = None
     auto_build_interval_hours: Optional[int] = Field(None, ge=1, le=8760)
     auto_build_fps: Optional[int] = Field(None, gt=0, le=120)
-    auto_build_quality: Optional[str] = Field(None, pattern=r"^(low|medium|high|lossless)$")
+    auto_build_quality: Optional[str] = Field(None, pattern=r"^(low|medium|high|maximum)$")
     auto_build_resolution: Optional[str] = Field(None, pattern=r"^\d+x\d+$")
     auto_build_text_overlay: Optional[str] = None  # JSON string of TextOverlayConfig
+    capture_quality: Optional[str] = Field(None, pattern=r"^(maximum|high|medium|low)$")
+    capture_resolution: Optional[str] = Field(None, pattern=r"^(native|\d+x\d+)$")
     tag_ids: Optional[List[int]] = None
 
     @field_validator('url')
@@ -149,6 +155,10 @@ class JobResponse(BaseModel):
     auto_build_quality: str = "medium"
     auto_build_resolution: str = "1920x1080"
     auto_build_text_overlay: Optional[str] = None
+    capture_quality: str = "maximum"
+    capture_resolution: str = "native"
+    source_width: Optional[int] = None
+    source_height: Optional[int] = None
     last_auto_build_at: Optional[str] = None
     auto_build_in_progress: int = 0
     next_scheduled_capture_at: Optional[str] = None
@@ -204,7 +214,7 @@ class VideoCreate(BaseModel):
     name: str
     resolution: str = Field(default="1920x1080", pattern=r"^\d+x\d+$")
     framerate: int = Field(default=30, gt=0)
-    quality: str = Field(default="high", pattern=r"^(low|medium|high|lossless)$")
+    quality: str = Field(default="high", pattern=r"^(low|medium|high|maximum)$")
     output_path: Optional[str] = Field(None, deprecated=True, description="Ignored. Uses global timelapses path from settings.")
     start_capture_id: Optional[int] = None
     end_capture_id: Optional[int] = None
@@ -247,6 +257,8 @@ class TestUrlResponse(BaseModel):
     message: str
     image_data: Optional[str] = None  # Base64 encoded image
     image_size: Optional[int] = None
+    source_width: Optional[int] = None
+    source_height: Optional[int] = None
 
 
 class DurationCalculation(BaseModel):
