@@ -1321,7 +1321,8 @@ async function createJob(event) {
     }
     
     // Determine source URL and stream type based on source type toggle
-    let jobUrl, stream_type, warningThresholdVal;
+    let jobUrl, stream_type;
+    const warningThresholdVal = values.warning_threshold || 3;
     if (_createSourceType === 'device') {
         jobUrl = document.getElementById('device_path').value;
         if (!jobUrl) {
@@ -1329,7 +1330,6 @@ async function createJob(event) {
             return;
         }
         stream_type = 'device';
-        warningThresholdVal = parseInt(document.getElementById('warning_threshold_device').value) || 3;
     } else {
         jobUrl = values.job_url;
         if (!jobUrl) {
@@ -1337,7 +1337,6 @@ async function createJob(event) {
             return;
         }
         stream_type = jobUrl.toLowerCase().startsWith('rtsp://') || jobUrl.toLowerCase().startsWith('rtsps://') ? 'rtsp' : 'http';
-        warningThresholdVal = values.warning_threshold || 3;
     }
     
     // Validate dates
@@ -1780,15 +1779,14 @@ function setSourceType(type) {
         networkBtn.classList.remove('active');
         deviceBtn.classList.add('active');
         networkGroup.style.display = 'none';
-        deviceGroup.style.display = 'block';
-        // Remove required from URL, load devices
+        deviceGroup.style.display = '';
         document.getElementById('job_url').removeAttribute('required');
         refreshDevices('device_path');
     } else {
         deviceBtn.classList.remove('active');
         networkBtn.classList.add('active');
         deviceGroup.style.display = 'none';
-        networkGroup.style.display = 'block';
+        networkGroup.style.display = '';
         document.getElementById('job_url').setAttribute('required', '');
     }
     // Clear preview results
@@ -4319,18 +4317,16 @@ async function duplicateJob(jobId) {
         // Set source type based on job
         if (job.stream_type === 'device') {
             setSourceType('device');
-            // Populate device picker with current device and refresh list
             const deviceSelect = document.getElementById('device_path');
             deviceSelect.innerHTML = `<option value="${escapeHtml(job.url)}" selected>${escapeHtml(job.url)}</option>`;
             refreshDevices('device_path').then(() => {
                 deviceSelect.value = job.url;
             });
-            document.getElementById('warning_threshold_device').value = job.warning_threshold || 3;
         } else {
             setSourceType('network');
             document.getElementById('job_url').value = job.url;
-            document.getElementById('warning_threshold').value = job.warning_threshold || 3;
         }
+        document.getElementById('warning_threshold').value = job.warning_threshold || 3;
         
         // Pre-fill fields from source job
         document.getElementById('job_name').value = `${job.name} (Copy)`;
