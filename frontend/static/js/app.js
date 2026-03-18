@@ -1770,22 +1770,25 @@ function setSourceType(type) {
     _createSourceType = type;
     const networkBtn = document.getElementById('source-type-network');
     const deviceBtn = document.getElementById('source-type-device');
-    const networkGroup = document.getElementById('network-source-group');
-    const deviceGroup = document.getElementById('device-source-group');
+    const urlInput = document.getElementById('job_url');
+    const deviceSelect = document.getElementById('device_path');
+    const refreshBtn = document.getElementById('device-refresh-btn');
     
     if (type === 'device') {
         networkBtn.classList.remove('active');
         deviceBtn.classList.add('active');
-        networkGroup.style.display = 'none';
-        deviceGroup.style.display = '';
-        document.getElementById('job_url').removeAttribute('required');
+        urlInput.style.display = 'none';
+        urlInput.removeAttribute('required');
+        deviceSelect.style.display = '';
+        refreshBtn.style.display = '';
         refreshDevices('device_path');
     } else {
         deviceBtn.classList.remove('active');
         networkBtn.classList.add('active');
-        deviceGroup.style.display = 'none';
-        networkGroup.style.display = '';
-        document.getElementById('job_url').setAttribute('required', '');
+        deviceSelect.style.display = 'none';
+        refreshBtn.style.display = 'none';
+        urlInput.style.display = '';
+        urlInput.setAttribute('required', '');
     }
     // Clear preview results
     document.getElementById('test-result').innerHTML = '';

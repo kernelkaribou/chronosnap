@@ -503,22 +503,16 @@
                                     </svg>
                                 </button>
                             </div>
-                            <div id="network-source-group" style="flex: 1; min-width: 0;">
-                                <input type="text" id="job_url" class="form-control" placeholder="http:// or rtsp://" required style="width: 100%;">
-                            </div>
-                            <div id="device-source-group" style="flex: 1; min-width: 0; display: none;">
-                                <div style="display: flex; gap: 0.35rem;">
-                                    <select id="device_path" class="form-control" style="flex: 1; min-width: 0;">
-                                        <option value="">No devices</option>
-                                    </select>
-                                    <button type="button" class="compare-btn" onclick="refreshDevices('device_path')" title="Refresh devices" style="padding: 0.625rem 0.5rem;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <polyline points="23 4 23 10 17 10"></polyline>
-                                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
+                            <input type="text" id="job_url" class="form-control" placeholder="http:// or rtsp://" required style="flex: 1; min-width: 0;">
+                            <select id="device_path" class="form-control" style="flex: 1; min-width: 0; display: none;">
+                                <option value="">No devices</option>
+                            </select>
+                            <button type="button" id="device-refresh-btn" class="compare-btn" onclick="refreshDevices('device_path')" title="Refresh devices" style="display: none;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                </svg>
+                            </button>
                             <input type="hidden" id="stream_type" value="http">
                             <button type="button" class="btn btn-secondary compare-btn" onclick="_createSourceType === 'device' ? testDevice() : testUrl()" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
