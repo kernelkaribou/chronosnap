@@ -9,20 +9,52 @@ import logging
 
 from ..models import TestUrlResponse
 from .. import config
+from .image_capture import _build_ffmpeg_filters
 
 logger = logging.getLogger(__name__)
 
 
-async def test_stream_url(url: str, stream_type: str = None) -> TestUrlResponse:
+def _get_image_dimensions(path: str) -> tuple[int, int] | tuple[None, None]:
+    """Get image width and height using Pillow."""
+    try:
+        from PIL import Image
+        with Image.open(path) as img:
+            return img.size  # (width, height)
+    except Exception:
+        return None, None
+
+
+def _probe_source_dimensions(url: str, stream_type: str = 'http') -> tuple[int, int] | tuple[None, None]:
+    """Probe native source resolution using ffprobe without capturing."""
+    try:
+        cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+               '-show_entries', 'stream=width,height', '-of', 'csv=p=0']
+        if stream_type == 'rtsp':
+            cmd.extend(['-rtsp_transport', 'tcp'])
+        cmd.append(url)
+        result = subprocess.run(cmd, capture_output=True, timeout=config.FFMPEG_TIMEOUT, check=False)
+        if result.returncode == 0:
+            parts = result.stdout.decode().strip().split(',')
+            if len(parts) >= 2:
+                return int(parts[0]), int(parts[1])
+    except Exception:
+        pass
+    return None, None
+
+
+async def test_stream_url(url: str, stream_type: str = None,
+                          quality: str = 'maximum', resolution: str = 'native') -> TestUrlResponse:
     """
     Test a stream URL by attempting to capture a single frame
     
     Args:
         url: The stream URL to test
         stream_type: Either 'http' or 'rtsp' (auto-detected if not provided)
+        quality: Capture quality preset (maximum/high/medium/low)
+        resolution: 'native' or 'WxH' string
         
     Returns:
-        TestUrlResponse with success status and test image info
+        TestUrlResponse with success status, test image info, and source dimensions
     """
     try:
         # Auto-detect stream type if not provided
@@ -33,7 +65,7 @@ async def test_stream_url(url: str, stream_type: str = None) -> TestUrlResponse:
         with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
             output_path = tmp.name
         
-        # Attempt capture based on stream type
+        # Build ffmpeg command with quality/resolution settings
         if stream_type == 'rtsp':
             cmd = [
                 'ffmpeg',
@@ -41,7 +73,7 @@ async def test_stream_url(url: str, stream_type: str = None) -> TestUrlResponse:
                 '-rtsp_transport', 'tcp',
                 '-i', url,
                 '-frames:v', '1',
-                '-q:v', '2',
+                *_build_ffmpeg_filters(quality, resolution),
                 '-y',
                 output_path
             ]
@@ -51,7 +83,7 @@ async def test_stream_url(url: str, stream_type: str = None) -> TestUrlResponse:
                 '-loglevel', 'error',
                 '-i', url,
                 '-frames:v', '1',
-                '-q:v', '2',
+                *_build_ffmpeg_filters(quality, resolution),
                 '-y',
                 output_path
             ]
@@ -66,6 +98,12 @@ async def test_stream_url(url: str, stream_type: str = None) -> TestUrlResponse:
         if result.returncode == 0 and os.path.exists(output_path):
             file_size = os.path.getsize(output_path)
             
+            # Detect native source dimensions (before any scaling)
+            source_width, source_height = _probe_source_dimensions(url, stream_type)
+            # Fallback: if probe fails and no scaling was applied, use image dimensions
+            if source_width is None and (not resolution or resolution == 'native'):
+                source_width, source_height = _get_image_dimensions(output_path)
+            
             # Read and encode image as base64
             with open(output_path, 'rb') as img_file:
                 image_bytes = img_file.read()
@@ -78,7 +116,9 @@ async def test_stream_url(url: str, stream_type: str = None) -> TestUrlResponse:
                 success=True,
                 message="Successfully captured test image",
                 image_data=f"data:image/jpeg;base64,{image_base64}",
-                image_size=file_size
+                image_size=file_size,
+                source_width=source_width,
+                source_height=source_height,
             )
         else:
             # Clean up temp file

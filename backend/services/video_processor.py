@@ -40,7 +40,7 @@ def process_video(
         job_dict: Job configuration
         resolution: Output resolution (e.g., "1920x1080")
         framerate: Output framerate
-        quality: Quality setting (low, medium, high, lossless)
+        quality: Quality setting (low, medium, high, maximum)
         start_capture_id: First capture to include (optional, for backward compatibility)
         end_capture_id: Last capture to include (optional, for backward compatibility)
         start_time: Start timestamp for captures (optional)
@@ -155,7 +155,7 @@ def process_video(
                 'low': '28',
                 'medium': '23',
                 'high': '18',
-                'lossless': '0'
+                'maximum': '0'
             }
             crf = quality_map.get(quality, '23')
             

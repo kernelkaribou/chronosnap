@@ -506,6 +506,27 @@
                         <input type="hidden" id="stream_type" value="http">
                         <div id="test-result" class="test-result"></div>
                     </div>
+
+                    <div id="capture-settings-row" class="form-row" style="margin-top: 0.75rem;">
+                        <div class="form-group flex-1">
+                            <label>Capture Quality</label>
+                            <select id="capture_quality" class="form-control">
+                                <option value="maximum" selected>Maximum</option>
+                                <option value="high">High</option>
+                                <option value="medium">Medium</option>
+                                <option value="low">Low</option>
+                            </select>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>Capture Resolution</label>
+                            <select id="capture_resolution" class="form-control">
+                                <option value="native" selected>Native</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="source-info" style="flex: 0 0 auto; display: none; align-self: flex-end; padding-bottom: 0.35rem;">
+                            <small id="source-dimensions" style="color: var(--text-secondary);"></small>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-section">
@@ -593,7 +614,7 @@
                                     <option value="low">Low</option>
                                     <option value="medium" selected>Medium</option>
                                     <option value="high">High</option>
-                                    <option value="lossless">Lossless</option>
+                                    <option value="maximum">Maximum</option>
                                 </select>
                             </div>
                             <div class="form-group flex-1">
@@ -690,7 +711,7 @@
                             <option value="low">Low</option>
                             <option value="medium">Medium</option>
                             <option value="high" selected>High</option>
-                            <option value="lossless">Lossless</option>
+                            <option value="maximum">Maximum</option>
                         </select>
                     </div>
                     <div class="form-group" style="flex: 0.75;">

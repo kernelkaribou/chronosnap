@@ -844,6 +844,7 @@ function renderJobs(jobs) {
             <div class="job-info">
                 <div><strong>Stream URL:</strong> <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; max-width: 250px; vertical-align: bottom;">${escapeHtml(getStreamHost(job.url))}</span></div>
                 <div><strong>Interval:</strong> ${job.interval_seconds}s</div>
+                <div><strong>Capture:</strong> ${(job.capture_quality || 'maximum').charAt(0).toUpperCase() + (job.capture_quality || 'maximum').slice(1)}${job.capture_resolution && job.capture_resolution !== 'native' ? ` @ ${job.capture_resolution}` : ''}</div>
                 ${timeWindowInfo}
                 ${job.start_datetime ? `<div><strong>Start:</strong> ${formatDateTimeNoSeconds(job.start_datetime)}</div>` : ''}
                 ${job.end_datetime ? `<div><strong>End:</strong> ${formatDateTimeNoSeconds(job.end_datetime)}</div>` : '<div><strong>Ongoing capture</strong></div>'}
@@ -1019,7 +1020,7 @@ async function showJobDetails(jobId) {
                         <label>Stream URL *</label>
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
                             <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required style="flex: 1; min-width: 0;">
-                            <button type="button" class="btn btn-secondary" onclick="previewStream('edit_url', 'edit-preview-result')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
+                            <button type="button" class="btn btn-secondary" onclick="previewStream('edit_url', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                     <circle cx="12" cy="12" r="3"></circle>
@@ -1033,6 +1034,28 @@ async function showJobDetails(jobId) {
                             </div>
                         </div>
                         <div id="edit-preview-result" class="test-result"></div>
+                    </div>
+
+                    <div id="edit-capture-settings-row" class="form-row" style="margin-top: 0.75rem;">
+                        <div class="form-group flex-1">
+                            <label>Capture Quality</label>
+                            <select id="edit_capture_quality" class="form-control">
+                                <option value="maximum" ${(!job.capture_quality || job.capture_quality === 'maximum') ? 'selected' : ''}>Maximum</option>
+                                <option value="high" ${job.capture_quality === 'high' ? 'selected' : ''}>High</option>
+                                <option value="medium" ${job.capture_quality === 'medium' ? 'selected' : ''}>Medium</option>
+                                <option value="low" ${job.capture_quality === 'low' ? 'selected' : ''}>Low</option>
+                            </select>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>Capture Resolution</label>
+                            <select id="edit_capture_resolution" class="form-control">
+                                <option value="native" selected>Native</option>
+                                ${job.capture_resolution && job.capture_resolution !== 'native' ? `<option value="${escapeHtml(job.capture_resolution)}" selected>${escapeHtml(job.capture_resolution)}</option>` : ''}
+                            </select>
+                        </div>
+                        <div class="form-group" id="edit-source-info" style="flex: 0 0 auto; display: none; align-self: flex-end; padding-bottom: 0.35rem;">
+                            <small id="edit-source-dimensions" style="color: var(--text-secondary);"></small>
+                        </div>
                     </div>
                 </div>
 
@@ -1115,7 +1138,7 @@ async function showJobDetails(jobId) {
                                     <option value="low" ${job.auto_build_quality === 'low' ? 'selected' : ''}>Low</option>
                                     <option value="medium" ${(!job.auto_build_quality || job.auto_build_quality === 'medium') ? 'selected' : ''}>Medium</option>
                                     <option value="high" ${job.auto_build_quality === 'high' ? 'selected' : ''}>High</option>
-                                    <option value="lossless" ${job.auto_build_quality === 'lossless' ? 'selected' : ''}>Lossless</option>
+                                    <option value="maximum" ${job.auto_build_quality === 'maximum' ? 'selected' : ''}>Maximum</option>
                                 </select>
                             </div>
                             <div class="form-group flex-1">
@@ -1190,6 +1213,15 @@ async function showJobDetails(jobId) {
         // Initialize edit overlay section
         initEditJobOverlay(job);
         
+        // Populate capture resolution dropdown from persisted source dimensions
+        if (job.source_width && job.source_height) {
+            const options = _generateResolutionOptions(job.source_width, job.source_height, job.capture_resolution || 'native');
+            _populateResolutionDropdown('edit_capture_resolution', options, job.capture_resolution || 'native');
+            _nativeDimensions['edit_capture_resolution'] = { w: job.source_width, h: job.source_height };
+            document.getElementById('edit-source-info').style.display = 'block';
+            document.getElementById('edit-source-dimensions').textContent = `Source: ${job.source_width}x${job.source_height}`;
+        }
+        
         // Add native resolution option to auto-build dropdown
         if (job.capture_count > 0) {
             fetch(`${API_BASE}/captures/job/${job.id}/time-range`).then(r => r.json()).then(tr => {
@@ -1237,6 +1269,8 @@ async function createJob(event) {
         time_window_enabled: { parse: 'bool' },
         time_window_start: {},
         time_window_end: {},
+        capture_quality: {},
+        capture_resolution: {},
         auto_build_enabled: { parse: 'bool' },
         auto_build_interval_hours: { parse: 'int' },
         auto_build_fps: { parse: 'int' },
@@ -1296,6 +1330,10 @@ async function createJob(event) {
         auto_build_quality: values.auto_build_quality || 'medium',
         auto_build_resolution: values.auto_build_resolution || '1920x1080',
         auto_build_text_overlay: values.auto_build_enabled ? JSON.stringify(readOverlayConfig('create-ab')) : null,
+        capture_quality: values.capture_quality || 'maximum',
+        capture_resolution: values.capture_resolution || 'native',
+        source_width: _nativeDimensions['capture_resolution']?.w || null,
+        source_height: _nativeDimensions['capture_resolution']?.h || null,
         tag_ids: getSelectedTagIds('create-job-tags')
     };
     
@@ -1344,6 +1382,8 @@ function setupJobEditChangeTracking(originalJob) {
         'edit_url',
         'edit_stream_type',
         'edit_warning_threshold',
+        'edit_capture_quality',
+        'edit_capture_resolution',
         'edit_auto_build_enabled',
         'edit_auto_build_interval_hours',
         'edit_auto_build_fps',
@@ -1552,6 +1592,8 @@ async function saveJobChanges(jobId) {
     const autoBuildFps = parseInt(document.getElementById('edit_auto_build_fps').value) || 30;
     const autoBuildQuality = document.getElementById('edit_auto_build_quality').value;
     const autoBuildResolution = document.getElementById('edit_auto_build_resolution').value;
+    const captureQuality = document.getElementById('edit_capture_quality').value;
+    const captureResolution = document.getElementById('edit_capture_resolution').value;
     
     // Validate required fields
     if (!url) {
@@ -1606,7 +1648,9 @@ async function saveJobChanges(jobId) {
         auto_build_fps: autoBuildFps,
         auto_build_quality: autoBuildQuality,
         auto_build_resolution: autoBuildResolution,
-        auto_build_text_overlay: JSON.stringify(readOverlayConfig('edit-ab'))
+        auto_build_text_overlay: JSON.stringify(readOverlayConfig('edit-ab')),
+        capture_quality: captureQuality,
+        capture_resolution: captureResolution
     };
     
     try {
@@ -1639,10 +1683,41 @@ async function deleteJob(jobId, jobName) {
 }
 
 async function testUrl() {
-    previewStream('job_url', 'test-result');
+    previewStream('job_url', 'test-result', 'capture_quality', 'capture_resolution', 'source-info', 'source-dimensions');
 }
 
-async function previewStream(urlInputId, resultDivId) {
+function _generateResolutionOptions(width, height, currentValue) {
+    const options = [{ value: 'native', label: `Native (${width}x${height})` }];
+    const aspect = width / height;
+    // Common downscale widths
+    const widths = [3840, 2560, 1920, 1280, 960, 640];
+    for (const w of widths) {
+        if (w >= width) continue;
+        const h = Math.round(w / aspect);
+        // Ensure even dimensions for ffmpeg
+        const hEven = h % 2 === 0 ? h : h + 1;
+        options.push({ value: `${w}x${hEven}`, label: `${w}x${hEven}` });
+    }
+    return options;
+}
+
+function _populateResolutionDropdown(selectId, options, currentValue) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = '';
+    for (const opt of options) {
+        const el = document.createElement('option');
+        el.value = opt.value;
+        el.textContent = opt.label;
+        if (opt.value === currentValue) el.selected = true;
+        select.appendChild(el);
+    }
+}
+
+// Track native source dimensions per resolution dropdown
+const _nativeDimensions = {};
+
+async function previewStream(urlInputId, resultDivId, qualityId, resolutionId, infoId, dimsId) {
     const url = document.getElementById(urlInputId).value;
     const resultDiv = document.getElementById(resultDivId);
     
@@ -1651,17 +1726,46 @@ async function previewStream(urlInputId, resultDivId) {
         return;
     }
     
-    resultDiv.innerHTML = '<p style="color: var(--text-secondary);">Loading preview...</p>';
+    resultDiv.innerHTML = '<div style="display:flex;justify-content:center;padding:2rem 0;"><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;padding:0.75rem 1.5rem;display:flex;align-items:center;gap:0.5rem;"><span class="spinner" style="width:14px;height:14px;border-width:2px;"></span><span style="color:var(--text-secondary);font-size:0.85rem;">Loading preview</span></div></div>';
     resultDiv.className = 'test-result';
     
     try {
-        const result = await apiRequest('/jobs/test-url', { method: 'POST', query: { url } });
+        const query = { url };
+        if (qualityId) {
+            const qEl = document.getElementById(qualityId);
+            if (qEl) query.quality = qEl.value;
+        }
+        if (resolutionId) {
+            const rEl = document.getElementById(resolutionId);
+            if (rEl) query.resolution = rEl.value;
+        }
+        
+        const result = await apiRequest('/jobs/test-url', { method: 'POST', query });
         
         if (result.success) {
+            const sizeStr = result.image_size ? ` (${formatBytes(result.image_size)})` : '';
             resultDiv.className = 'test-result';
             resultDiv.innerHTML = `
                 <img src="${result.image_data}" alt="Preview capture" style="max-width: 100%; margin-top: 10px; border: 1px solid var(--border-color); border-radius: 4px;">
+                <small style="color: var(--text-secondary); display: block; margin-top: 4px;">Capture size: ${sizeStr}</small>
             `;
+            
+            // Use native dimensions from backend, or fall back to previously cached
+            if (result.source_width && result.source_height && resolutionId) {
+                _nativeDimensions[resolutionId] = { w: result.source_width, h: result.source_height };
+            }
+            
+            const cached = _nativeDimensions[resolutionId];
+            if (cached && resolutionId) {
+                const currentRes = document.getElementById(resolutionId)?.value || 'native';
+                const options = _generateResolutionOptions(cached.w, cached.h, currentRes);
+                _populateResolutionDropdown(resolutionId, options, currentRes);
+                
+                if (infoId && dimsId) {
+                    document.getElementById(infoId).style.display = 'block';
+                    document.getElementById(dimsId).textContent = `Source: ${cached.w}x${cached.h}`;
+                }
+            }
         } else {
             resultDiv.className = 'test-result error';
             resultDiv.innerHTML = `<p style="color: var(--danger-color); margin-top: 10px;">${result.message}</p>`;
@@ -4077,6 +4181,8 @@ async function duplicateJob(jobId) {
         document.getElementById('framerate').value = job.framerate || 30;
         document.getElementById('warning_threshold').value = job.warning_threshold || 3;
         document.getElementById('naming_pattern').value = job.naming_pattern || '{job_name}_{count}_{timestamp}';
+        document.getElementById('capture_quality').value = job.capture_quality || 'maximum';
+        document.getElementById('capture_resolution').value = job.capture_resolution || 'native';
         updateNamingPreview();
         
         // Set start to now

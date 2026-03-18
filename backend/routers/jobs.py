@@ -73,9 +73,11 @@ async def create_job(job: JobCreate):
                 warning_threshold,
                 auto_build_enabled, auto_build_interval_hours, auto_build_fps,
                 auto_build_quality, auto_build_resolution, auto_build_text_overlay,
+                capture_quality, capture_resolution,
+                source_width, source_height,
                 last_auto_build_at,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             job.name, job.url, job.stream_type.value,
             to_iso(job.start_datetime),
@@ -92,6 +94,10 @@ async def create_job(job: JobCreate):
             job.auto_build_quality,
             job.auto_build_resolution,
             job.auto_build_text_overlay,
+            job.capture_quality,
+            job.capture_resolution,
+            job.source_width,
+            job.source_height,
             now_str if job.auto_build_enabled else None,
             now_str, now_str
         ))
@@ -321,6 +327,14 @@ async def update_job(job_id: int, job_update: JobUpdate):
             updates.append("auto_build_text_overlay = ?")
             values.append(job_update.auto_build_text_overlay)
         
+        if job_update.capture_quality is not None:
+            updates.append("capture_quality = ?")
+            values.append(job_update.capture_quality)
+        
+        if job_update.capture_resolution is not None:
+            updates.append("capture_resolution = ?")
+            values.append(job_update.capture_resolution)
+        
         # Track manual status changes
         manual_status_change = False
         if job_update.status is not None:
@@ -462,9 +476,10 @@ async def delete_job(job_id: int):
 
 
 @router.post("/test-url", response_model=TestUrlResponse)
-async def test_url(url: str, stream_type: str = None):
-    """Test a URL and capture a sample image"""
-    result = await test_stream_url(url, stream_type)
+async def test_url(url: str, stream_type: str = None,
+                   quality: str = 'maximum', resolution: str = 'native'):
+    """Test a URL and capture a sample image with optional quality/resolution settings"""
+    result = await test_stream_url(url, stream_type, quality, resolution)
     return result
 
 
