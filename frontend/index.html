@@ -90,7 +90,7 @@
                 <div class="view-header">
                     <h2>Timelapses</h2>
                     <div style="display:flex;gap:0.5rem;">
-                        <button class="btn btn-secondary compare-btn" id="compare-mode-btn" onclick="toggleCompareMode()" title="Compare two timelapses">
+                        <button class="btn btn-secondary compare-btn" id="compare-mode-btn" onclick="toggleCompareMode()" title="Compare timelapses">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="10" height="18" rx="1"/><rect x="13" y="3" width="10" height="18" rx="1"/><polyline points="3,17 6,12 9,17"/><polyline points="15,17 18,12 21,17"/></svg>
                             Compare
                         </button>
@@ -132,7 +132,8 @@
                 </div>
                 <div class="compare-mode-banner" id="compare-mode-banner" style="display:none;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="10" height="18" rx="1"/><rect x="13" y="3" width="10" height="18" rx="1"/><polyline points="3,17 6,12 9,17"/><polyline points="15,17 18,12 21,17"/></svg>
-                    <span id="compare-mode-text">Select 2 timelapses to compare</span>
+                    <span id="compare-mode-text">Select 2-4 timelapses to compare</span>
+                    <button class="btn btn-purple btn-sm" id="compare-launch-btn" style="display:none;" onclick="openComparison()">Compare</button>
                     <button class="btn btn-secondary btn-sm" onclick="toggleCompareMode()">Cancel</button>
                 </div>
                 <div class="captures-selection-controls" id="video-selection-controls" style="display: none;">
@@ -791,20 +792,7 @@
                 <h3>Compare Timelapses</h3>
                 <span class="close" onclick="closeComparison()">&times;</span>
             </div>
-            <div class="comparison-players">
-                <div class="comparison-side">
-                    <video id="compare-player-a" preload="metadata">
-                        <source id="compare-source-a" type="video/mp4">
-                    </video>
-                    <div class="comparison-label" id="compare-label-a"></div>
-                </div>
-                <div class="comparison-side">
-                    <video id="compare-player-b" preload="metadata">
-                        <source id="compare-source-b" type="video/mp4">
-                    </video>
-                    <div class="comparison-label" id="compare-label-b"></div>
-                </div>
-            </div>
+            <div class="comparison-players" id="comparison-players"></div>
             <div class="comparison-controls">
                 <button class="btn btn-secondary btn-sm" id="compare-play-btn" onclick="toggleComparisonPlay()">
                     <svg id="compare-play-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>

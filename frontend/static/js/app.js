@@ -313,8 +313,8 @@ class SelectionManager {
         if (this.selected.has(id)) {
             this.selected.delete(id);
         } else {
-            // In compare mode, limit to 2 selections
-            if (compareMode.active && this.name === 'videos' && this.selected.size >= 2) return;
+            // In compare mode, limit to 4 selections
+            if (compareMode.active && this.name === 'videos' && this.selected.size >= 4) return;
             this.selected.add(id);
         }
         const card = document.querySelector(`${this.cardSelector}[${this.dataAttr}="${id}"]`);
@@ -354,7 +354,6 @@ class SelectionManager {
         if (this.name === 'videos' && compareMode.active) {
             controls.style.display = 'none';
             updateCompareModeText(count);
-            if (count === 2) openComparison();
             return;
         }
 
@@ -2109,7 +2108,7 @@ async function disableShareFromSettings(videoId) {
 
 // ── Video Comparison ──────────────────────────────────────────────────────
 
-let comparisonState = { playing: false, playerA: null, playerB: null, animFrame: null };
+let comparisonState = { playing: false, players: [], animFrame: null };
 
 function toggleCompareMode() {
     compareMode.active = !compareMode.active;
@@ -2133,38 +2132,50 @@ function toggleCompareMode() {
 
 function updateCompareModeText(count) {
     const text = document.getElementById('compare-mode-text');
+    const launchBtn = document.getElementById('compare-launch-btn');
     if (!text) return;
-    if (count === 0) text.textContent = 'Select 2 timelapses to compare';
-    else if (count === 1) text.textContent = 'Select 1 more timelapse';
-    else text.textContent = 'Loading comparison...';
+    if (count < 2) {
+        const remaining = 2 - count;
+        text.textContent = remaining === 2 ? 'Select 2-4 timelapses to compare' : 'Select at least 1 more';
+        if (launchBtn) launchBtn.style.display = 'none';
+    } else {
+        text.textContent = `${count} selected`;
+        if (launchBtn) launchBtn.style.display = '';
+    }
 }
 
 async function openComparison() {
     const ids = [...videoSelection.selected];
-    if (ids.length !== 2) return;
+    if (ids.length < 2 || ids.length > 4) return;
 
     try {
-        const [videoA, videoB] = await Promise.all([
-            apiRequest(`/videos/${ids[0]}`),
-            apiRequest(`/videos/${ids[1]}`)
-        ]);
+        const videos = await Promise.all(ids.map(id => apiRequest(`/videos/${id}`)));
 
-        const modal = document.getElementById('comparison-modal');
-        const playerA = document.getElementById('compare-player-a');
-        const playerB = document.getElementById('compare-player-b');
+        const container = document.getElementById('comparison-players');
+        container.innerHTML = '';
+        container.className = `comparison-players compare-grid-${videos.length}`;
 
-        document.getElementById('compare-source-a').src = `${API_BASE}/videos/${videoA.id}/download`;
-        document.getElementById('compare-source-b').src = `${API_BASE}/videos/${videoB.id}/download`;
-        playerA.load();
-        playerB.load();
+        const players = [];
+        videos.forEach(video => {
+            const side = document.createElement('div');
+            side.className = 'comparison-side';
+            const player = document.createElement('video');
+            player.preload = 'metadata';
+            const source = document.createElement('source');
+            source.src = `${API_BASE}/videos/${video.id}/download`;
+            source.type = 'video/mp4';
+            player.appendChild(source);
+            const label = document.createElement('div');
+            label.className = 'comparison-label';
+            const meta = `${video.resolution} · ${video.framerate}fps · ${formatDuration(video.duration_seconds)}`;
+            label.innerHTML = `<strong>${escapeHtml(video.name)}</strong><span>${meta}</span>`;
+            side.appendChild(player);
+            side.appendChild(label);
+            container.appendChild(side);
+            players.push(player);
+        });
 
-        const metaA = `${videoA.resolution} · ${videoA.framerate}fps · ${formatDuration(videoA.duration_seconds)}`;
-        const metaB = `${videoB.resolution} · ${videoB.framerate}fps · ${formatDuration(videoB.duration_seconds)}`;
-        document.getElementById('compare-label-a').innerHTML = `<strong>${escapeHtml(videoA.name)}</strong><span>${metaA}</span>`;
-        document.getElementById('compare-label-b').innerHTML = `<strong>${escapeHtml(videoB.name)}</strong><span>${metaB}</span>`;
-
-        comparisonState.playerA = playerA;
-        comparisonState.playerB = playerB;
+        comparisonState.players = players;
         comparisonState.playing = false;
 
         document.getElementById('compare-play-icon').style.display = '';
@@ -2173,17 +2184,15 @@ async function openComparison() {
         document.getElementById('compare-time-current').textContent = '0:00';
         document.getElementById('compare-time-duration').textContent = '0:00';
 
-        // Update duration once metadata loaded
         let loaded = 0;
         const onMeta = () => {
             loaded++;
-            if (loaded >= 2) {
-                const maxDur = Math.max(playerA.duration || 0, playerB.duration || 0);
+            if (loaded >= players.length) {
+                const maxDur = Math.max(...players.map(p => p.duration || 0));
                 document.getElementById('compare-time-duration').textContent = formatDuration(maxDur);
             }
         };
-        playerA.addEventListener('loadedmetadata', onMeta, { once: true });
-        playerB.addEventListener('loadedmetadata', onMeta, { once: true });
+        players.forEach(p => p.addEventListener('loadedmetadata', onMeta, { once: true }));
 
         showModal('comparison-modal');
     } catch (error) {
@@ -2194,12 +2203,12 @@ async function openComparison() {
 function closeComparison() {
     const modal = document.getElementById('comparison-modal');
     const wasActive = modal.classList.contains('active');
-    const { playerA, playerB, animFrame } = comparisonState;
-    if (playerA) { playerA.pause(); playerA.currentTime = 0; }
-    if (playerB) { playerB.pause(); playerB.currentTime = 0; }
+    const { players, animFrame } = comparisonState;
+    players.forEach(p => { p.pause(); p.currentTime = 0; });
     if (animFrame) cancelAnimationFrame(animFrame);
     comparisonState.playing = false;
     comparisonState.animFrame = null;
+    comparisonState.players = [];
     modal.classList.remove('active');
     if (compareMode.active) toggleCompareMode();
     
@@ -2210,30 +2219,24 @@ function closeComparison() {
 }
 
 function toggleComparisonPlay() {
-    const { playerA, playerB } = comparisonState;
-    if (!playerA || !playerB) return;
+    const { players } = comparisonState;
+    if (players.length === 0) return;
 
     if (comparisonState.playing) {
-        playerA.pause();
-        playerB.pause();
+        players.forEach(p => p.pause());
         comparisonState.playing = false;
         if (comparisonState.animFrame) cancelAnimationFrame(comparisonState.animFrame);
         document.getElementById('compare-play-icon').style.display = '';
         document.getElementById('compare-pause-icon').style.display = 'none';
     } else {
-        if (playerA.ended && playerB.ended) {
-            playerA.currentTime = 0;
-            playerB.currentTime = 0;
+        if (players.every(p => p.ended)) {
+            players.forEach(p => { p.currentTime = 0; });
         }
-        // Adjust playback rates so both finish at the same time
-        const durA = playerA.duration || 1;
-        const durB = playerB.duration || 1;
-        const maxDur = Math.max(durA, durB);
-        playerA.playbackRate = durA / maxDur;
-        playerB.playbackRate = durB / maxDur;
+        // Adjust playback rates so all finish at the same time
+        const maxDur = Math.max(...players.map(p => p.duration || 1));
+        players.forEach(p => { p.playbackRate = (p.duration || 1) / maxDur; });
 
-        playerA.play();
-        playerB.play();
+        players.forEach(p => p.play());
         comparisonState.playing = true;
         document.getElementById('compare-play-icon').style.display = 'none';
         document.getElementById('compare-pause-icon').style.display = '';
@@ -2243,22 +2246,16 @@ function toggleComparisonPlay() {
 
 function syncComparisonLoop() {
     if (!comparisonState.playing) return;
-    const { playerA, playerB } = comparisonState;
-    const durA = playerA.duration || 1;
-    const durB = playerB.duration || 1;
-    const maxDur = Math.max(durA, durB);
+    const { players } = comparisonState;
+    const maxDur = Math.max(...players.map(p => p.duration || 1));
 
-    const progressA = playerA.currentTime / durA;
-    const progressB = playerB.currentTime / durB;
-    const avgProgress = (progressA + progressB) / 2;
+    const avgProgress = players.reduce((sum, p) => sum + (p.currentTime / (p.duration || 1)), 0) / players.length;
 
-    // Update scrubber and time display
     const scrubber = document.getElementById('compare-scrubber');
     scrubber.value = Math.round(avgProgress * 1000);
     document.getElementById('compare-time-current').textContent = formatDuration(avgProgress * maxDur);
 
-    // Stop when both ended
-    if (playerA.ended && playerB.ended) {
+    if (players.every(p => p.ended)) {
         comparisonState.playing = false;
         if (comparisonState.animFrame) cancelAnimationFrame(comparisonState.animFrame);
         document.getElementById('compare-play-icon').style.display = '';
@@ -2270,13 +2267,12 @@ function syncComparisonLoop() {
 }
 
 function scrubComparison(value) {
-    const { playerA, playerB } = comparisonState;
-    if (!playerA || !playerB) return;
+    const { players } = comparisonState;
+    if (players.length === 0) return;
     const position = value / 1000;
-    playerA.currentTime = position * (playerA.duration || 0);
-    playerB.currentTime = position * (playerB.duration || 0);
+    players.forEach(p => { p.currentTime = position * (p.duration || 0); });
 
-    const maxDur = Math.max(playerA.duration || 0, playerB.duration || 0);
+    const maxDur = Math.max(...players.map(p => p.duration || 0));
     document.getElementById('compare-time-current').textContent = formatDuration(position * maxDur);
 }
 
