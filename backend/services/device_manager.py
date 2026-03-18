@@ -95,3 +95,36 @@ def is_device_available(path: str) -> bool:
     if not re.match(r'^/dev/video\d+$', path):
         return False
     return os.path.exists(path) and os.access(path, os.R_OK)
+
+
+def get_device_max_resolution(path: str) -> tuple:
+    """
+    Query the maximum supported resolution for a V4L2 device.
+    
+    Parses v4l2-ctl --list-formats-ext output, preferring MJPG format
+    for higher resolution support. Returns (width, height) or (None, None).
+    """
+    try:
+        result = subprocess.run(
+            ['v4l2-ctl', '--device', path, '--list-formats-ext'],
+            capture_output=True, timeout=5, check=False
+        )
+        if result.returncode != 0:
+            return None, None
+        
+        output = result.stdout.decode('utf-8', errors='replace')
+        max_area = 0
+        best_w, best_h = None, None
+        
+        for line in output.splitlines():
+            match = re.search(r'(\d+)x(\d+)', line)
+            if match and 'Size:' in line:
+                w, h = int(match.group(1)), int(match.group(2))
+                if w * h > max_area:
+                    max_area = w * h
+                    best_w, best_h = w, h
+        
+        return best_w, best_h
+    except Exception as e:
+        logger.debug(f"Could not query max resolution for {path}: {e}")
+        return None, None
