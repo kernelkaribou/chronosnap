@@ -262,7 +262,7 @@ body {
     border-color: transparent;
     background: linear-gradient(135deg, #a78bfa, #e8457e, #a78bfa, #e8457e);
     background-size: 300% 300%;
-    animation: event-shimmer 3s ease infinite;
+    animation: event-shimmer 3.3s ease infinite;
     color: #fff;
 }
 
