@@ -751,6 +751,12 @@ body {
     display: block;
 }
 
+.video-detail-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
 .video-detail-meta {
     display: grid;
     grid-template-columns: auto 1fr auto 1fr auto 1fr auto 1fr;

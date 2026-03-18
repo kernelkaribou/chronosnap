@@ -123,11 +123,8 @@ def _run_auto_build(job: dict, now: datetime):
         from ..helpers.file_helpers import make_relative
         videos_path = get_timelapses_path()
         job_folder = f"{job_id}_{sanitized_name}"
-        job_dir = os.path.join(videos_path, job_folder)
-        os.makedirs(job_dir, exist_ok=True)
-        output_path = os.path.join(job_dir, f"{video_name}.mp4")
-        rel_output = make_relative(output_path, videos_path)
 
+        # Insert with placeholder path to get the video ID
         now_str = to_iso(now)
         with get_db() as conn:
             cursor = conn.cursor()
@@ -136,9 +133,9 @@ def _run_auto_build(job: dict, now: datetime):
                     job_id, job_name, name, file_path, file_size, resolution,
                     framerate, quality, start_time, end_time,
                     total_frames, duration_seconds, status, build_source, created_at
-                ) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 0, 0, 'processing', 'auto', ?)
+                ) VALUES (?, ?, ?, '', 0, ?, ?, ?, ?, ?, 0, 0, 'processing', 'auto', ?)
             """, (
-                job_id, job_name, video_name, rel_output,
+                job_id, job_name, video_name,
                 job.get('auto_build_resolution', '1920x1080'),
                 job.get('auto_build_fps', 30),
                 job.get('auto_build_quality', 'medium'),
@@ -147,6 +144,17 @@ def _run_auto_build(job: dict, now: datetime):
                 now_str
             ))
             video_id = cursor.lastrowid
+
+            # Create folder: {job_id}_{job_name}/{video_id}_{video_name}/
+            video_folder = f"{video_id}_{video_name}"
+            video_dir = os.path.join(videos_path, job_folder, video_folder)
+            os.makedirs(video_dir, exist_ok=True)
+            output_path = os.path.join(video_dir, f"{video_name}.mp4")
+            rel_output = make_relative(output_path, videos_path)
+            cursor.execute(
+                "UPDATE processed_videos SET file_path = ? WHERE id = ?",
+                (rel_output, video_id)
+            )
 
         process_video(
             video_id=video_id,

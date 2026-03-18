@@ -320,7 +320,6 @@ def generate_thumbnail(video_id: int, video_path: str):
         cmd = [
             'ffmpeg', '-loglevel', 'error',
             '-i', video_path,
-            '-ss', '0.5',
             '-frames:v', '1',
             '-q:v', '2',
             '-y', thumb_path

@@ -47,27 +47,23 @@ async def create_video(video: VideoCreate, background_tasks: BackgroundTasks):
         from ..services.import_service import get_timelapses_path
         videos_path = get_timelapses_path()
         
-        # Create job subfolder: {job_id}_{sanitized_job_name}
         import re
-        sanitized_name = re.sub(r'[^\w\s-]', '', job_dict['name']).strip()
-        job_folder = f"{video.job_id}_{sanitized_name}"
-        job_dir = os.path.join(videos_path, job_folder)
-        os.makedirs(job_dir, exist_ok=True)
+        sanitized_job = re.sub(r'[^\w\s-]', '', job_dict['name']).strip()
+        sanitized_video = re.sub(r'[^\w\s-]', '', video.name).strip()
+        if not sanitized_video:
+            raise HTTPException(status_code=400, detail="Video name contains only invalid characters")
         
-        # Create video record - name already includes timestamp from frontend
+        # Insert with placeholder path to get the video ID
         now = to_iso(get_now())
-        output_path = os.path.join(job_dir, f"{video.name}.mp4")
-        rel_output = make_relative(output_path, videos_path)
-        
         cursor.execute("""
             INSERT INTO processed_videos (
                 job_id, job_name, name, file_path, file_size, resolution,
                 framerate, quality, start_capture_id, end_capture_id,
                 start_time, end_time, total_frames, duration_seconds, status,
                 text_overlay, created_at
-            ) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'processing', ?, ?)
+            ) VALUES (?, ?, ?, '', 0, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'processing', ?, ?)
         """, (
-            video.job_id, job_dict['name'], video.name, rel_output, video.resolution,
+            video.job_id, job_dict['name'], video.name, video.resolution,
             video.framerate, video.quality, video.start_capture_id,
             video.end_capture_id, video.start_time, video.end_time,
             video.text_overlay.model_dump_json() if video.text_overlay else None,
@@ -75,6 +71,19 @@ async def create_video(video: VideoCreate, background_tasks: BackgroundTasks):
         ))
         
         video_id = cursor.lastrowid
+        
+        # Create folder structure: {job_id}_{job_name}/{video_id}_{video_name}/
+        job_folder = f"{video.job_id}_{sanitized_job}"
+        video_folder = f"{video_id}_{sanitized_video}"
+        video_dir = os.path.join(videos_path, job_folder, video_folder)
+        os.makedirs(video_dir, exist_ok=True)
+        
+        output_path = os.path.join(video_dir, f"{sanitized_video}.mp4")
+        rel_output = make_relative(output_path, videos_path)
+        cursor.execute(
+            "UPDATE processed_videos SET file_path = ? WHERE id = ?",
+            (rel_output, video_id)
+        )
         
         # Set tags if provided
         if video.tag_ids:
@@ -242,6 +251,131 @@ async def get_video(video_id: int):
                 seen_ids.add(t['id'])
                 merged.append(t)
         video_dict['tags'] = merged
+        video_dict['share_token'] = fetch_share_tokens(cursor, [video_id]).get(video_id)
+        return video_dict
+
+
+class VideoRenameRequest(BaseModel):
+    name: str
+
+
+@router.patch("/{video_id}", response_model=VideoResponse)
+async def rename_video(video_id: int, body: VideoRenameRequest):
+    """Rename a video: updates display name, folder, files, and thumbnail on disk and in DB."""
+    new_name = body.name.strip()
+    if not new_name:
+        raise HTTPException(status_code=400, detail="Name must not be empty")
+    
+    # Sanitize: remove characters unsafe for filenames
+    sanitized = "".join(c for c in new_name if c not in r'\/:*?"<>|').strip()
+    if not sanitized:
+        raise HTTPException(status_code=400, detail="Name contains only invalid characters")
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        video = get_or_404(cursor,
+            "SELECT * FROM processed_videos WHERE id = ?",
+            (video_id,), "Video not found")
+        
+        if video['name'] == new_name:
+            video_dict = dict_from_row(cursor.execute("""
+                SELECT v.*, COALESCE(v.job_name, j.name) as job_name
+                FROM processed_videos v LEFT JOIN jobs j ON v.job_id = j.id
+                WHERE v.id = ?
+            """, (video_id,)).fetchone())
+            normalize_favorite(video_dict)
+            video_dict['tags'] = fetch_tags_for_videos(cursor, [video_id]).get(video_id, [])
+            video_dict['share_token'] = fetch_share_tokens(cursor, [video_id]).get(video_id)
+            return video_dict
+        
+        from ..services.import_service import get_timelapses_path
+        videos_path = get_timelapses_path()
+        
+        old_file_path = video['file_path']
+        old_thumb_path = video['thumbnail_path']
+        old_ext = os.path.splitext(old_file_path)[1]  # .mp4
+        
+        # Detect folder structure depth
+        # New structure: {job_folder}/{video_id}_{name}/{name}.mp4 (2 dirs)
+        # Old structure: {job_folder}/{name}.mp4 (1 dir)
+        path_parts = old_file_path.replace('\\', '/').split('/')
+        
+        if len(path_parts) >= 3:
+            # New structure: rename video subfolder and files inside
+            old_video_dir = os.path.dirname(old_file_path)
+            job_folder = os.path.dirname(old_video_dir)
+            
+            new_video_folder = f"{video_id}_{sanitized}"
+            new_video_dir = os.path.join(job_folder, new_video_folder)
+            new_file_path = os.path.join(new_video_dir, f"{sanitized}{old_ext}")
+            new_thumb_path = os.path.join(new_video_dir, f"{sanitized}_thumb.jpg") if old_thumb_path else None
+            
+            abs_old_dir = os.path.join(videos_path, old_video_dir)
+            abs_new_dir = os.path.join(videos_path, new_video_dir)
+            
+            if abs_old_dir != abs_new_dir and os.path.isdir(abs_old_dir):
+                if os.path.exists(abs_new_dir):
+                    raise HTTPException(status_code=409, detail=f"A folder named '{new_video_folder}' already exists")
+                os.rename(abs_old_dir, abs_new_dir)
+            elif not os.path.isdir(abs_old_dir):
+                os.makedirs(abs_new_dir, exist_ok=True)
+            
+            # Rename files inside the (now-renamed) folder
+            old_filename = os.path.basename(old_file_path)
+            new_filename = f"{sanitized}{old_ext}"
+            if old_filename != new_filename:
+                abs_old_file = os.path.join(abs_new_dir, old_filename)
+                abs_new_file = os.path.join(abs_new_dir, new_filename)
+                if os.path.exists(abs_old_file):
+                    os.rename(abs_old_file, abs_new_file)
+            
+            if old_thumb_path:
+                old_thumb_filename = os.path.basename(old_thumb_path)
+                new_thumb_filename = f"{sanitized}_thumb.jpg"
+                if old_thumb_filename != new_thumb_filename:
+                    abs_old_thumb = os.path.join(abs_new_dir, old_thumb_filename)
+                    abs_new_thumb = os.path.join(abs_new_dir, new_thumb_filename)
+                    if os.path.exists(abs_old_thumb):
+                        os.rename(abs_old_thumb, abs_new_thumb)
+        else:
+            # Old/flat structure: migrate to new structure during rename
+            old_dir = os.path.dirname(old_file_path)
+            new_video_folder = f"{video_id}_{sanitized}"
+            new_video_dir = os.path.join(old_dir, new_video_folder)
+            new_file_path = os.path.join(new_video_dir, f"{sanitized}{old_ext}")
+            new_thumb_path = os.path.join(new_video_dir, f"{sanitized}_thumb.jpg") if old_thumb_path else None
+            
+            abs_new_dir = os.path.join(videos_path, new_video_dir)
+            os.makedirs(abs_new_dir, exist_ok=True)
+            
+            # Move files into new subfolder
+            abs_old_file = os.path.join(videos_path, old_file_path)
+            abs_new_file = os.path.join(abs_new_dir, f"{sanitized}{old_ext}")
+            if os.path.exists(abs_old_file):
+                os.rename(abs_old_file, abs_new_file)
+            
+            if old_thumb_path:
+                abs_old_thumb = os.path.join(videos_path, old_thumb_path)
+                abs_new_thumb = os.path.join(abs_new_dir, f"{sanitized}_thumb.jpg")
+                if os.path.exists(abs_old_thumb):
+                    os.rename(abs_old_thumb, abs_new_thumb)
+        
+        # Update database
+        cursor.execute("""
+            UPDATE processed_videos
+            SET name = ?, file_path = ?, thumbnail_path = ?
+            WHERE id = ?
+        """, (new_name, new_file_path, new_thumb_path, video_id))
+        
+        logger.info(f"Renamed video {video_id}: '{video['name']}' -> '{new_name}'")
+        
+        video_dict = dict_from_row(cursor.execute("""
+            SELECT v.*, COALESCE(v.job_name, j.name) as job_name
+            FROM processed_videos v LEFT JOIN jobs j ON v.job_id = j.id
+            WHERE v.id = ?
+        """, (video_id,)).fetchone())
+        normalize_favorite(video_dict)
+        video_dict['tags'] = fetch_tags_for_videos(cursor, [video_id]).get(video_id, [])
         video_dict['share_token'] = fetch_share_tokens(cursor, [video_id]).get(video_id)
         return video_dict
 

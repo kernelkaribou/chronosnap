@@ -758,7 +758,15 @@
     <div id="video-detail-modal" class="modal">
         <div class="modal-content xlarge">
             <div class="modal-header">
-                <h3 id="video-detail-title">Video Details</h3>
+                <h3 class="video-detail-title-row">
+                    <span id="video-detail-title">Video Details</span>
+                    <button id="video-rename-btn" class="btn-icon" title="Rename" onclick="startVideoRename()" style="padding:0.2rem;margin-left:0.4rem;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                    </button>
+                    <input type="text" id="video-rename-input" class="form-control" style="display:none;font-size:1rem;padding:0.2rem 0.5rem;max-width:20rem;">
+                    <button id="video-rename-save" class="btn btn-sm btn-purple" style="display:none;" onclick="saveVideoRename()">Save</button>
+                    <button id="video-rename-cancel" class="btn btn-sm btn-secondary" style="display:none;" onclick="cancelVideoRename()">Cancel</button>
+                </h3>
                 <span class="close" onclick="closeVideoDetail()">&times;</span>
             </div>
             <div style="padding: 1rem;">
