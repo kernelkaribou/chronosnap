@@ -271,12 +271,11 @@ function formatEventTime(isoStr) {
 }
 
 function updateEventBadge(count) {
-    const badge = document.getElementById('event-badge');
+    const btn = document.querySelector('.event-bell');
     if (count > 0) {
-        badge.textContent = count > 9 ? '9+' : count;
-        badge.style.display = 'flex';
+        btn.classList.add('has-unseen');
     } else {
-        badge.style.display = 'none';
+        btn.classList.remove('has-unseen');
     }
 }
 
