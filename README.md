@@ -139,7 +139,6 @@ Five volumes are required for persistent data:
 | `TZ` | `Etc/UTC` | Timezone for scheduling and display. Must be a valid IANA timezone (for example, `America/Chicago`). This controls when time windows activate and how timestamps are displayed. |
 | `PORT` | `8080` | Port the application listens on inside the container. |
 | `LOG_LEVEL` | `INFO` | Logging verbosity. Options: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
-| `MAX_UPLOAD_SIZE` | `10737418240` | Maximum upload size in bytes (default 10 GB). |
 | `FFMPEG_TIMEOUT` | `30` | FFmpeg capture timeout in seconds. Increase for slow networks. |
 | `APP_VERSION` | Read from `VERSION` file | Override the application version string. Optional. If not set, the version is read from the `VERSION` file at the repository root. |
 
