@@ -15,7 +15,7 @@ from ..services.import_service import (
     validate_path_within, sanitize_filename, detect_file_type,
     extract_archive, analyze_staging, browse_directory,
     execute_image_import, execute_video_import, probe_video,
-    get_import_path, get_export_path, get_captures_path, get_timelapses_path,
+    get_import_path, get_captures_path, get_timelapses_path,
     check_disk_space,
     set_staging_source, cleanup_import_source,
 )
@@ -44,9 +44,6 @@ class ExecuteRequest(BaseModel):
 
 class ImportPathSettings(BaseModel):
     import_path: str
-
-class ExportPathSettings(BaseModel):
-    export_path: str
 
 class ServerPathSettings(BaseModel):
     path: str
@@ -524,7 +521,6 @@ async def get_path_settings():
         'captures_path': get_captures_path(),
         'timelapses_path': get_timelapses_path(),
         'import_path': get_import_path(),
-        'export_path': get_export_path(),
     }
 
 
@@ -532,13 +528,12 @@ _PATH_KEYS = {
     'captures': ('captures_path', 'Captures'),
     'timelapses': ('timelapses_path', 'Timelapses'),
     'import': ('import_path', 'Import'),
-    'export': ('export_path', 'Export'),
 }
 
 
 @router.put("/settings/path/{path_type}")
 async def update_path_setting(path_type: str, settings: ServerPathSettings):
-    """Update a server path setting (captures, timelapses, import, export)."""
+    """Update a server path setting (captures, timelapses, import)."""
     from ..database import get_db
 
     if path_type not in _PATH_KEYS:
