@@ -1019,7 +1019,7 @@ async function showJobDetails(jobId) {
                     <div class="form-group" style="margin-bottom: 0.75rem;">
                         ${job.stream_type === 'device' ? `
                         <label>Camera Device</label>
-                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <div class="source-row">
                             <select id="edit_device_path" class="form-control" style="flex: 1; min-width: 0;">
                                 <option value="${escapeHtml(job.url)}" selected>${escapeHtml(job.url)}</option>
                             </select>
@@ -1044,7 +1044,7 @@ async function showJobDetails(jobId) {
                         </div>
                         ` : `
                         <label>Stream URL *</label>
-                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <div class="source-row">
                             <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required style="flex: 1; min-width: 0;">
                             <button type="button" class="compare-btn" onclick="previewStream('edit_url', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

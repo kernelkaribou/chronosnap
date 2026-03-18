@@ -2396,6 +2396,20 @@ body {
     to   { opacity: 1; }
 }
 
+/* ===== Source Row ===== */
+.source-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+.source-row > input.form-control,
+.source-row > select.form-control,
+.source-row > .compare-btn,
+.source-row .warn-after-group input {
+    height: 38px;
+    box-sizing: border-box;
+}
+
 /* ===== Source Type Icon Toggle ===== */
 .source-icon-toggle {
     display: flex;
