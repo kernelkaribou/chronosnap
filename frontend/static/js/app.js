@@ -360,6 +360,12 @@ class SelectionManager {
         controls.style.display = count > 0 ? 'flex' : 'none';
         document.getElementById(this.countId).textContent = `${count} selected`;
 
+        // Show compare button when 2-4 videos selected (outside compare mode)
+        if (this.name === 'videos') {
+            const compareBtn = document.getElementById('video-compare-selected-btn');
+            if (compareBtn) compareBtn.style.display = (count >= 2 && count <= 4) ? '' : 'none';
+        }
+
         const cards = document.querySelectorAll(`${this.cardSelector}[${this.dataAttr}]`);
         const allSelected = cards.length > 0 && [...cards].every(c => this.selected.has(parseInt(c.getAttribute(this.dataAttr))));
         document.getElementById(this.toggleBtnId).textContent = allSelected ? 'Clear Selection' : 'Select Visible';
