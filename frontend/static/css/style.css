@@ -541,6 +541,83 @@ body {
     max-width: 900px;
 }
 
+/* Detail page layout helpers */
+.detail-info-grid {
+    display: flex;
+    gap: var(--space-xl);
+    margin-bottom: var(--space-xl);
+}
+
+.detail-info-col {
+    flex: 1;
+    min-width: 0;
+}
+
+.detail-actions {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: var(--space-lg);
+    border-top: 2px solid var(--border-color);
+}
+
+.detail-actions-group {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.form-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.form-row-wrap {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.form-section {
+    display: flex;
+    gap: var(--space-md);
+    align-items: stretch;
+}
+
+.info-box {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+}
+
+.modal-actions {
+    display: flex;
+    gap: var(--space-sm);
+    justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+    .detail-info-grid {
+        flex-direction: column;
+        gap: var(--space-lg);
+    }
+    .detail-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .detail-actions-group {
+        justify-content: center;
+    }
+    .form-section {
+        flex-direction: column;
+    }
+}
+
 @media (max-width: 640px) {
     .view-header h2 {
         font-size: 1.5rem;
@@ -3065,7 +3142,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .share-toggle-inline .share-link-url {
     margin-left: 0.5rem;
     flex: 1;
-    min-width: 500px;
+    min-width: min(500px, 60vw);
 }
 .toggle-switch {
     position: relative; display: inline-block; width: 40px; height: 22px;
@@ -3271,6 +3348,19 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     font-variant-numeric: tabular-nums;
     min-width: 3rem;
     text-align: center;
+}
+
+@media (max-width: 768px) {
+    .comparison-players {
+        grid-template-columns: 1fr;
+    }
+    .comparison-players.compare-grid-3,
+    .comparison-players.compare-grid-4 {
+        grid-template-columns: 1fr;
+    }
+    .comparison-side video {
+        max-height: 40vh;
+    }
 }
 
 /* ── Import modal ─────────────────────────────────────── */

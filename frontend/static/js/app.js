@@ -962,11 +962,11 @@ async function loadJobDetail(jobId) {
         if (job.time_window_enabled) {
             timeWindowHtml = `
                 <div class="info-box" style="margin: 1rem 0;">
-                    <div style="display: flex; align-items: start; gap: 0.5rem;">
+                    <div class="info-box">
                         <div>
                             <strong>Time Window Enabled</strong>
-                            <p style="margin-top: 0.25rem; font-size: 0.875rem;">Captures only happen between <strong>${job.time_window_start}</strong> and <strong>${job.time_window_end}</strong> each day.</p>
-                            ${job.time_window_start > job.time_window_end ? '<p style="margin-top: 0.25rem; font-size: 0.75rem; opacity: 0.8;">⏰ This window spans midnight (e.g., captures from evening to early morning)</p>' : ''}
+                            <p class="mt-sm text-base">Captures only happen between <strong>${job.time_window_start}</strong> and <strong>${job.time_window_end}</strong> each day.</p>
+                            ${job.time_window_start > job.time_window_end ? '<p class="mt-sm text-xs" style="opacity: 0.8;">⏰ This window spans midnight (e.g., captures from evening to early morning)</p>' : ''}
                         </div>
                     </div>
                 </div>
@@ -1013,8 +1013,8 @@ async function loadJobDetail(jobId) {
                 
                 ${timeWindowHtml}
                 
-                <div style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem;">
-                    <div class="job-info" style="flex: 1; margin-bottom: 0;">
+                <div class="detail-info-grid">
+                    <div class="job-info detail-info-col" style="margin-bottom: 0;">
                         <div><strong>Status:</strong> <span class="job-status ${statusClass}">${statusLabel}</span></div>
                         <div><strong>Start:</strong> ${formatDateTimeNoSeconds(job.start_datetime)}</div>
                         ${nextCaptureHtml}
@@ -1022,7 +1022,7 @@ async function loadJobDetail(jobId) {
                         ${lastCaptureHtml}
                     </div>
                     
-                    <div class="job-info" style="flex: 1; margin-bottom: 0; padding-left: 1.5rem; border-left: 1px solid var(--border-color);">
+                    <div class="job-info detail-info-col" style="margin-bottom: 0; padding-left: 1.5rem; border-left: 1px solid var(--border-color);">
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <strong>Captures:</strong> 
                             <a href="#" onclick="event.stopPropagation(); viewJobCaptures(${job.id}); return false;" 
@@ -1139,19 +1139,19 @@ async function loadJobDetail(jobId) {
                         <small style="color: var(--text-secondary);">Leave empty for ongoing capture</small>
                     </div>
                     
-                    <div class="form-group" style="margin-bottom: 1rem;">
-                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
+                    <div class="form-group mb-lg">
+                        <div class="form-row-wrap gap-md">
+                            <label class="form-row" style="cursor: pointer; margin: 0;">
                                 <input type="checkbox" id="edit_time_window_enabled" ${job.time_window_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditTimeWindow()">
                                 <span><strong>Daily Time Window</strong></span>
                             </label>
-                            <div id="edit-time-window-fields" class="toggle-fields ${job.time_window_enabled ? '' : 'disabled'}" style="display: flex; align-items: center; gap: 0.5rem;">
-                                <label style="font-size: 0.8rem; margin: 0;">Start</label>
+                            <div id="edit-time-window-fields" class="toggle-fields form-row ${job.time_window_enabled ? '' : 'disabled'}">
+                                <label class="text-sm" style="margin: 0;">Start</label>
                                 <div class="time-picker-container" style="margin: 0;">
                                     <input type="time" id="edit_time_window_start_time" class="form-control" style="padding: 0.3rem 0.5rem;">
                                 </div>
                                 <input type="hidden" id="edit_time_window_start">
-                                <label style="font-size: 0.8rem; margin: 0;">End</label>
+                                <label class="text-sm" style="margin: 0;">End</label>
                                 <div class="time-picker-container" style="margin: 0;">
                                     <input type="time" id="edit_time_window_end_time" class="form-control" style="padding: 0.3rem 0.5rem;">
                                 </div>
@@ -1160,7 +1160,7 @@ async function loadJobDetail(jobId) {
                         </div>
                     </div>
 
-                    <div style="display: flex; gap: 0.75rem; align-items: stretch;">
+                    <div class="form-section">
                         <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 0.5rem;">
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label>Capture Interval (s) *</label>
@@ -1237,8 +1237,8 @@ async function loadJobDetail(jobId) {
 
                 <input type="hidden" id="edit_start_datetime" value="${job.start_datetime}">
                 
-                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: space-between; align-items: center; padding-top: 1rem; border-top: 2px solid var(--border-color);">
-                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                <div class="detail-actions">
+                    <div class="detail-actions-group">
                         <button class="btn btn-accent btn-sm" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')">
                             Build Timelapse
                         </button>
@@ -1250,18 +1250,18 @@ async function loadJobDetail(jobId) {
                             job.status === 'disabled' ?
                             `<button class="btn btn-secondary btn-sm" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')">Enable</button>` : ''
                         }
-                        <button class="btn-icon" onclick="duplicateJob(${job.id})" title="Duplicate Job" style="padding: 0.5rem;">
+                        <button class="btn-icon" onclick="duplicateJob(${job.id})" title="Duplicate Job">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                             </svg>
                         </button>
-                        <button class="btn-icon" onclick="exportJob(${job.id}, '${escapeHtml(job.name)}')" title="Export Job" style="padding: 0.5rem;">
+                        <button class="btn-icon" onclick="exportJob(${job.id}, '${escapeHtml(job.name)}')" title="Export Job">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
                             </svg>
                         </button>
-                        <button class="btn-icon" onclick="deleteJob(${job.id}, '${escapeHtml(job.name)}')" title="Delete Job" style="padding: 0.5rem;">
+                        <button class="btn-icon" onclick="deleteJob(${job.id}, '${escapeHtml(job.name)}')" title="Delete Job">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="3 6 5 6 21 6"></polyline>
                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -1270,7 +1270,7 @@ async function loadJobDetail(jobId) {
                             </svg>
                         </button>
                     </div>
-                    <button id="save-job-btn" class="btn btn-accent" onclick="saveJobChanges(${job.id})" style="font-weight: 600;" disabled>
+                    <button id="save-job-btn" class="btn btn-accent" onclick="saveJobChanges(${job.id})" disabled>
                         Save
                     </button>
                 </div>
@@ -4837,7 +4837,7 @@ async function performMaintenanceScan(jobId, jobName) {
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
                 </p>
-                <button class="btn btn-secondary" style="margin-top: 1rem;" onclick="closeMaintenance()">Close</button>
+                <button class="btn btn-secondary mt-lg" onclick="closeMaintenance()">Close</button>
             </div>
         `;
     }
@@ -4855,7 +4855,7 @@ function displayMaintenanceResults(jobId, jobName) {
                 <p style="color: var(--text-secondary);">
                     All ${data.total_captures} database records match files on disk. Everything is in sync.
                 </p>
-                <button class="btn btn-primary" style="margin-top: 1.5rem;" onclick="closeMaintenance()">Close</button>
+                <button class="btn btn-primary mt-xl" onclick="closeMaintenance()">Close</button>
             </div>
         `;
     } else {
@@ -4949,14 +4949,14 @@ function displayMaintenanceResults(jobId, jobName) {
                 ` : ''}
                 
                 ${data.missing_count > 0 || data.orphaned_count > 0 ? `
-                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                <div class="modal-actions">
                     <button class="btn btn-secondary" onclick="closeMaintenance()">Cancel</button>
                     <button class="btn btn-primary" onclick="confirmMaintenanceSubmit(${jobId}, '${escapeHtml(jobName)}')">
                         Submit
                     </button>
                 </div>
                 ` : `
-                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                <div class="modal-actions">
                     <button class="btn btn-primary" onclick="closeMaintenance()">Close</button>
                 </div>
                 `}
@@ -5063,7 +5063,7 @@ async function performMaintenanceActions(jobId, jobName) {
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
                 </p>
-                <button class="btn btn-secondary" style="margin-top: 1rem;" onclick="closeMaintenance()">Close</button>
+                <button class="btn btn-secondary mt-lg" onclick="closeMaintenance()">Close</button>
             </div>
         `;
         showNotification('Maintenance failed', 'error');
@@ -5134,7 +5134,7 @@ async function performMaintenanceImport(jobId, jobName) {
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
                 </p>
-                <button class="btn btn-secondary" style="margin-top: 1rem;" onclick="closeMaintenance()">Close</button>
+                <button class="btn btn-secondary mt-lg" onclick="closeMaintenance()">Close</button>
             </div>
         `;
         showNotification('Maintenance import failed', 'error');
@@ -5193,7 +5193,7 @@ async function performMaintenanceCleanup(jobId, jobName) {
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
                 </p>
-                <button class="btn btn-secondary" style="margin-top: 1rem;" onclick="closeMaintenance()">Close</button>
+                <button class="btn btn-secondary mt-lg" onclick="closeMaintenance()">Close</button>
             </div>
         `;
     }
@@ -6490,7 +6490,7 @@ async function scanOrphanedCaptures() {
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
                 </p>
-                <button class="btn btn-secondary" style="margin-top: 1rem;" onclick="closeMaintenance()">Close</button>
+                <button class="btn btn-secondary mt-lg" onclick="closeMaintenance()">Close</button>
             </div>
         `;
     }
@@ -6506,7 +6506,7 @@ function displayOrphanedResults(data) {
                 <p style="color: var(--text-secondary);">
                     No orphaned captures found. All files and records belong to active jobs.
                 </p>
-                <button class="btn btn-primary" style="margin-top: 1.5rem;" onclick="closeMaintenance()">Close</button>
+                <button class="btn btn-primary mt-xl" onclick="closeMaintenance()">Close</button>
             </div>
         `;
         return;
@@ -6537,17 +6537,17 @@ function displayOrphanedResults(data) {
             : `'both', '${escapeHtml(group.folder_path)}', ${group.original_job_id}`;
         
         return `
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: var(--bg-color); border-radius: 0.375rem; margin-bottom: 0.5rem;">
+            <div class="flex-between" style="padding: 0.75rem; background: var(--bg-color); border-radius: var(--radius-sm); margin-bottom: 0.5rem;">
                 <div style="flex: 1; min-width: 0;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                    <div class="form-row-wrap">
                         <strong>${escapeHtml(group.original_job_name)}</strong>
-                        <span style="font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 0.25rem; background: ${typeBadgeColor}; color: white;">${typeLabel}</span>
+                        <span class="text-xs" style="padding: 0.1rem 0.4rem; border-radius: 0.25rem; background: ${typeBadgeColor}; color: white;">${typeLabel}</span>
                     </div>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                    <div class="text-sm text-secondary mt-sm">
                         ${details}
                     </div>
                 </div>
-                <button class="btn btn-danger" style="padding: 0.3rem 0.75rem; font-size: 0.85rem; white-space: nowrap; margin-left: 0.5rem;" 
+                <button class="btn btn-danger btn-sm" style="white-space: nowrap; margin-left: 0.5rem;" 
                     onclick="deleteOrphanedGroup(${cleanupArg}, '${escapeHtml(group.original_job_name)}')">
                     Delete
                 </button>
@@ -6562,16 +6562,16 @@ function displayOrphanedResults(data) {
     
     content.innerHTML = `
         <div>
-            <div style="margin-bottom: 1rem;">
-                <strong style="color: #e67e22;">⚠ Orphaned Captures Found</strong>
-                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+            <div class="mb-lg">
+                <strong class="text-warning">⚠ Orphaned Captures Found</strong>
+                <div class="text-sm text-secondary mt-sm">
                     ${data.orphaned_groups.length} group${data.orphaned_groups.length > 1 ? 's' : ''} · ${summaryParts.join(' · ')}
                 </div>
             </div>
             <div style="max-height: 400px; overflow-y: auto;">
                 ${groupsHtml}
             </div>
-            <div style="display: flex; justify-content: space-between; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <div class="flex-between" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
                 <button class="btn btn-secondary" onclick="closeMaintenance()">Close</button>
                 ${data.orphaned_groups.length > 1 ? `
                     <button class="btn btn-danger" onclick="deleteAllOrphanedCaptures()">Delete All</button>
