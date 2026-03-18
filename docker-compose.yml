@@ -35,6 +35,11 @@ services:
     # Security: No new privileges
     security_opt:
       - no-new-privileges:true
+    # Local camera support: Uncomment and configure device mappings for USB webcams
+    # or other V4L2 video devices. List each device you want accessible in the container.
+    # devices:
+    #   - /dev/video0:/dev/video0
+    #   - /dev/video1:/dev/video1
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]

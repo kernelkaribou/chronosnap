@@ -842,7 +842,7 @@ function renderJobs(jobs) {
                 <div class="job-card-title">${escapeHtml(job.name)}</div>
             </div>
             <div class="job-info">
-                <div><strong>Stream URL:</strong> <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; max-width: 250px; vertical-align: bottom;">${escapeHtml(getStreamHost(job.url))}</span></div>
+                <div><strong>${job.stream_type === 'device' ? 'Device:' : 'Stream URL:'}</strong> <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; max-width: 250px; vertical-align: bottom;">${escapeHtml(job.stream_type === 'device' ? job.url : getStreamHost(job.url))}</span></div>
                 <div><strong>Interval:</strong> ${job.interval_seconds}s</div>
                 <div><strong>Capture:</strong> ${(job.capture_quality || 'maximum').charAt(0).toUpperCase() + (job.capture_quality || 'maximum').slice(1)}${job.capture_resolution && job.capture_resolution !== 'native' ? ` @ ${job.capture_resolution}` : ''}</div>
                 ${timeWindowInfo}
@@ -1017,6 +1017,33 @@ async function showJobDetails(jobId) {
                 <div class="form-section">
                     <div class="form-section-title">Source</div>
                     <div class="form-group" style="margin-bottom: 0.75rem;">
+                        ${job.stream_type === 'device' ? `
+                        <label>Camera Device</label>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <select id="edit_device_path" class="form-control" style="flex: 1; min-width: 0;">
+                                <option value="${escapeHtml(job.url)}" selected>${escapeHtml(job.url)}</option>
+                            </select>
+                            <input type="hidden" id="edit_url" value="${escapeHtml(job.url)}">
+                            <button type="button" class="btn btn-secondary" onclick="refreshDevices('edit_device_path')" title="Refresh device list" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                </svg>
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="previewStream('edit_device_path', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                Preview
+                            </button>
+                            <div style="flex: 0 0 auto; text-align: center;">
+                                <label style="font-size: 0.75rem; white-space: nowrap;">Warn After</label>
+                                <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50" style="width: 72px;">
+                                <small style="font-size: 0.65rem;">failures</small>
+                            </div>
+                        </div>
+                        ` : `
                         <label>Stream URL *</label>
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
                             <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required style="flex: 1; min-width: 0;">
@@ -1033,6 +1060,7 @@ async function showJobDetails(jobId) {
                                 <small style="font-size: 0.65rem;">failures</small>
                             </div>
                         </div>
+                        `}
                         <div id="edit-preview-result" class="test-result"></div>
                     </div>
 
@@ -1222,6 +1250,14 @@ async function showJobDetails(jobId) {
             document.getElementById('edit-source-dimensions').textContent = `Source: ${job.source_width}x${job.source_height}`;
         }
         
+        // Load device list for device-type jobs
+        if (job.stream_type === 'device') {
+            refreshDevices('edit_device_path').then(() => {
+                const sel = document.getElementById('edit_device_path');
+                if (sel) sel.value = job.url;
+            });
+        }
+        
         // Add native resolution option to auto-build dropdown
         if (job.capture_count > 0) {
             fetch(`${API_BASE}/captures/job/${job.id}/time-range`).then(r => r.json()).then(tr => {
@@ -1284,8 +1320,25 @@ async function createJob(event) {
         return;
     }
     
-    // Auto-detect stream type from URL
-    const stream_type = values.job_url.toLowerCase().startsWith('rtsp://') ? 'rtsp' : 'http';
+    // Determine source URL and stream type based on source type toggle
+    let jobUrl, stream_type, warningThresholdVal;
+    if (_createSourceType === 'device') {
+        jobUrl = document.getElementById('device_path').value;
+        if (!jobUrl) {
+            showNotification('Please select a camera device', 'error');
+            return;
+        }
+        stream_type = 'device';
+        warningThresholdVal = parseInt(document.getElementById('warning_threshold_device').value) || 3;
+    } else {
+        jobUrl = values.job_url;
+        if (!jobUrl) {
+            showNotification('Please enter a stream URL', 'error');
+            return;
+        }
+        stream_type = jobUrl.toLowerCase().startsWith('rtsp://') || jobUrl.toLowerCase().startsWith('rtsps://') ? 'rtsp' : 'http';
+        warningThresholdVal = values.warning_threshold || 3;
+    }
     
     // Validate dates
     const startDate = new Date(values.start_datetime);
@@ -1313,14 +1366,14 @@ async function createJob(event) {
     
     const formData = {
         name: values.job_name,
-        url: values.job_url,
+        url: jobUrl,
         stream_type: stream_type,
         start_datetime: datetimeLocalToISO(values.start_datetime),
         end_datetime: values.end_datetime ? datetimeLocalToISO(values.end_datetime) : null,
         interval_seconds: values.interval_seconds,
         framerate: values.framerate,
         naming_pattern: values.naming_pattern,
-        warning_threshold: values.warning_threshold || 3,
+        warning_threshold: warningThresholdVal,
         time_window_enabled: values.time_window_enabled,
         time_window_start: values.time_window_enabled ? values.time_window_start : null,
         time_window_end: values.time_window_enabled ? values.time_window_end : null,
@@ -1380,6 +1433,7 @@ function setupJobEditChangeTracking(originalJob) {
         'edit_time_window_start_time',
         'edit_time_window_end_time',
         'edit_url',
+        'edit_device_path',
         'edit_stream_type',
         'edit_warning_threshold',
         'edit_capture_quality',
@@ -1520,14 +1574,22 @@ async function updateJobEndTime(jobId) {
 }
 
 async function updateJobUrl(jobId) {
-    const url = document.getElementById('edit_url').value.trim();
+    const editDeviceEl = document.getElementById('edit_device_path');
+    const url = editDeviceEl ? editDeviceEl.value : document.getElementById('edit_url').value.trim();
     
     if (!url) {
         showNotification('URL cannot be empty', 'error');
         return;
     }
     
-    const stream_type = url.toLowerCase().startsWith('rtsp://') ? 'rtsp' : 'http';
+    let stream_type;
+    if (url.startsWith('/dev/video')) {
+        stream_type = 'device';
+    } else if (url.toLowerCase().startsWith('rtsp://') || url.toLowerCase().startsWith('rtsps://')) {
+        stream_type = 'rtsp';
+    } else {
+        stream_type = 'http';
+    }
     
     try {
         await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { url, stream_type } });
@@ -1580,7 +1642,9 @@ function setAutoBuildInterval(inputId, hours) {
 async function saveJobChanges(jobId) {
     // Collect all form values
     const interval = parseInt(document.getElementById('edit_interval_seconds').value);
-    const url = document.getElementById('edit_url').value.trim();
+    // URL may come from device picker or text input
+    const editDeviceEl = document.getElementById('edit_device_path');
+    const url = editDeviceEl ? editDeviceEl.value : document.getElementById('edit_url').value.trim();
     const endDatetimeRaw = document.getElementById('edit_end_datetime').value || null;
     const endDatetime = endDatetimeRaw ? datetimeLocalToISO(endDatetimeRaw) : null;
     const timeWindowEnabled = document.getElementById('edit_time_window_enabled').checked;
@@ -1630,8 +1694,15 @@ async function saveJobChanges(jobId) {
         }
     }
     
-    // Auto-detect stream type from URL
-    const stream_type = url.toLowerCase().startsWith('rtsp://') ? 'rtsp' : 'http';
+    // Detect stream type from URL
+    let stream_type;
+    if (url.startsWith('/dev/video')) {
+        stream_type = 'device';
+    } else if (url.toLowerCase().startsWith('rtsp://') || url.toLowerCase().startsWith('rtsps://')) {
+        stream_type = 'rtsp';
+    } else {
+        stream_type = 'http';
+    }
     
     // Build update payload
     const updateData = {
@@ -1686,6 +1757,67 @@ async function testUrl() {
     previewStream('job_url', 'test-result', 'capture_quality', 'capture_resolution', 'source-info', 'source-dimensions');
 }
 
+async function testDevice() {
+    const devicePath = document.getElementById('device_path').value;
+    if (!devicePath) {
+        showNotification('Please select a camera device first', 'warning');
+        return;
+    }
+    previewStream('device_path', 'device-test-result', 'capture_quality', 'capture_resolution', 'source-info', 'source-dimensions');
+}
+
+// Current source type state for create modal
+let _createSourceType = 'network';
+
+function setSourceType(type) {
+    _createSourceType = type;
+    const networkBtn = document.getElementById('source-type-network');
+    const deviceBtn = document.getElementById('source-type-device');
+    const networkGroup = document.getElementById('network-source-group');
+    const deviceGroup = document.getElementById('device-source-group');
+    
+    if (type === 'device') {
+        networkBtn.classList.remove('active');
+        deviceBtn.classList.add('active');
+        networkGroup.style.display = 'none';
+        deviceGroup.style.display = 'block';
+        // Remove required from URL, load devices
+        document.getElementById('job_url').removeAttribute('required');
+        refreshDevices('device_path');
+    } else {
+        deviceBtn.classList.remove('active');
+        networkBtn.classList.add('active');
+        deviceGroup.style.display = 'none';
+        networkGroup.style.display = 'block';
+        document.getElementById('job_url').setAttribute('required', '');
+    }
+    // Clear preview results
+    document.getElementById('test-result').innerHTML = '';
+    document.getElementById('device-test-result').innerHTML = '';
+}
+
+async function refreshDevices(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = '<option value="">Scanning...</option>';
+    try {
+        const devices = await apiRequest('/devices/');
+        select.innerHTML = '';
+        if (devices.length === 0) {
+            select.innerHTML = '<option value="">No cameras detected</option>';
+            return;
+        }
+        for (const d of devices) {
+            const opt = document.createElement('option');
+            opt.value = d.path;
+            opt.textContent = `${d.name} (${d.path})`;
+            select.appendChild(opt);
+        }
+    } catch (err) {
+        select.innerHTML = '<option value="">Error loading devices</option>';
+    }
+}
+
 function _generateResolutionOptions(width, height, currentValue) {
     const options = [{ value: 'native', label: `Native (${width}x${height})` }];
     const aspect = width / height;
@@ -1722,15 +1854,19 @@ async function previewStream(urlInputId, resultDivId, qualityId, resolutionId, i
     const resultDiv = document.getElementById(resultDivId);
     
     if (!url) {
-        showNotification('Please enter a URL first', 'warning');
+        showNotification('Please enter a URL or select a device first', 'warning');
         return;
     }
+    
+    // Determine stream type for the query
+    const streamType = url.startsWith('/dev/video') ? 'device' : null;
     
     resultDiv.innerHTML = '<div style="display:flex;justify-content:center;padding:2rem 0;"><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;padding:0.75rem 1.5rem;display:flex;align-items:center;gap:0.5rem;"><span class="spinner" style="width:14px;height:14px;border-width:2px;"></span><span style="color:var(--text-secondary);font-size:0.85rem;">Loading preview</span></div></div>';
     resultDiv.className = 'test-result';
     
     try {
         const query = { url };
+        if (streamType) query.stream_type = streamType;
         if (qualityId) {
             const qEl = document.getElementById(qualityId);
             if (qEl) query.quality = qEl.value;
@@ -4078,8 +4214,13 @@ async function showCreateJobModal() {
     // Reset the form to clear any previous values
     document.getElementById('create-job-form').reset();
     
+    // Reset source type to network
+    _createSourceType = 'network';
+    setSourceType('network');
+    
     // Clear test results and estimates
     document.getElementById('test-result').innerHTML = '';
+    document.getElementById('device-test-result').innerHTML = '';
     document.getElementById('duration-estimate').innerHTML = '';
     
     // Set default datetime to now
@@ -4172,14 +4313,29 @@ async function duplicateJob(jobId) {
         // Open create modal and pre-fill with job data
         document.getElementById('create-job-form').reset();
         document.getElementById('test-result').innerHTML = '';
+        document.getElementById('device-test-result').innerHTML = '';
         document.getElementById('duration-estimate').innerHTML = '';
+        
+        // Set source type based on job
+        if (job.stream_type === 'device') {
+            setSourceType('device');
+            // Populate device picker with current device and refresh list
+            const deviceSelect = document.getElementById('device_path');
+            deviceSelect.innerHTML = `<option value="${escapeHtml(job.url)}" selected>${escapeHtml(job.url)}</option>`;
+            refreshDevices('device_path').then(() => {
+                deviceSelect.value = job.url;
+            });
+            document.getElementById('warning_threshold_device').value = job.warning_threshold || 3;
+        } else {
+            setSourceType('network');
+            document.getElementById('job_url').value = job.url;
+            document.getElementById('warning_threshold').value = job.warning_threshold || 3;
+        }
         
         // Pre-fill fields from source job
         document.getElementById('job_name').value = `${job.name} (Copy)`;
-        document.getElementById('job_url').value = job.url;
         document.getElementById('interval_seconds').value = job.interval_seconds;
         document.getElementById('framerate').value = job.framerate || 30;
-        document.getElementById('warning_threshold').value = job.warning_threshold || 3;
         document.getElementById('naming_pattern').value = job.naming_pattern || '{job_name}_{count}_{timestamp}';
         document.getElementById('capture_quality').value = job.capture_quality || 'maximum';
         // Populate resolution dropdown from source dimensions before setting value

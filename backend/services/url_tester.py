@@ -31,6 +31,8 @@ def _probe_source_dimensions(url: str, stream_type: str = 'http') -> tuple[int, 
                '-show_entries', 'stream=width,height', '-of', 'csv=p=0']
         if stream_type == 'rtsp':
             cmd.extend(['-rtsp_transport', 'tcp'])
+        elif stream_type == 'device':
+            cmd.extend(['-f', 'v4l2'])
         cmd.append(url)
         result = subprocess.run(cmd, capture_output=True, timeout=config.FFMPEG_TIMEOUT, check=False)
         if result.returncode == 0:
@@ -59,14 +61,39 @@ async def test_stream_url(url: str, stream_type: str = None,
     try:
         # Auto-detect stream type if not provided
         if stream_type is None:
-            stream_type = 'rtsp' if url.lower().startswith('rtsp://') else 'http'
+            if url.startswith('/dev/video'):
+                stream_type = 'device'
+            elif url.lower().startswith('rtsp://') or url.lower().startswith('rtsps://'):
+                stream_type = 'rtsp'
+            else:
+                stream_type = 'http'
+        
+        # Check device availability for device streams
+        if stream_type == 'device':
+            import os as _os
+            if not _os.path.exists(url):
+                return TestUrlResponse(
+                    success=False,
+                    message=f"Error: Device {url} not found. Ensure it is mapped in your Docker configuration."
+                )
         
         # Create temp file for test capture
         with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
             output_path = tmp.name
         
         # Build ffmpeg command with quality/resolution settings
-        if stream_type == 'rtsp':
+        if stream_type == 'device':
+            cmd = [
+                'ffmpeg',
+                '-loglevel', 'error',
+                '-f', 'v4l2',
+                '-i', url,
+                '-frames:v', '1',
+                *_build_ffmpeg_filters(quality, resolution),
+                '-y',
+                output_path
+            ]
+        elif stream_type == 'rtsp':
             cmd = [
                 'ffmpeg',
                 '-loglevel', 'error',

@@ -12,7 +12,7 @@ import sys
 import os
 
 from .database import init_db
-from .routers import jobs, captures, videos, settings, storage, tags, shared
+from .routers import jobs, captures, videos, settings, storage, tags, shared, devices
 from .services.capture_scheduler import CaptureScheduler
 from .auth import verify_api_key
 from . import config
@@ -143,6 +143,7 @@ app.include_router(videos.router, prefix="/api/videos", tags=["videos"], depende
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"], dependencies=[Depends(verify_api_key)])
 app.include_router(storage.router, prefix="/api/storage", tags=["storage"], dependencies=[Depends(verify_api_key)])
 app.include_router(tags.router, prefix="/api/tags", tags=["tags"], dependencies=[Depends(verify_api_key)])
+app.include_router(devices.router, prefix="/api/devices", tags=["devices"], dependencies=[Depends(verify_api_key)])
 app.include_router(shared.router, prefix="/api/shared", tags=["shared"], dependencies=[Depends(verify_api_key)])
 from .routers import event_router
 app.include_router(event_router.router, prefix="/api", tags=["events"], dependencies=[Depends(verify_api_key)])

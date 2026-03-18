@@ -91,7 +91,9 @@ def capture_image(job: Dict[str, Any]) -> tuple[bool, Optional[str]]:
         # Capture based on stream type
         quality = job.get('capture_quality', 'maximum') or 'maximum'
         resolution = job.get('capture_resolution', 'native') or 'native'
-        if job['stream_type'] == 'rtsp':
+        if job['stream_type'] == 'device':
+            success, error_msg = _capture_device(job['url'], output_path, quality, resolution)
+        elif job['stream_type'] == 'rtsp':
             success, error_msg = _capture_rtsp(job['url'], output_path, quality, resolution)
         else:  # http
             success, error_msg = _capture_http(job['url'], output_path, quality, resolution)
@@ -221,3 +223,42 @@ def _capture_http(url: str, output_path: str, quality: str = 'maximum', resoluti
     except Exception as e:
         logger.error(f"HTTP capture error: {e}")
         return False, f"HTTP Error: {str(e)}"
+
+
+def _capture_device(device_path: str, output_path: str, quality: str = 'maximum', resolution: str = 'native') -> tuple[bool, Optional[str]]:
+    """Capture from a local V4L2 video device using FFMPEG"""
+    try:
+        if not os.path.exists(device_path):
+            return False, f"Device Error: {device_path} not found or inaccessible"
+        
+        cmd = [
+            'ffmpeg',
+            '-loglevel', 'error',
+            '-f', 'v4l2',
+            '-i', device_path,
+            '-frames:v', '1',
+            *_build_ffmpeg_filters(quality, resolution),
+            '-y',
+            output_path
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            timeout=config.FFMPEG_TIMEOUT,
+            check=False
+        )
+        
+        if result.returncode == 0:
+            return True, None
+        else:
+            error_msg = result.stderr.decode('utf-8').strip() if result.stderr else "Device capture failed"
+            logger.error(f"Device capture failed for {device_path}: {error_msg}")
+            return False, f"Device Error: {device_path} not found or inaccessible"
+        
+    except subprocess.TimeoutExpired:
+        logger.error(f"Device capture timed out: {device_path}")
+        return False, f"Device Error: Capture timeout on {device_path}"
+    except Exception as e:
+        logger.error(f"Device capture error: {e}")
+        return False, f"Device Error: {str(e)}"
