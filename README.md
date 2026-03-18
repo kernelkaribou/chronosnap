@@ -217,38 +217,69 @@ The major number `81` corresponds to V4L2 video devices. This grants access to a
 
 #### Raspberry Pi CSI Cameras (libcamera)
 
-Pi Camera Modules (v1, v2, v3, HQ Camera) connected via the CSI ribbon cable use the libcamera stack instead of standard V4L2. These cameras expose raw Bayer sensor data that FFmpeg cannot capture from directly, so the application uses `libcamera-still` for image capture.
+Pi Camera Modules (v1, v2, v3, HQ Camera) connected via the CSI ribbon cable use the libcamera stack instead of standard V4L2. These cameras expose raw Bayer sensor data that FFmpeg cannot capture from directly, so the application uses `rpicam-still` (or `libcamera-still` on older systems) for image capture.
 
-> **This is an advanced setup.** It requires mounting host binaries into the container and is intended for users comfortable with Raspberry Pi hardware and Docker device passthrough.
+> **This is an advanced setup.** It requires installing libcamera tools on the host, mounting their binaries into the container, and is intended for users comfortable with Raspberry Pi hardware and Docker device passthrough.
 
 **Prerequisites:**
 
-- Raspberry Pi running Raspberry Pi OS (Bookworm or later recommended)
-- Pi Camera Module detected and working on the host (`libcamera-hello` shows a preview)
+- Raspberry Pi running Raspberry Pi OS (Bookworm or later)
+- Pi Camera Module connected and enabled
 - Docker installed on the Pi
 
-**1. Verify the camera works on the host:**
+**1. Install libcamera tools on the host (if not already present):**
+
+Raspberry Pi OS does not always include the camera tools by default. The package names differ by OS version:
 
 ```bash
+# Raspberry Pi OS Trixie (Debian 13) and later:
+sudo apt install rpicam-apps
+
+# Raspberry Pi OS Bookworm (Debian 12):
+sudo apt install rpicam-apps
+# Or on older Bookworm images:
+sudo apt install libcamera-apps
+```
+
+The `rpicam-apps` package provides `rpicam-still` and `rpicam-hello`. The older `libcamera-apps` package provides `libcamera-still` and `libcamera-hello`. The application supports both naming conventions and will use whichever is available.
+
+If the packages are not found, you may need to add the Raspberry Pi apt repository:
+
+```bash
+echo "deb http://archive.raspberrypi.com/debian $(lsb_release -cs) main" | \
+  sudo tee /etc/apt/sources.list.d/raspi.list
+curl -fsSL https://archive.raspberrypi.com/debian/pool/main/r/raspberrypi-archive-keyring/raspberrypi-archive-keyring_2021.1.1+rpt1_all.deb -o /tmp/raspi-keyring.deb
+sudo dpkg -i /tmp/raspi-keyring.deb
+sudo apt update
+sudo apt install rpicam-apps
+```
+
+**2. Verify the camera works on the host:**
+
+```bash
+# Trixie+:
+rpicam-hello --list-cameras
+# Or Bookworm:
 libcamera-hello --list-cameras
+
 # Should show your camera, e.g.:
 # 0 : imx219 [3280x2464 10-bit RGGB] (/base/soc/i2c0mux/i2c@1/imx219@10)
 ```
 
-**2. Find the libcamera library and binary paths:**
+**3. Find the binary and library paths:**
 
 ```bash
-which libcamera-still libcamera-hello
-# Typically: /usr/bin/libcamera-still, /usr/bin/libcamera-hello
+# Find the binaries (use whichever exists on your system)
+which rpicam-still rpicam-hello 2>/dev/null || which libcamera-still libcamera-hello
 
-# Find shared libraries
-ldd $(which libcamera-still) | grep libcamera
+# Find shared libraries the binaries depend on
+ldd $(which rpicam-still 2>/dev/null || which libcamera-still) | grep -E "libcamera|libpisp|librpicam"
 # Note the paths, typically under /usr/lib/aarch64-linux-gnu/
 ```
 
-**3. Configure docker-compose.yml:**
+**4. Configure docker-compose.yml:**
 
-Map the camera device, libcamera binaries, and their shared libraries into the container:
+Map the camera device, binaries, and their shared libraries into the container. Adjust the binary names and library paths to match what you found in step 3:
 
 ```yaml
 services:
@@ -265,20 +296,22 @@ services:
       - ./data:/app/data
       - ./imports:/imports
       - ./exports:/exports
-      # Libcamera binaries (read-only)
-      - /usr/bin/libcamera-still:/usr/bin/libcamera-still:ro
-      - /usr/bin/libcamera-hello:/usr/bin/libcamera-hello:ro
-      # Libcamera shared libraries (read-only)
+      # Rpicam/libcamera binaries (read-only) - use the paths from step 3
+      - /usr/bin/rpicam-still:/usr/bin/rpicam-still:ro
+      - /usr/bin/rpicam-hello:/usr/bin/rpicam-hello:ro
+      # Shared libraries (read-only) - adjust paths based on ldd output
       - /usr/lib/aarch64-linux-gnu/libcamera:/usr/lib/aarch64-linux-gnu/libcamera:ro
       - /usr/lib/aarch64-linux-gnu/libpisp:/usr/lib/aarch64-linux-gnu/libpisp:ro
+      - /usr/lib/aarch64-linux-gnu/librpicam-app.so.1:/usr/lib/aarch64-linux-gnu/librpicam-app.so.1:ro
 ```
 
-The exact library paths may vary depending on your Pi OS version. If `libcamera-still` fails inside the container with a "shared library not found" error, run `ldd /usr/bin/libcamera-still` on the host and add any missing library paths as volume mounts.
+If the binaries fail inside the container with a "shared library not found" error, run `ldd` on the binary and add any missing library paths as volume mounts.
 
-**4. Verify inside the container:**
+**5. Verify inside the container:**
 
 ```bash
-docker exec timelapse-manager libcamera-hello --list-cameras
+docker exec timelapse-manager rpicam-hello --list-cameras
+# Or: docker exec timelapse-manager libcamera-hello --list-cameras
 docker exec timelapse-manager curl -s http://localhost:8080/api/devices/ | python3 -m json.tool
 ```
 
@@ -286,10 +319,10 @@ The camera should appear in the API response with `"driver": "libcamera"`. In th
 
 **How it works under the hood:**
 
-- The application checks for `libcamera-still` at startup. If not found, Pi CSI camera support is silently disabled and only V4L2 (USB) cameras are available.
+- At startup, the application checks for `rpicam-still` first, then falls back to `libcamera-still`. If neither is found, Pi CSI camera support is silently disabled and only V4L2 (USB) cameras are available.
 - When both a USB webcam and a Pi CSI camera are connected, the application uses libcamera for the CSI camera and V4L2 for the USB webcam automatically.
-- Captures use `libcamera-still --immediate` which takes a single still image without a preview window.
-- Resolution is detected from `libcamera-hello --list-cameras` output and the maximum supported resolution is used by default.
+- Captures use `rpicam-still --immediate` (or `libcamera-still --immediate`) which takes a single still image without a preview window.
+- Resolution is detected from `rpicam-hello --list-cameras` output and the maximum supported resolution is used by default.
 
 ## Job Configuration
 
