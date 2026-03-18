@@ -15,6 +15,7 @@ from ..services.video_processor import process_video, cancel_video
 from ..utils import get_now, to_iso
 from ..helpers.db_helpers import get_or_404, normalize_favorite, fetch_tags_for_videos, fetch_tags_for_jobs, set_video_tags
 from ..helpers.file_helpers import validate_writable_directory, delete_video_files, resolve_video_path, make_relative
+from ..services.event_service import add_event
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -480,6 +481,7 @@ async def delete_video(video_id: int):
         # Delete record
         cursor.execute("DELETE FROM processed_videos WHERE id = ?", (video_id,))
         
+        add_event(f"Video '{vid['name']}' deleted", "video", {"video_id": video_id})
         logger.info(f"Deleted video '{vid['name']}' (ID: {video_id})")
 
 
@@ -512,6 +514,9 @@ async def delete_multiple_videos(request: BulkDeleteRequest):
             cursor.execute("DELETE FROM processed_videos WHERE id = ?", (video_id,))
             deleted += 1
             logger.info(f"Deleted video '{vid['name']}' (ID: {video_id})")
+    
+    if deleted > 0:
+        add_event(f"{deleted} video(s) deleted", "video")
     
     return {"deleted": deleted, "requested": len(request.video_ids)}
 

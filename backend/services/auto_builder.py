@@ -13,6 +13,7 @@ from ..database import get_db, dict_from_row
 from ..utils import get_now, to_iso, parse_iso
 from .. import config
 from .video_processor import process_video
+from .event_service import add_event
 from .webhook import send_webhook_event
 
 logger = logging.getLogger(__name__)
@@ -180,8 +181,10 @@ def _run_auto_build(job: dict, now: datetime):
             success = True
             logger.info(f"Auto-build completed for job {job_id} ({job_name}): video_id={video_id}")
             send_webhook_event('auto_build_complete', job_name, job_id)
+            add_event(f"Auto-build completed for '{job_name}'", "video", {"job_id": job_id, "video_id": video_id})
         else:
             logger.warning(f"Auto-build failed for job {job_id} ({job_name}): video status={video_status}")
+            add_event(f"Auto-build failed for '{job_name}'", "video", {"job_id": job_id})
 
     except Exception as e:
         logger.error(f"Auto-build error for job {job_id} ({job_name}): {e}", exc_info=True)

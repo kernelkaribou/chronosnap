@@ -10,6 +10,7 @@ import logging
 
 from ..database import get_db
 from .. import config
+from .event_service import add_event
 
 logger = logging.getLogger(__name__)
 
@@ -279,6 +280,8 @@ def _update_video_status(video_id: int, status: str, progress: float, message: s
     from .state_manager import update_video_state
     update_video_state(video_id, status, progress, message)
     logger.info(f"Video {video_id} status: {status} - {message}")
+    if status == 'failed':
+        add_event(f"Video build failed (ID: {video_id})", "video", {"video_id": video_id, "error": message[:100]})
 
 
 def _update_video_completed(video_id: int, file_size: int, total_frames: int, duration_seconds: float):
@@ -305,6 +308,7 @@ def _update_video_completed(video_id: int, file_size: int, total_frames: int, du
     generate_thumbnail(video_id, video_path)
     
     logger.info(f"Completed video '{video_name}' (ID: {video_id}) - Frames: {total_frames}, Duration: {duration_seconds:.2f}s, Size: {file_size / (1024*1024):.2f}MB")
+    add_event(f"Video '{video_name}' build completed", "video", {"video_id": video_id})
 
 
 def generate_thumbnail(video_id: int, video_path: str):

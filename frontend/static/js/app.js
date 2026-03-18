@@ -201,6 +201,108 @@ function dismissNotification() {
     document.getElementById('notification-toast').classList.remove('show');
 }
 
+// ─── Event Log ────────────────────────────────────────────────
+let _eventPanelOpen = false;
+let _lastSeenEventTimestamp = localStorage.getItem('lastSeenEventTimestamp') || '';
+let _eventPollTimer = null;
+
+function toggleEventPanel() {
+    const panel = document.getElementById('event-panel');
+    _eventPanelOpen = !_eventPanelOpen;
+    panel.style.display = _eventPanelOpen ? 'block' : 'none';
+    if (_eventPanelOpen) {
+        fetchEvents().then(() => {
+            // Mark all as seen
+            const body = document.getElementById('event-panel-body');
+            const firstItem = body.querySelector('.event-item');
+            if (firstItem) {
+                _lastSeenEventTimestamp = firstItem.dataset.timestamp || '';
+                localStorage.setItem('lastSeenEventTimestamp', _lastSeenEventTimestamp);
+            }
+            updateEventBadge(0);
+        });
+    }
+}
+
+async function fetchEvents() {
+    try {
+        const res = await fetch('/api/events/');
+        if (!res.ok) return;
+        const events = await res.json();
+        renderEvents(events);
+        if (!_eventPanelOpen) {
+            const unseen = events.filter(e => e.timestamp > _lastSeenEventTimestamp).length;
+            updateEventBadge(unseen);
+        }
+    } catch (e) { /* silently fail */ }
+}
+
+function renderEvents(events) {
+    const body = document.getElementById('event-panel-body');
+    if (!events.length) {
+        body.innerHTML = '<div class="event-empty">No events yet</div>';
+        return;
+    }
+    body.innerHTML = events.map(ev => {
+        const cat = ev.category || 'system';
+        const time = formatEventTime(ev.timestamp);
+        return `<div class="event-item" data-timestamp="${ev.timestamp}">
+            <span class="event-item-dot cat-${cat}"></span>
+            <div class="event-item-content">
+                <div class="event-item-msg">${escapeHtml(ev.message)}</div>
+                <div class="event-item-time">${time}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function formatEventTime(isoStr) {
+    try {
+        const d = new Date(isoStr);
+        const now = new Date();
+        const diffMs = now - d;
+        const diffMin = Math.floor(diffMs / 60000);
+        if (diffMin < 1) return 'Just now';
+        if (diffMin < 60) return `${diffMin}m ago`;
+        const diffHr = Math.floor(diffMin / 60);
+        if (diffHr < 24) return `${diffHr}h ago`;
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch { return ''; }
+}
+
+function updateEventBadge(count) {
+    const badge = document.getElementById('event-badge');
+    if (count > 0) {
+        badge.textContent = count > 9 ? '9+' : count;
+        badge.style.display = 'flex';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function startEventPolling() {
+    fetchEvents();
+    _eventPollTimer = setInterval(fetchEvents, 30000);
+}
+
+// Close event panel on outside click
+document.addEventListener('click', (e) => {
+    if (!_eventPanelOpen) return;
+    const panel = document.getElementById('event-panel');
+    const bell = document.querySelector('.event-bell');
+    if (!panel.contains(e.target) && !bell.contains(e.target)) {
+        _eventPanelOpen = false;
+        panel.style.display = 'none';
+    }
+});
+// ─── End Event Log ────────────────────────────────────────────
+
 // Confirmation system
 function showConfirm(message, callback) {
     const modal = document.getElementById('confirm-modal');
@@ -453,6 +555,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Load tags globally (needed by tag pickers in modals)
     loadTagManager();
+    
+    // Start event log polling
+    startEventPolling();
     
     // Load initial view based on URL hash or default to jobs
     const hash = window.location.hash.slice(1); // Remove #
