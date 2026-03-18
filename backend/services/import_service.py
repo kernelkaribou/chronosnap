@@ -1170,18 +1170,27 @@ def execute_video_import(
     os.chmod(video_dir, 0o755)
     
     dest_path = os.path.join(video_dir, f"{sanitized_video}{original_ext}")
-    
-    # Move the video
-    shutil.move(src_path, dest_path)
-    os.chmod(dest_path, 0o644)
-    
-    # Update DB with final path
     rel_dest = os.path.relpath(dest_path, get_timelapses_path())
+    
+    # Update DB with final path before moving file
     with get_db() as conn:
         conn.execute(
             "UPDATE processed_videos SET file_path = ? WHERE id = ?",
             (rel_dest, video_id)
         )
+    
+    # Move the video file; clean up DB record if move fails
+    try:
+        shutil.move(src_path, dest_path)
+        os.chmod(dest_path, 0o644)
+    except Exception as e:
+        with get_db() as conn:
+            conn.execute("DELETE FROM processed_videos WHERE id = ?", (video_id,))
+        try:
+            os.rmdir(video_dir)
+        except OSError:
+            pass
+        raise ValueError(f"Failed to move video file: {e}")
     
     # Generate thumbnail (pass absolute path for filesystem ops)
     _generate_video_thumbnail(video_id, dest_path)
