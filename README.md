@@ -55,7 +55,7 @@ Browser uploads work well for typical imports up to a few gigabytes. For very la
 
 #### Server Path Import (Optional)
 
-For bulk imports or large file sets, place files in the `/imports` directory on the host, then browse and select them from within the web interface. This avoids browser upload limits and network interruptions since the files are already on disk. The import path is configurable in Settings.
+For bulk imports or large file sets, place files in the `/imports` directory on the host, then browse and select them from within the web interface. This avoids browser upload limits and network interruptions since the files are already on disk.
 
 To enable server path imports, add the volume mount to your `docker-compose.yml`:
 
@@ -109,7 +109,6 @@ The export button appears in the job details modal (the download arrow icon next
 - Job duplication to quickly create similar configurations
 - API key authentication (32-character keys) for all endpoints
 - Health check endpoint for container orchestration
-- **Server paths**: all four paths (Captures, Timelapses, Import, Export) are configurable in Settings, each with a default matching its Docker volume mount. Paths use an edit/confirm/cancel toggle pattern consistent with job path editing.
 
 ### Storage Dashboard
 
@@ -427,7 +426,7 @@ Interactive API documentation is available at `/docs` (Swagger UI) when the appl
 | `/api/captures` | List, filter, download, and delete captures. Detect and clean up orphaned files. |
 | `/api/videos` | Create timelapse videos, track processing progress, download and delete videos. |
 | `/api/import` | Import images and videos from server paths or browser uploads. Browse directories, analyze staged files, execute imports. |
-| `/api/settings` | View and regenerate the API key. Configure webhook notifications (URL, template, event filtering), server paths (captures, timelapses, import, export), export retention, and check for version updates. |
+| `/api/settings` | View and regenerate the API key. Configure webhook notifications (URL, template, event filtering), export retention, and check for version updates. |
 | `/api/storage` | Storage statistics and disk usage. |
 
 ### API Configuration
@@ -437,10 +436,6 @@ For automated or scripted deployments, application settings can be configured vi
 ```bash
 API_KEY="your-api-key"
 BASE="http://localhost:8080/api"
-
-# Configure storage paths
-curl -X PUT "$BASE/import/settings/path/captures" -H "X-API-Key: $API_KEY" \
-  -H "Content-Type: application/json" -d '{"path": "/captures"}'
 
 # Set export retention (days, 0 = indefinite)
 curl -X PUT "$BASE/settings/export-retention" -H "X-API-Key: $API_KEY" \

@@ -46,34 +46,19 @@ STALE_STAGING_HOURS = 2
 # Path security
 # ===========================================================================
 
-def _get_setting_path(key: str, default: str) -> str:
-    """Get a configured path from settings or return default."""
-    try:
-        from ..database import get_db
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
-            row = cursor.fetchone()
-            if row and row[0]:
-                return row[0]
-    except Exception as e:
-        logger.warning(f"Failed to read setting '{key}': {e}")
-    return default
-
-
 def get_import_path() -> str:
-    """Get the configured import path from settings or default."""
-    return _get_setting_path('import_path', config.DEFAULT_IMPORT_PATH)
+    """Return the fixed import path."""
+    return config.DEFAULT_IMPORT_PATH
 
 
 def get_captures_path() -> str:
-    """Get the configured captures path from settings or default."""
-    return _get_setting_path('captures_path', config.DEFAULT_CAPTURES_PATH)
+    """Return the fixed captures path."""
+    return config.DEFAULT_CAPTURES_PATH
 
 
 def get_timelapses_path() -> str:
-    """Get the configured timelapses path from settings or default."""
-    return _get_setting_path('timelapses_path', config.DEFAULT_VIDEOS_PATH)
+    """Return the fixed timelapses path."""
+    return config.DEFAULT_VIDEOS_PATH
 
 
 def get_default_naming_pattern() -> str:

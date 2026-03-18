@@ -4090,86 +4090,6 @@ async function executeImport() {
     }
 }
 
-// --- Server path settings ---
-let _pathBackups = {};
-const _pathTypes = [
-    { key: 'captures', label: 'Captures Path', apiField: 'captures_path' },
-    { key: 'timelapses', label: 'Timelapses Path', apiField: 'timelapses_path' },
-    { key: 'import', label: 'Import Path', apiField: 'import_path' },
-];
-
-function renderPathRow(type) {
-    const editSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
-    const saveSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
-    const cancelSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-    const container = document.getElementById(`path-row-${type.key}`);
-    if (!container) return;
-    container.innerHTML = `
-        <label style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">${type.label}</label>
-        <div style="display:flex;gap:0.5rem;align-items:center;">
-            <input type="text" id="${type.key}-path-input" class="form-control" style="flex:1;opacity:0.6;" readonly>
-            <button class="btn-icon" id="${type.key}-path-edit-btn" onclick="togglePathEdit('${type.key}', true)" title="Edit">${editSvg}</button>
-            <button class="btn-icon" id="${type.key}-path-save-btn" onclick="saveServerPath('${type.key}')" title="Save" style="display:none;color:var(--success-color);">${saveSvg}</button>
-            <button class="btn-icon" id="${type.key}-path-cancel-btn" onclick="togglePathEdit('${type.key}', false)" title="Cancel" style="display:none;color:var(--danger-color);">${cancelSvg}</button>
-        </div>`;
-}
-
-async function loadServerPaths() {
-    _pathTypes.forEach(t => renderPathRow(t));
-    try {
-        const result = await apiRequest('/import/settings/path');
-        _pathTypes.forEach(t => {
-            const val = result[t.apiField] || '';
-            document.getElementById(`${t.key}-path-input`).value = val;
-            _pathBackups[t.key] = val;
-        });
-        _importBrowsePath = result.import_path || '/imports';
-    } catch (e) {
-        _pathTypes.forEach(t => {
-            document.getElementById(`${t.key}-path-input`).value = '';
-        });
-        _importBrowsePath = '/imports';
-    }
-}
-
-function togglePathEdit(type, editing) {
-    const input = document.getElementById(`${type}-path-input`);
-    const editBtn = document.getElementById(`${type}-path-edit-btn`);
-    const saveBtn = document.getElementById(`${type}-path-save-btn`);
-    const cancelBtn = document.getElementById(`${type}-path-cancel-btn`);
-    if (editing) {
-        _pathBackups[type] = input.value;
-        input.removeAttribute('readonly');
-        input.style.opacity = '1';
-        editBtn.style.display = 'none';
-        saveBtn.style.display = '';
-        cancelBtn.style.display = '';
-        input.focus();
-    } else {
-        input.value = _pathBackups[type];
-        input.setAttribute('readonly', '');
-        input.style.opacity = '0.6';
-        editBtn.style.display = '';
-        saveBtn.style.display = 'none';
-        cancelBtn.style.display = 'none';
-    }
-}
-
-async function saveServerPath(type) {
-    const path = document.getElementById(`${type}-path-input`).value.trim();
-    const label = _pathTypes.find(t => t.key === type)?.label || type;
-    if (!path) { showNotification(`${label} cannot be empty`, 'error'); return; }
-    try {
-        await apiRequest(`/import/settings/path/${type}`, { method: 'PUT', body: { path } });
-        _pathBackups[type] = path;
-        if (type === 'import') _importBrowsePath = path;
-        togglePathEdit(type, false);
-        showNotification(`${label} updated`, 'success');
-    } catch (error) {
-        showNotification(error.message || `Failed to update ${label.toLowerCase()}`, 'error');
-    }
-}
-
 async function loadNamingPattern() {
     try {
         const result = await apiRequest('/settings/naming-pattern');
@@ -5677,7 +5597,6 @@ async function loadSettings() {
     loadWebhookSettings();
     loadTagManager();
     loadSharedVideosList();
-    loadServerPaths();
     loadNamingPattern();
     
     // Load version and check for updates
