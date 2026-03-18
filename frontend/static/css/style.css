@@ -707,6 +707,24 @@ body {
     max-width: 100%;
 }
 
+/* Sticky detail header (back button + title) below navbar */
+.detail-view-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: var(--bg-color);
+    margin: -2rem -2rem 2rem -2rem;
+    padding: 1rem 2rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+@media (max-width: 768px) {
+    .detail-view-header {
+        margin: -1rem -1rem 1.5rem -1rem;
+        padding: 0.75rem 1rem;
+    }
+}
+
 /* Job detail: sidebar (preview + meta) + main (settings) */
 .detail-layout {
     display: grid;
@@ -716,8 +734,6 @@ body {
 }
 
 .detail-sidebar {
-    position: sticky;
-    top: 5rem;
     align-self: start;
 }
 
