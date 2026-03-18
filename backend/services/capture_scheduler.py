@@ -15,6 +15,7 @@ from .image_capture import capture_image
 from .job_state import calculate_job_state, should_execute_capture
 from .webhook import send_webhook_event
 from .auto_builder import check_auto_builds, reset_stuck_auto_builds
+from .event_service import add_event
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +142,7 @@ class CaptureScheduler:
                 # Send webhook on completion
                 if new_status == 'completed' and current_status != 'completed':
                     send_webhook_event('completed', job['name'], job_id)
+                    add_event(f"Job '{job['name']}' completed", "job", {"job_id": job_id})
             if next_capture_iso != current_next_capture_iso:
                 logger.debug(f"Job {job_id} ({job['name']}) next_scheduled_capture_at updated: {current_next_capture_iso} -> {next_capture_iso}")
             if should_clear_warning:
@@ -322,6 +324,7 @@ class CaptureScheduler:
                     # Send deferred webhook events now that we know the final status
                     if new_status == 'completed' and job.get('status') != 'completed':
                         send_webhook_event('completed', job['name'], job_id)
+                        add_event(f"Job '{job['name']}' completed", "job", {"job_id": job_id})
                         self.failure_counts.pop(job_id, None)
                     elif was_in_warning:
                         send_webhook_event('recovered', job['name'], job_id)

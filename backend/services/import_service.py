@@ -17,6 +17,7 @@ from typing import Dict, List, Any, Optional, Tuple, Set
 
 from .. import config
 from ..utils import get_now, to_iso
+from .event_service import add_event
 
 logger = logging.getLogger(__name__)
 
@@ -1090,6 +1091,7 @@ def execute_image_import(
         )
         
         logger.info(f"Imported {moved_count} images as job '{job_name}' (ID: {job_id})")
+        add_event(f"Imported {moved_count} images as '{job_name}'", "import", {"job_id": job_id})
         
         return {
             'job_id': job_id,
@@ -1196,6 +1198,7 @@ def execute_video_import(
     _generate_video_thumbnail(video_id, dest_path)
     
     logger.info(f"Imported video '{video_name}' (ID: {video_id})")
+    add_event(f"Video '{video_name}' imported", "import", {"video_id": video_id})
     
     return {
         'video_id': video_id,

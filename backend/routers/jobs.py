@@ -18,6 +18,7 @@ from ..database import get_db, dict_from_row
 from ..services.url_tester import test_stream_url
 from ..services.duration_calculator import calculate_duration
 from ..services.image_capture import capture_image
+from ..services.event_service import add_event
 from ..services.capture_scheduler import get_scheduler
 from ..services.maintenance import scan_job_files, cleanup_missing_captures, import_orphaned_files, scan_directory
 from ..services.job_state import calculate_job_state
@@ -120,6 +121,8 @@ async def create_job(job: JobCreate):
         # Store the relative directory name
         cursor.execute("UPDATE jobs SET capture_path = ? WHERE id = ?",
                        (rel_job_dir, job_id))
+        
+        add_event(f"Job '{job.name}' created", "job", {"job_id": job_id})
         
         # Get the job we just created
         cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
@@ -326,6 +329,8 @@ async def update_job(job_id: int, job_update: JobUpdate):
             updates.append("status = ?")
             values.append(job_update.status.value)
             manual_status_change = job_update.status.value in ('completed', 'disabled')
+            if job_update.status.value == 'completed':
+                add_event(f"Job '{current_job['name']}' completed", "job", {"job_id": job_id})
         
         # Track if schedule-affecting fields are being updated
         schedule_changed = False
@@ -454,6 +459,7 @@ async def delete_job(job_id: int):
         # Delete job (cascades captures, sets NULL on processed_videos)
         cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
         
+        add_event(f"Job '{job_info['name']}' deleted", "job", {"job_id": job_id})
         logger.info(f"Deleted job '{job_info['name']}' (ID: {job_id}) and all captures")
 
 
@@ -785,6 +791,7 @@ async def export_job(job_id: int):
             
             os.chmod(export_path, 0o644)
             logger.info(f"Built export archive: {export_path} ({os.path.getsize(export_path)} bytes)")
+            add_event(f"Export completed for job '{job_name}'", "export", {"job_id": job_id, "file_name": zip_name})
             
             return {
                 'method': 'file',
