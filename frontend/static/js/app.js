@@ -3199,7 +3199,9 @@ async function processVideo(event) {
     
     try {
         await apiRequest('/videos/', { method: 'POST', body: formData });
-        closeModal('process-video-modal');
+        // Close modal without history.back() since we're navigating to videos view
+        document.getElementById('process-video-modal').classList.remove('active');
+        if (_modalHistoryDepth > 0) _modalHistoryDepth--;
         document.getElementById('process-video-form').reset();
         switchView('videos');
         showNotification('Video processing started');
