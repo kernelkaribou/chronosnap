@@ -2441,7 +2441,7 @@ body {
 }
 .warn-after-group input {
     width: 52px;
-    padding: 0.35rem 0.3rem;
+    padding: 0.625rem 0.3rem;
     text-align: center;
     font-size: 0.8rem;
 }
@@ -3014,7 +3014,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     align-items: center;
     gap: 0.3rem;
     position: relative;
-    padding: 0.4rem 0.75rem;
+    padding: 0.625rem 0.75rem;
     border-radius: var(--radius-sm);
     z-index: 0;
     cursor: pointer;
