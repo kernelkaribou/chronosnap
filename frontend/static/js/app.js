@@ -4182,7 +4182,14 @@ async function duplicateJob(jobId) {
         document.getElementById('warning_threshold').value = job.warning_threshold || 3;
         document.getElementById('naming_pattern').value = job.naming_pattern || '{job_name}_{count}_{timestamp}';
         document.getElementById('capture_quality').value = job.capture_quality || 'maximum';
-        document.getElementById('capture_resolution').value = job.capture_resolution || 'native';
+        // Populate resolution dropdown from source dimensions before setting value
+        if (job.source_width && job.source_height) {
+            const options = _generateResolutionOptions(job.source_width, job.source_height, job.capture_resolution || 'native');
+            _populateResolutionDropdown('capture_resolution', options, job.capture_resolution || 'native');
+            _nativeDimensions['capture_resolution'] = { w: job.source_width, h: job.source_height };
+        } else {
+            document.getElementById('capture_resolution').value = job.capture_resolution || 'native';
+        }
         updateNamingPreview();
         
         // Set start to now

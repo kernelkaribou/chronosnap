@@ -47,7 +47,7 @@ class JobCreate(BaseModel):
     auto_build_resolution: str = Field(default="1920x1080", pattern=r"^\d+x\d+$")
     auto_build_text_overlay: Optional[str] = None  # JSON string of TextOverlayConfig
     capture_quality: str = Field(default="maximum", pattern=r"^(maximum|high|medium|low)$", description="Capture image quality preset")
-    capture_resolution: str = Field(default="native", description="Capture resolution: 'native' or 'WxH'")
+    capture_resolution: str = Field(default="native", pattern=r"^(native|\d+x\d+)$", description="Capture resolution: 'native' or 'WxH'")
     source_width: Optional[int] = None
     source_height: Optional[int] = None
     tag_ids: Optional[List[int]] = None
@@ -113,7 +113,7 @@ class JobUpdate(BaseModel):
     auto_build_resolution: Optional[str] = Field(None, pattern=r"^\d+x\d+$")
     auto_build_text_overlay: Optional[str] = None  # JSON string of TextOverlayConfig
     capture_quality: Optional[str] = Field(None, pattern=r"^(maximum|high|medium|low)$")
-    capture_resolution: Optional[str] = None
+    capture_resolution: Optional[str] = Field(None, pattern=r"^(native|\d+x\d+)$")
     tag_ids: Optional[List[int]] = None
 
     @field_validator('url')

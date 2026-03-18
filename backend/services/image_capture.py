@@ -25,10 +25,13 @@ QUALITY_MAP = {
 
 def _build_ffmpeg_filters(quality: str = 'maximum', resolution: str = 'native') -> list[str]:
     """Build ffmpeg quality and resolution flags for capture commands."""
+    import re
     flags = []
     q_val = QUALITY_MAP.get(quality, '2')
     flags.extend(['-q:v', q_val])
     if resolution and resolution != 'native':
+        if not re.match(r'^\d+x\d+$', resolution):
+            raise ValueError(f"Invalid resolution format: {resolution}")
         flags.extend(['-vf', f'scale={resolution.replace("x", ":")}'])
     return flags
 

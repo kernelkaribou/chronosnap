@@ -477,7 +477,8 @@ async def delete_job(job_id: int):
 
 @router.post("/test-url", response_model=TestUrlResponse)
 async def test_url(url: str, stream_type: str = None,
-                   quality: str = 'maximum', resolution: str = 'native'):
+                   quality: str = Query('maximum', pattern=r"^(maximum|high|medium|low)$"),
+                   resolution: str = Query('native', pattern=r"^(native|\d+x\d+)$")):
     """Test a URL and capture a sample image with optional quality/resolution settings"""
     result = await test_stream_url(url, stream_type, quality, resolution)
     return result
