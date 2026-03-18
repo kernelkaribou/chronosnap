@@ -244,9 +244,11 @@ function renderEvents(events) {
         return;
     }
     body.innerHTML = events.map(ev => {
-        const cat = ev.category || 'system';
+        const validCats = ['job', 'video', 'import', 'export', 'system'];
+        const cat = validCats.includes(ev.category) ? ev.category : 'system';
         const time = formatEventTime(ev.timestamp);
-        return `<div class="event-item" data-timestamp="${ev.timestamp}">
+        const ts = escapeHtml(ev.timestamp || '');
+        return `<div class="event-item" data-timestamp="${ts}">
             <span class="event-item-dot cat-${cat}"></span>
             <div class="event-item-content">
                 <div class="event-item-msg">${escapeHtml(ev.message)}</div>
