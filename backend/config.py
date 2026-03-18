@@ -18,7 +18,7 @@ DEFAULT_VIDEOS_PATH = "/timelapses"
 DEFAULT_IMPORT_PATH = "/imports"
 
 # Import settings
-IMPORT_STAGING_DIR = str(DATA_DIR / "import-staging")
+IMPORT_STAGING_DIR = str(BASE_DIR / "import-staging")
 MAX_UPLOAD_SIZE = 25 * 1024 * 1024 * 1024  # 25GB
 
 # Default naming patterns
