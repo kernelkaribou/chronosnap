@@ -137,6 +137,20 @@ class JobUpdate(BaseModel):
             raise ValueError("URL must start with http://, https://, rtsp://, rtsps://, or /dev/video")
         return v
 
+    @model_validator(mode='after')
+    def validate_device_url(self):
+        """Ensure /dev/video paths are only used with device stream type on partial updates."""
+        import re
+        if self.url is not None and self.url.startswith('/dev/video'):
+            if self.stream_type is not None and self.stream_type != StreamType.DEVICE:
+                raise ValueError("Device paths require stream_type 'device'")
+            if not re.match(r'^/dev/video\d+$', self.url):
+                raise ValueError("Device path must be /dev/videoN (e.g., /dev/video0)")
+        elif self.stream_type == StreamType.DEVICE and self.url is not None:
+            if not self.url.startswith('/dev/video'):
+                raise ValueError("Device stream type requires a /dev/video* path")
+        return self
+
 
 class TagBrief(BaseModel):
     id: int
