@@ -27,17 +27,21 @@ def _get_image_dimensions(path: str) -> tuple[int, int] | tuple[None, None]:
 def _probe_source_dimensions(url: str, stream_type: str = 'http') -> tuple[int, int] | tuple[None, None]:
     """Probe native source resolution using ffprobe without capturing."""
     try:
-        cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0',
-               '-show_entries', 'stream=width,height', '-of', 'csv=p=0']
-        if stream_type == 'rtsp':
-            cmd.extend(['-rtsp_transport', 'tcp'])
-        elif stream_type == 'device':
-            cmd.extend(['-f', 'v4l2'])
-            from .device_manager import get_device_max_resolution
-            max_w, max_h = get_device_max_resolution(url)
-            if max_w and max_h:
-                cmd.extend(['-video_size', f'{max_w}x{max_h}'])
-        cmd.append(url)
+        if stream_type == 'device':
+            from .capture_backends import build_probe_cmd, get_max_resolution
+            probe_cmd = build_probe_cmd(url)
+            if probe_cmd is None:
+                # Backend doesn't use ffprobe (e.g., libcamera)
+                max_w, max_h = get_max_resolution(url)
+                return (max_w, max_h) if max_w else (None, None)
+            cmd = probe_cmd
+        else:
+            cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+                   '-show_entries', 'stream=width,height', '-of', 'csv=p=0']
+            if stream_type == 'rtsp':
+                cmd.extend(['-rtsp_transport', 'tcp'])
+            cmd.append(url)
+        
         result = subprocess.run(cmd, capture_output=True, timeout=config.FFMPEG_TIMEOUT, check=False)
         if result.returncode == 0:
             parts = result.stdout.decode().strip().split(',')
@@ -87,20 +91,13 @@ async def test_stream_url(url: str, stream_type: str = None,
         
         # Build ffmpeg command with quality/resolution settings
         if stream_type == 'device':
-            from .device_manager import get_device_max_resolution
-            dev_w, dev_h = get_device_max_resolution(url)
-            video_size_args = ['-video_size', f'{dev_w}x{dev_h}'] if dev_w and dev_h else []
-            cmd = [
-                'ffmpeg',
-                '-loglevel', 'error',
-                '-f', 'v4l2',
-                *video_size_args,
-                '-i', url,
-                '-frames:v', '1',
-                *_build_ffmpeg_filters(quality, resolution),
-                '-y',
-                output_path
-            ]
+            from .capture_backends import build_capture_cmd
+            cmd = build_capture_cmd(url, output_path, list(_build_ffmpeg_filters(quality, resolution)))
+            if cmd is None:
+                return TestUrlResponse(
+                    success=False,
+                    message=f"Error: No capture backend available for {url}"
+                )
         elif stream_type == 'rtsp':
             cmd = [
                 'ffmpeg',
