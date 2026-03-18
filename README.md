@@ -16,6 +16,8 @@ A self-hosted web application for creating automated timelapse captures from HTT
 
 - RTSP and RTSPS streams captured via FFmpeg with TCP transport
 - HTTP/HTTPS snapshot URLs captured via FFmpeg
+- Local camera support for USB webcams (V4L2) and Raspberry Pi CSI cameras (libcamera)
+- Automatic device detection and enumeration via the Devices API
 - URL validation with a preview capture before committing to a job
 - Preview button on existing jobs to verify camera connectivity and angle at any time
 - Manual snapshot trigger for on-demand captures outside the schedule
@@ -168,6 +170,126 @@ services:
       timeout: 10s
       retries: 3
 ```
+
+### Local Camera Support
+
+Local cameras (USB webcams and Raspberry Pi CSI cameras) can be used as capture sources instead of network streams. This requires passing hardware devices from the host into the Docker container.
+
+#### USB Webcams (V4L2)
+
+USB webcams are supported out of the box. The container includes `v4l-utils` and uses FFmpeg's V4L2 input for capture. You just need to map the device into the container.
+
+**1. Identify your camera on the host:**
+
+```bash
+ls -la /dev/video*
+# Or if v4l-utils is installed on the host:
+v4l2-ctl --list-devices
+```
+
+USB cameras typically create two `/dev/video` entries (for example, `video0` and `video1`). The lower-numbered device is usually the capture interface.
+
+**2. Map devices in docker-compose.yml:**
+
+```yaml
+services:
+  timelapse-manager:
+    # ... existing configuration ...
+    devices:
+      - /dev/video0:/dev/video0
+```
+
+To map all video devices without listing each one individually, use a device cgroup rule instead:
+
+```yaml
+services:
+  timelapse-manager:
+    # ... existing configuration ...
+    device_cgroup_rules:
+      - 'c 81:* rmw'
+    volumes:
+      - /dev:/dev
+```
+
+The major number `81` corresponds to V4L2 video devices. This grants access to all video devices without full privileged mode.
+
+**3. Create a job** using the camera icon toggle in the Create Job modal. Your devices will appear in the dropdown.
+
+#### Raspberry Pi CSI Cameras (libcamera)
+
+Pi Camera Modules (v1, v2, v3, HQ Camera) connected via the CSI ribbon cable use the libcamera stack instead of standard V4L2. These cameras expose raw Bayer sensor data that FFmpeg cannot capture from directly, so the application uses `libcamera-still` for image capture.
+
+> **This is an advanced setup.** It requires mounting host binaries into the container and is intended for users comfortable with Raspberry Pi hardware and Docker device passthrough.
+
+**Prerequisites:**
+
+- Raspberry Pi running Raspberry Pi OS (Bookworm or later recommended)
+- Pi Camera Module detected and working on the host (`libcamera-hello` shows a preview)
+- Docker installed on the Pi
+
+**1. Verify the camera works on the host:**
+
+```bash
+libcamera-hello --list-cameras
+# Should show your camera, e.g.:
+# 0 : imx219 [3280x2464 10-bit RGGB] (/base/soc/i2c0mux/i2c@1/imx219@10)
+```
+
+**2. Find the libcamera library and binary paths:**
+
+```bash
+which libcamera-still libcamera-hello
+# Typically: /usr/bin/libcamera-still, /usr/bin/libcamera-hello
+
+# Find shared libraries
+ldd $(which libcamera-still) | grep libcamera
+# Note the paths, typically under /usr/lib/aarch64-linux-gnu/
+```
+
+**3. Configure docker-compose.yml:**
+
+Map the camera device, libcamera binaries, and their shared libraries into the container:
+
+```yaml
+services:
+  timelapse-manager:
+    # ... existing configuration ...
+    devices:
+      - /dev/video0:/dev/video0
+    device_cgroup_rules:
+      - 'c 81:* rmw'
+    volumes:
+      # Standard volumes
+      - ./captures:/captures
+      - ./timelapses:/timelapses
+      - ./data:/app/data
+      - ./imports:/imports
+      - ./exports:/exports
+      # Libcamera binaries (read-only)
+      - /usr/bin/libcamera-still:/usr/bin/libcamera-still:ro
+      - /usr/bin/libcamera-hello:/usr/bin/libcamera-hello:ro
+      # Libcamera shared libraries (read-only)
+      - /usr/lib/aarch64-linux-gnu/libcamera:/usr/lib/aarch64-linux-gnu/libcamera:ro
+      - /usr/lib/aarch64-linux-gnu/libpisp:/usr/lib/aarch64-linux-gnu/libpisp:ro
+```
+
+The exact library paths may vary depending on your Pi OS version. If `libcamera-still` fails inside the container with a "shared library not found" error, run `ldd /usr/bin/libcamera-still` on the host and add any missing library paths as volume mounts.
+
+**4. Verify inside the container:**
+
+```bash
+docker exec timelapse-manager libcamera-hello --list-cameras
+docker exec timelapse-manager curl -s http://localhost:8080/api/devices/ | python3 -m json.tool
+```
+
+The camera should appear in the API response with `"driver": "libcamera"`. In the Create Job modal, click the camera icon and select the device from the dropdown.
+
+**How it works under the hood:**
+
+- The application checks for `libcamera-still` at startup. If not found, Pi CSI camera support is silently disabled and only V4L2 (USB) cameras are available.
+- When both a USB webcam and a Pi CSI camera are connected, the application uses libcamera for the CSI camera and V4L2 for the USB webcam automatically.
+- Captures use `libcamera-still --immediate` which takes a single still image without a preview window.
+- Resolution is detected from `libcamera-hello --list-cameras` output and the maximum supported resolution is used by default.
 
 ## Job Configuration
 
@@ -328,6 +450,7 @@ RTSP captures use TCP transport for reliability over UDP. Ensure the container c
 - Python 3.11 with FastAPI and Uvicorn
 - SQLite for data storage
 - FFmpeg for image capture and video encoding
+- V4L2 for USB webcam support, libcamera for Raspberry Pi CSI cameras
 - Pillow for thumbnail generation
 - Vanilla HTML, CSS, and JavaScript frontend with Alpine.js
 - Chart.js for storage dashboard visualizations
