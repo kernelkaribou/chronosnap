@@ -266,7 +266,7 @@ body {
         linear-gradient(var(--card-bg, #1a1a2e), var(--card-bg, #1a1a2e)),
         conic-gradient(from var(--spin-angle, 0deg), #a78bfa, #e8457e, #a78bfa);
     color: var(--text-primary);
-    padding: 2px;
+    padding: 3px;
     animation: event-spin 2.5s linear infinite;
 }
 
