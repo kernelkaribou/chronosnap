@@ -5584,10 +5584,22 @@ async function loadWebhookSettings() {
     }
 }
 
+function isValidWebhookUrl(url) {
+    try {
+        const parsed = new URL(url);
+        return ['http:', 'https:'].includes(parsed.protocol) && parsed.hostname.length > 0;
+    } catch { return false; }
+}
+
 async function saveWebhookSettings() {
     const url = document.getElementById('webhook-url').value.trim();
     const template = document.getElementById('webhook-template').value.trim();
     const defaultTemplate = '{"title": "{title}", "message": "{message}"}';
+
+    if (url && !isValidWebhookUrl(url)) {
+        showNotification('Webhook URL must be a valid http:// or https:// URL', 'error');
+        return;
+    }
 
     const settings = {
         webhook_enabled: document.getElementById('webhook-enabled').checked && !!url,
@@ -5638,6 +5650,11 @@ async function testWebhook() {
 
     if (!url) {
         showNotification('Enter a webhook URL first', 'error');
+        return;
+    }
+
+    if (!isValidWebhookUrl(url)) {
+        showNotification('Webhook URL must be a valid http:// or https:// URL', 'error');
         return;
     }
 

@@ -4,6 +4,7 @@ Settings API endpoints
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, List
+from urllib.parse import urlparse
 import logging
 
 from ..database import get_db, generate_api_key
@@ -233,6 +234,11 @@ async def get_webhook_settings():
 @router.put("/webhook", response_model=WebhookSettings)
 async def update_webhook_settings(settings: WebhookSettings):
     """Update webhook notification settings"""
+    if settings.webhook_url:
+        parsed = urlparse(settings.webhook_url)
+        if parsed.scheme not in ('http', 'https') or not parsed.hostname:
+            raise HTTPException(status_code=400, detail="Webhook URL must be a valid http:// or https:// URL")
+
     try:
         now = to_iso(get_now())
         pairs = {
@@ -262,6 +268,10 @@ async def test_webhook(request: WebhookTestRequest):
     """Send a test webhook notification"""
     if not request.url:
         return WebhookTestResponse(success=False, message="Webhook URL is required")
+
+    parsed = urlparse(request.url)
+    if parsed.scheme not in ('http', 'https') or not parsed.hostname:
+        return WebhookTestResponse(success=False, message="Webhook URL must be a valid http:// or https:// URL")
 
     success, message = send_test_webhook(request.url, request.payload_template)
     return WebhookTestResponse(success=success, message=message)
