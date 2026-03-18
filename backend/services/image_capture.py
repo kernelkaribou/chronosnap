@@ -226,26 +226,17 @@ def _capture_http(url: str, output_path: str, quality: str = 'maximum', resoluti
 
 
 def _capture_device(device_path: str, output_path: str, quality: str = 'maximum', resolution: str = 'native') -> tuple[bool, Optional[str]]:
-    """Capture from a local V4L2 video device using FFMPEG"""
+    """Capture from a local video device using the appropriate backend."""
     try:
         if not os.path.exists(device_path):
             return False, f"Device Error: {device_path} not found or inaccessible"
         
-        from .device_manager import get_device_max_resolution
-        dev_w, dev_h = get_device_max_resolution(device_path)
-        video_size_args = ['-video_size', f'{dev_w}x{dev_h}'] if dev_w and dev_h else []
+        from .capture_backends import build_capture_cmd
+        quality_filters = list(_build_ffmpeg_filters(quality, resolution))
+        cmd = build_capture_cmd(device_path, output_path, quality_filters)
         
-        cmd = [
-            'ffmpeg',
-            '-loglevel', 'error',
-            '-f', 'v4l2',
-            *video_size_args,
-            '-i', device_path,
-            '-frames:v', '1',
-            *_build_ffmpeg_filters(quality, resolution),
-            '-y',
-            output_path
-        ]
+        if cmd is None:
+            return False, f"Device Error: No capture backend available for {device_path}"
         
         result = subprocess.run(
             cmd,
