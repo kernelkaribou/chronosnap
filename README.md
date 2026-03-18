@@ -215,7 +215,9 @@ The major number `81` corresponds to V4L2 video devices. This grants access to a
 
 **3. Create a job** using the camera icon toggle in the Create Job modal. Your devices will appear in the dropdown.
 
-#### Raspberry Pi CSI Cameras (libcamera)
+#### Raspberry Pi CSI Cameras (libcamera) -- Experimental
+
+> **Experimental:** CSI camera support via libcamera is functional but depends heavily on the host OS and kernel configuration. USB webcams via V4L2 are the recommended and fully tested path for local cameras. CSI support has been verified on Raspberry Pi OS Bookworm but may have issues on Trixie due to ongoing libcamera packaging changes.
 
 Pi Camera Modules (v1, v2, v3, HQ Camera) connected via the CSI ribbon cable use the libcamera stack instead of standard V4L2. These cameras expose raw Bayer sensor data that FFmpeg cannot capture from directly, so the application uses `rpicam-still` (or `libcamera-still` on older systems) for image capture.
 
