@@ -138,15 +138,10 @@
                     <select class="gallery-filter-select" id="video-job-filter" onchange="filterVideos()">
                         <option value="">All Jobs</option>
                     </select>
-                    <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;">
-                        <select class="gallery-filter-select" id="video-sort" onchange="filterVideos()">
-                            <option value="created_desc">Newest</option>
-                            <option value="created_asc">Oldest</option>
-                            <option value="name_asc">Name A-Z</option>
-                            <option value="name_desc">Name Z-A</option>
-                            <option value="duration_desc">Longest</option>
-                            <option value="duration_asc">Shortest</option>
-                        </select>
+                    <div style="margin-left:auto;">
+                        <button class="btn btn-sm filter-reset-btn" id="video-filter-reset" onclick="resetVideoFilters()" title="Reset all filters">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 105.64-8.36L1 10"/></svg>
+                        </button>
                     </div>
                 </div>
                 <div class="gallery-filters gallery-toggle-row">
@@ -168,9 +163,14 @@
                         Compare
                     </button>
                     <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;">
-                        <button class="btn btn-sm filter-reset-btn" id="video-filter-reset" onclick="resetVideoFilters()" title="Reset all filters">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 105.64-8.36L1 10"/></svg>
-                        </button>
+                        <select class="gallery-filter-select" id="video-sort" onchange="filterVideos()">
+                            <option value="created_desc">Newest</option>
+                            <option value="created_asc">Oldest</option>
+                            <option value="name_asc">Name A-Z</option>
+                            <option value="name_desc">Name Z-A</option>
+                            <option value="duration_desc">Longest</option>
+                            <option value="duration_asc">Shortest</option>
+                        </select>
                         <span class="gallery-count" id="video-count"></span>
                     </div>
                 </div>
@@ -248,16 +248,10 @@
                     </select>
                     <input type="datetime-local" class="gallery-filter-input" id="captures-start-time" onchange="applyCaptureSortAndFilter()" title="From">
                     <input type="datetime-local" class="gallery-filter-input" id="captures-end-time" onchange="applyCaptureSortAndFilter()" title="To">
-                    <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;">
-                        <select class="gallery-filter-select" id="captures-sort-order" onchange="applyCaptureSortAndFilter()">
-                            <option value="desc">Newest</option>
-                            <option value="asc">Oldest</option>
-                        </select>
-                        <select class="gallery-filter-select" id="captures-page-size" onchange="applyCaptureSortAndFilter()">
-                            <option value="16" selected>16</option>
-                            <option value="32">32</option>
-                            <option value="64">64</option>
-                        </select>
+                    <div style="margin-left:auto;">
+                        <button class="btn btn-sm filter-reset-btn" id="captures-filter-reset" onclick="clearCaptureFilters()" title="Reset all filters">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 105.64-8.36L1 10"/></svg>
+                        </button>
                     </div>
                 </div>
                 <div class="gallery-filters gallery-toggle-row">
@@ -276,9 +270,15 @@
                         Compare
                     </button>
                     <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;">
-                        <button class="btn btn-sm filter-reset-btn" id="captures-filter-reset" onclick="clearCaptureFilters()" title="Reset all filters">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 105.64-8.36L1 10"/></svg>
-                        </button>
+                        <select class="gallery-filter-select" id="captures-sort-order" onchange="applyCaptureSortAndFilter()">
+                            <option value="desc">Newest</option>
+                            <option value="asc">Oldest</option>
+                        </select>
+                        <select class="gallery-filter-select" id="captures-page-size" onchange="applyCaptureSortAndFilter()">
+                            <option value="16" selected>16</option>
+                            <option value="32">32</option>
+                            <option value="64">64</option>
+                        </select>
                         <span class="gallery-count" id="captures-count"></span>
                     </div>
                 </div>
