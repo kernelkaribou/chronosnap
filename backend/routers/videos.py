@@ -360,6 +360,44 @@ async def rename_video(video_id: int, body: VideoRenameRequest):
         return video_dict
 
 
+class VideoJobLinkRequest(BaseModel):
+    job_id: Optional[int] = None
+
+
+@router.put("/{video_id}/job", response_model=VideoResponse)
+async def update_video_job(video_id: int, body: VideoJobLinkRequest):
+    """Update the job association for a video. Set job_id to null to unlink."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        get_or_404(cursor,
+            "SELECT id FROM processed_videos WHERE id = ?",
+            (video_id,), "Video not found")
+
+        job_name = None
+        if body.job_id is not None:
+            job = get_or_404(cursor,
+                "SELECT id, name FROM jobs WHERE id = ?",
+                (body.job_id,), "Job not found")
+            job_name = job['name']
+
+        cursor.execute(
+            "UPDATE processed_videos SET job_id = ?, job_name = ? WHERE id = ?",
+            (body.job_id, job_name, video_id)
+        )
+
+        video_dict = dict_from_row(cursor.execute("""
+            SELECT v.*, COALESCE(v.job_name, j.name) as job_name
+            FROM processed_videos v LEFT JOIN jobs j ON v.job_id = j.id
+            WHERE v.id = ?
+        """, (video_id,)).fetchone())
+        normalize_favorite(video_dict)
+        video_dict['tags'] = fetch_tags_for_videos(cursor, [video_id]).get(video_id, [])
+        video_dict['share_token'] = fetch_share_tokens(cursor, [video_id]).get(video_id)
+
+        logger.info(f"Updated video {video_id} job link: job_id={body.job_id}")
+        return video_dict
+
+
 @router.get("/{video_id}/check")
 async def check_video_file(video_id: int):
     """Check if video file exists and is accessible"""
