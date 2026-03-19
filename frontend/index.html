@@ -1033,8 +1033,14 @@
                                 <p style="color:var(--text-secondary);font-size:0.85rem;margin:0;">Drop files or folders here</p>
                                 <p style="color:var(--text-secondary);font-size:0.75rem;margin:0.25rem 0 0.75rem;">Images, videos, or archives</p>
                                 <div style="display:flex;gap:0.5rem;justify-content:center;">
-                                    <button class="compare-btn" onclick="document.getElementById('import-folder-input').click()" style="padding:0.4rem 1rem;font-size:0.85rem;">Browse</button>
+                                    <button class="compare-btn" onclick="document.getElementById('import-file-input').click()" title="Select individual files (images, videos, or archives)" style="padding:0.4rem 1rem;font-size:0.85rem;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px;"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Files
+                                    </button>
+                                    <button class="compare-btn" onclick="document.getElementById('import-folder-input').click()" title="Select a folder to upload all contents" style="padding:0.4rem 1rem;font-size:0.85rem;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px;"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>Folder
+                                    </button>
                                 </div>
+                                <input type="file" id="import-file-input" multiple accept="image/*,video/*,.zip,.tar,.gz,.tgz,.bz2,.rar,.7z" style="display:none" onchange="handleImportFiles(this.files)">
                                 <input type="file" id="import-folder-input" webkitdirectory style="display:none" onchange="handleImportFiles(this.files)">
                             </div>
                         </div>
@@ -1051,6 +1057,9 @@
                 <div id="import-staging-preview" style="display:none;margin-top:1.5rem;">
                     <div style="border-top:1px solid var(--border-color);padding-top:1rem;">
                         <h4 style="margin:0 0 0.75rem;">Analysis Results</h4>
+
+                        <!-- Export metadata banner (shown when importing a ChronoSnap export) -->
+                        <div id="import-export-metadata" style="display:none;"></div>
 
                         <!-- Images summary -->
                         <div id="import-preview-images" style="display:none;margin-bottom:1rem;">

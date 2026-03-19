@@ -718,6 +718,7 @@ async def export_job(job_id: int):
     with get_db() as conn:
         cursor = conn.cursor()
         job = get_or_404(cursor, "SELECT id, name FROM jobs WHERE id = ?", (job_id,), "Job not found")
+        job_tags = fetch_tags_for_jobs(cursor, [job_id]).get(job_id, [])
     
     job_name = job['name']
     files, total_size, job_dict = _get_export_files(job_id, job_name)
@@ -756,6 +757,7 @@ async def export_job(job_id: int):
         'video_count': len([f for f in files if '/videos/' in f[0] and not f[0].endswith('_thumb.jpg')]),
         'total_size': total_size,
         'exported_at': to_iso(get_now()),
+        'tags': [{'name': t['name'], 'color': t['color']} for t in job_tags],
     }
     metadata_json = json.dumps(metadata, indent=2)
     

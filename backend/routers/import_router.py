@@ -36,6 +36,7 @@ class ExecuteRequest(BaseModel):
     image_stream_url: Optional[str] = ''
     image_stream_type: Optional[str] = 'rtsp'
     image_interval_seconds: Optional[int] = 60
+    image_tags: Optional[List[Dict[str, str]]] = None  # [{name, color}] from export metadata
     videos: Optional[List[Dict[str, Any]]] = None  # [{file_name, name, job_id?}]
     selected_images: Optional[List[str]] = None     # file_paths to include (None = all)
     selected_videos: Optional[List[str]] = None     # file_names to include (None = all)
@@ -369,6 +370,7 @@ async def execute_import(session_id: str, request: ExecuteRequest):
                     stream_url=request.image_stream_url or '',
                     stream_type=request.image_stream_type or 'rtsp',
                     interval_seconds=request.image_interval_seconds or 60,
+                    tags=request.image_tags,
                 )
                 results['images'] = img_result
             except Exception as e:

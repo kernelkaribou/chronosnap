@@ -33,7 +33,7 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Create necessary directories
-RUN mkdir -p /app/data /captures /timelapses /imports
+RUN mkdir -p /app/data /captures /timelapses /imports /app/import-staging
 
 # Add build metadata
 LABEL org.opencontainers.image.title="ChronoSnap" \

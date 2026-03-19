@@ -3,6 +3,7 @@ Import service — staging management, file classification, path security, archi
 """
 import os
 import re
+import json
 import uuid
 import time
 import shutil
@@ -755,6 +756,7 @@ def analyze_staging(session_id: str) -> Dict[str, Any]:
     """Analyze all files in a staging session.
     
     Returns structured analysis with images, videos, errors, and summary stats.
+    Detects job.json from ChronoSnap exports and returns metadata for pre-filling.
     """
     from .maintenance import extract_timestamp_from_file
     
@@ -765,6 +767,7 @@ def analyze_staging(session_id: str) -> Dict[str, Any]:
     images = []
     videos = []
     errors = []
+    export_metadata = None
     
     # Walk both raw and extracted directories
     # First pass: collect all filenames per directory for thumbnail detection
@@ -784,6 +787,18 @@ def analyze_staging(session_id: str) -> Dict[str, Any]:
             dir_files = all_files_by_dir.get(root, set())
             for filename in files:
                 file_path = os.path.join(root, filename)
+                
+                # Detect export metadata file
+                if filename == 'job.json' and export_metadata is None:
+                    try:
+                        with open(file_path, 'r') as f:
+                            export_metadata = json.loads(f.read())
+                        logger.info(f"Found export metadata: {export_metadata.get('name', 'unknown')}")
+                        continue
+                    except Exception as e:
+                        logger.warning(f"Failed to parse job.json: {e}")
+                        continue
+                
                 file_type = detect_file_type(file_path)
                 
                 if file_type == 'image':
@@ -866,6 +881,7 @@ def analyze_staging(session_id: str) -> Dict[str, Any]:
         'video_count': len(videos),
         'video_total_size': total_video_size,
         'video_duplicates': video_duplicates,
+        'export_metadata': export_metadata,
         'errors': errors,
         'error_count': len(errors),
     }
@@ -938,10 +954,12 @@ def execute_image_import(
     stream_url: str = '',
     stream_type: str = 'rtsp',
     interval_seconds: int = 60,
+    tags: Optional[List[Dict]] = None,
 ) -> Dict[str, Any]:
     """Import images into a new job with proper folder structure.
     
     Returns dict with job_id, job_name, imported_count, total_size.
+    Tags are [{name, color}] dicts - matched by name or created if new.
     """
     from ..database import get_db
     
@@ -1034,6 +1052,31 @@ def execute_image_import(
             "UPDATE jobs SET capture_count = ?, storage_size = ? WHERE id = ?",
             (moved_count, total_size, job_id)
         )
+        
+        # Apply tags from export metadata (find by name or create)
+        if tags:
+            tag_ids = []
+            for tag in tags:
+                tag_name = tag.get('name', '').strip()
+                if not tag_name:
+                    continue
+                cursor.execute("SELECT id FROM tags WHERE name = ?", (tag_name,))
+                row = cursor.fetchone()
+                if row:
+                    tag_ids.append(row[0])
+                else:
+                    tag_color = tag.get('color', '#6366f1')
+                    cursor.execute(
+                        "INSERT INTO tags (name, color, created_at) VALUES (?, ?, ?)",
+                        (tag_name, tag_color, now)
+                    )
+                    tag_ids.append(cursor.lastrowid)
+            if tag_ids:
+                for tid in tag_ids:
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO job_tags (job_id, tag_id) VALUES (?, ?)",
+                        (job_id, tid)
+                    )
         
         logger.info(f"Imported {moved_count} images as job '{job_name}' (ID: {job_id})")
         add_event(f"Imported {moved_count} images as '{job_name}'", "import", {"job_id": job_id})
