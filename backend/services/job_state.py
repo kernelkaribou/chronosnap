@@ -131,7 +131,7 @@ def calculate_next_window_start(reference_time: datetime, start_time: time, end_
             return today_start
 
 
-def find_next_capture_in_window(job: dict, window_start: datetime, start_time: time, end_time: time, max_days: int = 30) -> Optional[datetime]:
+def find_next_capture_in_window(job: dict, window_start: datetime, start_time: time, end_time: time, max_days: int = 365) -> Optional[datetime]:
     """
     Find the first capture on the grid that falls within a time window.
     Will search across multiple days if needed.
