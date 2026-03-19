@@ -230,8 +230,9 @@ def process_video(
                 
                 logger.info(f"Video processing completed: {output_path}")
             elif process.returncode in (-9, -15):
-                # Killed by cancel_video — status already set by cancel_video()
+                # Killed by cancel_video — record already deleted, just clean up temp files
                 logger.info(f"Video processing cancelled for video_id={video_id}")
+                return
             else:
                 error_msg = ''.join(stderr_lines[-20:]) if stderr_lines else "Unknown error"
                 _update_video_status(video_id, 'failed', 0, f"FFMPEG error: {error_msg[:200]}")
@@ -257,20 +258,49 @@ def _update_progress(video_id: int, progress: float):
 
 
 def cancel_video(video_id: int) -> bool:
-    """Cancel an in-progress video build. Returns True if cancelled."""
+    """Cancel an in-progress video build. Kills the process, removes files and DB record."""
+    from ..helpers.file_helpers import resolve_video_path, delete_video_files
+    
     with _process_lock:
         process = _active_processes.get(video_id)
     if process and process.poll() is None:
         process.kill()
-        _update_video_status(video_id, 'failed', 0, "Cancelled by user")
-        # Clean up partial output file
+        process.wait()
+        
+        # Fetch record details before deleting
+        video_name = None
         with get_db() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT file_path FROM processed_videos WHERE id = ?", (video_id,))
+            cursor.execute(
+                "SELECT name, file_path, thumbnail_path FROM processed_videos WHERE id = ?",
+                (video_id,)
+            )
             row = cursor.fetchone()
-            if row and row[0] and os.path.exists(row[0]):
-                os.remove(row[0])
-        logger.info(f"Video build cancelled: video_id={video_id}")
+            if row:
+                video_name = row['name'] or row[0]
+                file_path = row['file_path'] or row[1]
+                thumb_path = row['thumbnail_path'] or row[2] if len(row) > 2 else None
+                # Delete partial output and thumbnail
+                abs_fp = resolve_video_path(file_path) if file_path else None
+                abs_thumb = resolve_video_path(thumb_path) if thumb_path else None
+                delete_video_files(abs_fp, abs_thumb)
+                # Delete empty parent folder
+                if abs_fp:
+                    parent = os.path.dirname(abs_fp)
+                    if parent and os.path.isdir(parent) and not os.listdir(parent):
+                        os.rmdir(parent)
+                # Remove DB record
+                cursor.execute("DELETE FROM processed_videos WHERE id = ?", (video_id,))
+        
+        add_event(
+            f"Video build cancelled: '{video_name or f'ID {video_id}'}'",
+            "video",
+            {"video_id": video_id}
+        )
+        logger.info(f"Video build cancelled and cleaned up: video_id={video_id}")
+        
+        with _process_lock:
+            _active_processes.pop(video_id, None)
         return True
     return False
 

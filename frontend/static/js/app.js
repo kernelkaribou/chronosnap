@@ -2524,6 +2524,7 @@ async function cancelVideoBuild(videoId, videoName) {
                 await apiRequest(`/videos/${videoId}/cancel`, { method: 'POST' });
                 closeVideoDetail();
                 loadVideos();
+                refreshEventsSoon();
                 showNotification(`Build cancelled for "${videoName}"`);
             } catch (error) {
                 showNotification(`Failed to cancel: ${error.message}`, 'error');
