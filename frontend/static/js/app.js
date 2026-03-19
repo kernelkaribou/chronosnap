@@ -1098,20 +1098,21 @@ async function loadJobDetail(jobId) {
                             </div>
                         </div>
                         <div class="detail-sidebar-actions">
-                            <button id="save-job-btn" class="btn btn-accent" onclick="saveJobChanges(${job.id})" disabled style="width: 100%;">
+                            <button id="save-job-btn" class="btn btn-primary" onclick="saveJobChanges(${job.id})" disabled style="width: 100%;">
                                 Save Changes
                             </button>
                             <button class="btn btn-accent btn-sm" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')" style="width: 100%;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                                 Build Timelapse
                             </button>
                             <div class="detail-sidebar-actions-row">
                                 ${job.status !== 'completed' ? 
-                                    `<button class="btn btn-secondary btn-sm" onclick="confirmCompleteJob(${job.id}, '${escapeHtml(job.name)}')">Complete</button>` : ''
+                                    `<button class="btn btn-secondary btn-sm" onclick="confirmCompleteJob(${job.id}, '${escapeHtml(job.name)}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Complete</button>` : ''
                                 }
                                 ${job.status === 'active' || job.status === 'sleeping' ? 
-                                    `<button class="btn btn-secondary btn-sm" onclick="confirmDisableJob(${job.id}, '${escapeHtml(job.name)}')">Disable</button>` :
+                                    `<button class="btn btn-secondary btn-sm" onclick="confirmDisableJob(${job.id}, '${escapeHtml(job.name)}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></svg> Disable</button>` :
                                     job.status === 'disabled' ?
-                                    `<button class="btn btn-secondary btn-sm" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')">Enable</button>` : ''
+                                    `<button class="btn btn-secondary btn-sm" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg> Enable</button>` : ''
                                 }
                                 <button class="btn-icon" onclick="duplicateJob(${job.id})" title="Duplicate Job">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
