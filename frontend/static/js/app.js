@@ -1272,8 +1272,8 @@ async function loadJobDetail(jobId) {
                         <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
                             <input type="checkbox" id="edit_auto_build_enabled" ${job.auto_build_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditAutoBuildFields()">
                             <span><strong>Enable Auto-Build</strong></span>
+                            <small style="color: var(--text-secondary); font-weight: normal; font-size: 0.75rem;">Automatically build on a recurring schedule</small>
                         </label>
-                        <small style="color: var(--text-secondary); display: block; margin-left: 1.5rem;">Automatically build timelapse videos on a recurring schedule</small>
                     </div>
 
                     <div id="edit-auto-build-fields" class="toggle-fields ${job.auto_build_enabled ? '' : 'disabled'}" style="margin-bottom: 1rem; margin-left: 1.5rem;">

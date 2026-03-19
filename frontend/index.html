@@ -649,7 +649,7 @@
                             <input type="datetime-local" id="start_datetime" class="form-control" required>
                         </div>
                         <div class="form-group flex-1">
-                            <label>End Date & Time <small style="color: var(--text-secondary); font-weight: normal;">(Leave empty for ongoing)</small></label>
+                            <label style="display:flex;align-items:baseline;gap:0.5rem;">End Date & Time <small style="color:var(--text-secondary);font-weight:normal;font-size:0.75rem;">Leave empty for ongoing</small></label>
                             <input type="datetime-local" id="end_datetime" class="form-control">
                         </div>
                     </div>
@@ -696,8 +696,8 @@
                         <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
                             <input type="checkbox" id="auto_build_enabled" style="cursor: pointer;" onchange="toggleAutoBuildFields()">
                             <span><strong>Enable Auto-Build</strong></span>
+                            <small style="color: var(--text-secondary); font-weight: normal; font-size: 0.75rem;">Automatically build on a recurring schedule</small>
                         </label>
-                        <small style="color: var(--text-secondary); display: block; margin-left: 1.5rem;">Automatically build timelapse videos on a recurring schedule</small>
                     </div>
 
                     <div id="auto-build-fields" class="toggle-fields disabled" style="margin-bottom: 1rem; margin-left: 1.5rem;">
