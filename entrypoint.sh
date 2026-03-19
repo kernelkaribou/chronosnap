@@ -26,7 +26,7 @@ if [ "$CURRENT_UID" != "$PUID" ] || [ "$CURRENT_GID" != "$PGID" ]; then
 fi
 
 # Set ownership of directories (ignore errors for NFS/read-only mounts)
-chown -R "$PUID:$PGID" /app/data /captures /timelapses /imports 2>/dev/null || true
+chown -R "$PUID:$PGID" /app/data /app/import-staging /captures /timelapses /imports 2>/dev/null || true
 
 # Add appuser to the video group for V4L2 device access
 if getent group video > /dev/null 2>&1; then
