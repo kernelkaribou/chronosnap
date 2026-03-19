@@ -7225,33 +7225,63 @@ function prependHomepageVideos(newVideos, recentVideos) {
     container.scrollTo({ left: 0, behavior: 'smooth' });
 }
 
+function animateCounter(el, target, duration = 800) {
+    const start = parseInt(el.dataset.currentValue || '0', 10);
+    if (start === target) return;
+    el.dataset.currentValue = target;
+    const startTime = performance.now();
+    const step = (now) => {
+        const progress = Math.min((now - startTime) / duration, 1);
+        const ease = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+        const current = Math.round(start + (target - start) * ease);
+        el.textContent = current.toLocaleString();
+        if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+}
+
 function renderHomepageStats(stats, captures, videos, jobs) {
     const container = document.getElementById('homepage-stats');
     const activeJobs = jobs.filter(j => j.status === 'active').length;
     const totalJobs = jobs.length;
 
-    container.innerHTML = `
-        <div class="homepage-stat-card" onclick="navigateTo('/captures')" title="View captures">
-            <div class="homepage-stat-value">${stats.captures_total_count.toLocaleString()}</div>
-            <div class="homepage-stat-label">Captures</div>
-            <div class="homepage-stat-sub">${formatBytes(stats.captures_total_size)}</div>
-        </div>
-        <div class="homepage-stat-card" onclick="navigateTo('/timelapses')" title="View timelapses">
-            <div class="homepage-stat-value">${stats.videos_total_count}</div>
-            <div class="homepage-stat-label">Timelapses</div>
-            <div class="homepage-stat-sub">${formatBytes(stats.videos_total_size)}</div>
-        </div>
-        <div class="homepage-stat-card" onclick="navigateTo('/jobs')" title="View jobs">
-            <div class="homepage-stat-value">${totalJobs}</div>
-            <div class="homepage-stat-label">Jobs</div>
-            <div class="homepage-stat-sub">${activeJobs} active</div>
-        </div>
-        <div class="homepage-stat-card" onclick="navigateTo('/storage')" title="View storage">
-            <div class="homepage-stat-value">${formatBytes(stats.disk_used)}</div>
-            <div class="homepage-stat-label">Storage Used</div>
-            <div class="homepage-stat-sub">${formatBytes(stats.disk_free)} free</div>
-        </div>
-    `;
+    // First render — build the structure
+    if (!container.querySelector('.homepage-stat-value')) {
+        container.innerHTML = `
+            <div class="homepage-stat-card" onclick="navigateTo('/captures')" title="View captures">
+                <div class="homepage-stat-value" id="hp-stat-captures">0</div>
+                <div class="homepage-stat-label">Captures</div>
+                <div class="homepage-stat-sub" id="hp-stat-captures-sub">${formatBytes(stats.captures_total_size)}</div>
+            </div>
+            <div class="homepage-stat-card" onclick="navigateTo('/timelapses')" title="View timelapses">
+                <div class="homepage-stat-value" id="hp-stat-videos">0</div>
+                <div class="homepage-stat-label">Timelapses</div>
+                <div class="homepage-stat-sub" id="hp-stat-videos-sub">${formatBytes(stats.videos_total_size)}</div>
+            </div>
+            <div class="homepage-stat-card" onclick="navigateTo('/jobs')" title="View jobs">
+                <div class="homepage-stat-value" id="hp-stat-jobs">0</div>
+                <div class="homepage-stat-label">Jobs</div>
+                <div class="homepage-stat-sub" id="hp-stat-jobs-sub">${activeJobs} active</div>
+            </div>
+            <div class="homepage-stat-card" onclick="navigateTo('/storage')" title="View storage">
+                <div class="homepage-stat-value" id="hp-stat-storage">${formatBytes(stats.disk_used)}</div>
+                <div class="homepage-stat-label">Storage Used</div>
+                <div class="homepage-stat-sub" id="hp-stat-storage-sub">${formatBytes(stats.disk_free)} free</div>
+            </div>
+        `;
+    }
+
+    // Animate numeric counters
+    animateCounter(document.getElementById('hp-stat-captures'), stats.captures_total_count);
+    animateCounter(document.getElementById('hp-stat-videos'), stats.videos_total_count);
+    animateCounter(document.getElementById('hp-stat-jobs'), totalJobs);
+
+    // Update text-based stats directly
+    document.getElementById('hp-stat-captures-sub').textContent = formatBytes(stats.captures_total_size);
+    document.getElementById('hp-stat-videos-sub').textContent = formatBytes(stats.videos_total_size);
+    document.getElementById('hp-stat-jobs-sub').textContent = `${activeJobs} active`;
+    document.getElementById('hp-stat-storage').textContent = formatBytes(stats.disk_used);
+    document.getElementById('hp-stat-storage-sub').textContent = `${formatBytes(stats.disk_free)} free`;
 }
 
 function renderHomepageSpotlight(captureData, allVideos) {
@@ -7325,7 +7355,7 @@ function renderHomepageSpotlight(captureData, allVideos) {
             </div>`;
     }
 
-    container.innerHTML = captureCard + videoCard;
+    container.innerHTML = videoCard + captureCard;
 }
 
 function renderHomepageCaptures(data) {
