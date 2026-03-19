@@ -1038,6 +1038,7 @@ async function loadJobDetail(jobId) {
                             ${nextAutoBuildHtml}
                             ${lastCaptureHtml}
                             <div><strong>Storage:</strong> ${formatBytes(job.storage_size)}</div>
+                            <div><strong>Pattern:</strong> <span class="text-xs" style="color: var(--text-secondary);">${escapeHtml(job.naming_pattern || '{job_name}_{count}_{timestamp}')}</span></div>
                             <div><strong>Folder:</strong> <span class="text-xs" style="word-break: break-all;">${escapeHtml(job.capture_path)}</span></div>
                             <div class="detail-meta-actions">
                                 <strong>Captures:</strong>
@@ -1069,19 +1070,22 @@ async function loadJobDetail(jobId) {
                                 </button>
                             </div>
                         </div>
-                        <div class="detail-actions">
-                            <button class="btn btn-accent btn-sm" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')">
+                        <div class="detail-sidebar-actions">
+                            <button id="save-job-btn" class="btn btn-accent" onclick="saveJobChanges(${job.id})" disabled style="width: 100%;">
+                                Save Changes
+                            </button>
+                            <button class="btn btn-accent btn-sm" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')" style="width: 100%;">
                                 Build Timelapse
                             </button>
-                            ${job.status !== 'completed' ? 
-                                `<button class="btn btn-secondary btn-sm" onclick="confirmCompleteJob(${job.id}, '${escapeHtml(job.name)}')">Complete</button>` : ''
-                            }
-                            ${job.status === 'active' || job.status === 'sleeping' ? 
-                                `<button class="btn btn-secondary btn-sm" onclick="confirmDisableJob(${job.id}, '${escapeHtml(job.name)}')">Disable</button>` :
-                                job.status === 'disabled' ?
-                                `<button class="btn btn-secondary btn-sm" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')">Enable</button>` : ''
-                            }
-                            <div class="detail-actions-group">
+                            <div class="detail-sidebar-actions-row">
+                                ${job.status !== 'completed' ? 
+                                    `<button class="btn btn-secondary btn-sm" onclick="confirmCompleteJob(${job.id}, '${escapeHtml(job.name)}')">Complete</button>` : ''
+                                }
+                                ${job.status === 'active' || job.status === 'sleeping' ? 
+                                    `<button class="btn btn-secondary btn-sm" onclick="confirmDisableJob(${job.id}, '${escapeHtml(job.name)}')">Disable</button>` :
+                                    job.status === 'disabled' ?
+                                    `<button class="btn btn-secondary btn-sm" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')">Enable</button>` : ''
+                                }
                                 <button class="btn-icon" onclick="duplicateJob(${job.id})" title="Duplicate Job">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -1291,12 +1295,6 @@ async function loadJobDetail(jobId) {
                     <div class="form-group" style="margin-bottom: 1rem;">
                         <div class="tag-picker" id="edit-job-tags"></div>
                     </div>
-                </div>
-
-                <div class="detail-save-bar">
-                    <button id="save-job-btn" class="btn btn-accent" onclick="saveJobChanges(${job.id})" disabled>
-                        Save Changes
-                    </button>
                 </div>
 
                     </div><!-- /detail-main -->
