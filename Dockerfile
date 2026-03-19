@@ -11,7 +11,6 @@ RUN apt-get update && \
     ca-certificates \
     fonts-dejavu-core \
     fonts-liberation \
-    p7zip-full \
     unrar-free && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*

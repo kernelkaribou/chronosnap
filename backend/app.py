@@ -1,9 +1,11 @@
 """
 Main FastAPI application for ChronoSnap
 """
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 from contextlib import asynccontextmanager
 import uvicorn
 import logging
@@ -117,14 +119,32 @@ app = FastAPI(
     redoc_url=None  # Disable ReDoc, use Swagger UI only
 )
 
-# CORS middleware
+# CORS middleware - same-origin only (web UI uses Referer auth, external clients use API keys)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+
+        # Cache static assets with versioned URLs (cache buster ?v= handles invalidation)
+        if request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "public, max-age=86400"
+
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Import router (separate for upload size limit)
 from .routers import import_router

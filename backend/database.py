@@ -18,6 +18,7 @@ def get_db():
     conn = sqlite3.connect(config.DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
     try:
         yield conn
         conn.commit()
@@ -136,7 +137,11 @@ def init_db():
         # Create indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_captures_job_id ON captures(job_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_captures_captured_at ON captures(captured_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_captures_job_time ON captures(job_id, captured_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_captures_favorite ON captures(job_id, is_favorite)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_videos_job_id ON processed_videos(job_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_videos_status ON processed_videos(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_videos_job_status ON processed_videos(job_id, status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)")
         
         # Tags tables
