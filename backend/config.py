@@ -9,12 +9,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent  # /app
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
-# Database (auto-migrate from legacy name)
-_legacy_db = DATA_DIR / "timelapse-manager.db"
-_new_db = DATA_DIR / "chronosnap.db"
-if _legacy_db.exists() and not _new_db.exists():
-    _legacy_db.rename(_new_db)
-DATABASE_PATH = str(_new_db)
+# Database
+DATABASE_PATH = str(DATA_DIR / "chronosnap.db")
 
 # Default paths (hardcoded, customizable per job/video)
 DEFAULT_CAPTURES_PATH = "/captures"
