@@ -476,15 +476,10 @@ async def delete_job(job_id: int):
 
 
 @router.post("/test-url", response_model=TestUrlResponse)
-async def test_url(url: str, stream_type: str = Query(None, pattern=r"^(http|rtsp|device)$"),
+async def test_url(url: str, stream_type: str = None,
                    quality: str = Query('maximum', pattern=r"^(maximum|high|medium|low)$"),
                    resolution: str = Query('native', pattern=r"^(native|\d+x\d+)$")):
-    """Test a URL or device path and capture a sample image with optional quality/resolution settings"""
-    # Validate device paths
-    if url.startswith('/dev/'):
-        import re
-        if not re.match(r'^/dev/video\d+$', url):
-            raise HTTPException(status_code=400, detail="Invalid device path. Must be /dev/videoN")
+    """Test a URL and capture a sample image with optional quality/resolution settings"""
     result = await test_stream_url(url, stream_type, quality, resolution)
     return result
 

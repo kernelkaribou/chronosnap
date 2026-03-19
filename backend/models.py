@@ -10,7 +10,6 @@ from enum import Enum
 class StreamType(str, Enum):
     HTTP = "http"
     RTSP = "rtsp"
-    DEVICE = "device"
 
 
 class JobStatus(str, Enum):
@@ -29,7 +28,7 @@ class VideoStatus(str, Enum):
 
 class JobCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    url: str = Field(..., max_length=2048, description="HTTP/RTSP stream URL or /dev/video* device path")
+    url: str = Field(..., max_length=2048, description="HTTP or RTSP stream URL")
     stream_type: StreamType
     start_datetime: datetime
     end_datetime: Optional[datetime] = None
@@ -56,22 +55,9 @@ class JobCreate(BaseModel):
     @field_validator('url')
     @classmethod
     def validate_url(cls, v):
-        if not v.startswith(('http://', 'https://', 'rtsp://', 'rtsps://', '/dev/video')):
-            raise ValueError("URL must start with http://, https://, rtsp://, rtsps://, or /dev/video")
+        if not v.startswith(('http://', 'https://', 'rtsp://', 'rtsps://')):
+            raise ValueError("URL must start with http://, https://', rtsp://', or rtsps://")
         return v
-    
-    @model_validator(mode='after')
-    def validate_device_url(self):
-        """Ensure /dev/video paths are only used with device stream type."""
-        import re
-        if self.url.startswith('/dev/video'):
-            if self.stream_type != StreamType.DEVICE:
-                raise ValueError("Device paths require stream_type 'device'")
-            if not re.match(r'^/dev/video\d+$', self.url):
-                raise ValueError("Device path must be /dev/videoN (e.g., /dev/video0)")
-        elif self.stream_type == StreamType.DEVICE:
-            raise ValueError("Device stream type requires a /dev/video* path")
-        return self
     
     @model_validator(mode='after')
     def validate_dates(self):
@@ -133,23 +119,9 @@ class JobUpdate(BaseModel):
     @field_validator('url')
     @classmethod
     def validate_url(cls, v):
-        if v is not None and not v.startswith(('http://', 'https://', 'rtsp://', 'rtsps://', '/dev/video')):
-            raise ValueError("URL must start with http://, https://, rtsp://, rtsps://, or /dev/video")
+        if v is not None and not v.startswith(('http://', 'https://', 'rtsp://', 'rtsps://')):
+            raise ValueError("URL must start with http://, https://', rtsp://, or rtsps://")
         return v
-
-    @model_validator(mode='after')
-    def validate_device_url(self):
-        """Ensure /dev/video paths are only used with device stream type on partial updates."""
-        import re
-        if self.url is not None and self.url.startswith('/dev/video'):
-            if self.stream_type is not None and self.stream_type != StreamType.DEVICE:
-                raise ValueError("Device paths require stream_type 'device'")
-            if not re.match(r'^/dev/video\d+$', self.url):
-                raise ValueError("Device path must be /dev/videoN (e.g., /dev/video0)")
-        elif self.stream_type == StreamType.DEVICE and self.url is not None:
-            if not self.url.startswith('/dev/video'):
-                raise ValueError("Device stream type requires a /dev/video* path")
-        return self
 
 
 class TagBrief(BaseModel):
@@ -287,12 +259,6 @@ class TestUrlResponse(BaseModel):
     image_size: Optional[int] = None
     source_width: Optional[int] = None
     source_height: Optional[int] = None
-
-
-class DeviceInfo(BaseModel):
-    path: str
-    name: str
-    driver: str = "v4l2"
 
 
 class DurationCalculation(BaseModel):

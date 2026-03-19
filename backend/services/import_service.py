@@ -35,7 +35,7 @@ JUNK_NAMES = {'__MACOSX', '.DS_Store', 'Thumbs.db', 'desktop.ini', '.Spotlight-V
 MAX_EXTRACTION_RATIO = 20       # max extracted_size / archive_size
 MAX_FILE_COUNT = 100_000
 MAX_NESTING_DEPTH = 2
-MAX_SINGLE_FILE_SIZE = 100 * 1024 * 1024 * 1024  # 100GB
+MAX_SINGLE_FILE_SIZE = 50 * 1024 * 1024 * 1024  # 50GB
 EXTRACTION_TIMEOUT = 600        # 10 minutes
 MAX_FILENAME_LENGTH = 255
 MAX_CONCURRENT_SESSIONS = 5
@@ -46,34 +46,39 @@ STALE_STAGING_HOURS = 2
 # Path security
 # ===========================================================================
 
-def get_import_path() -> str:
-    """Return the fixed import path."""
-    return config.DEFAULT_IMPORT_PATH
-
-
-def get_captures_path() -> str:
-    """Return the fixed captures path."""
-    return config.DEFAULT_CAPTURES_PATH
-
-
-def get_timelapses_path() -> str:
-    """Return the fixed timelapses path."""
-    return config.DEFAULT_VIDEOS_PATH
-
-
-def get_default_naming_pattern() -> str:
-    """Get the configured default naming pattern from settings or default."""
+def _get_setting_path(key: str, default: str) -> str:
+    """Get a configured path from settings or return default."""
     try:
         from ..database import get_db
         with get_db() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT value FROM settings WHERE key = ?", ('default_naming_pattern',))
+            cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
             row = cursor.fetchone()
             if row and row[0]:
                 return row[0]
     except Exception as e:
-        logger.warning(f"Failed to read naming pattern setting: {e}")
-    return config.DEFAULT_CAPTURE_PATTERN
+        logger.warning(f"Failed to read setting '{key}': {e}")
+    return default
+
+
+def get_import_path() -> str:
+    """Get the configured import path from settings or default."""
+    return _get_setting_path('import_path', config.DEFAULT_IMPORT_PATH)
+
+
+def get_captures_path() -> str:
+    """Get the configured captures path from settings or default."""
+    return _get_setting_path('captures_path', config.DEFAULT_CAPTURES_PATH)
+
+
+def get_timelapses_path() -> str:
+    """Get the configured timelapses path from settings or default."""
+    return _get_setting_path('timelapses_path', config.DEFAULT_VIDEOS_PATH)
+
+
+def get_default_naming_pattern() -> str:
+    """Get the configured default naming pattern from settings or default."""
+    return _get_setting_path('default_naming_pattern', config.DEFAULT_CAPTURE_PATTERN)
 
 
 def validate_path_within(path: str, allowed_prefix: str) -> str:
