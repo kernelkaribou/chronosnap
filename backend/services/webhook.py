@@ -4,7 +4,6 @@ Webhook notification service for event-driven alerts
 import json
 import logging
 import threading
-from typing import Optional
 
 import urllib.request
 import urllib.error

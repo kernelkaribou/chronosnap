@@ -4,7 +4,6 @@ Supports per-frame dynamic variables and 9-position grid placement.
 """
 import os
 import logging
-from datetime import datetime
 from typing import Dict, Any, Optional, Tuple
 from io import BytesIO
 

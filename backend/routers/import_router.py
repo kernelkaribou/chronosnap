@@ -2,7 +2,7 @@
 Import API endpoints — upload, browse, scan, analyze, execute, cleanup.
 """
 from fastapi import APIRouter, HTTPException, UploadFile, File, Query, Form
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import os
@@ -14,7 +14,7 @@ from ..services.import_service import (
     count_active_sessions, MAX_CONCURRENT_SESSIONS,
     validate_path_within, sanitize_filename, detect_file_type,
     extract_archive, analyze_staging, browse_directory,
-    execute_image_import, execute_video_import, probe_video,
+    execute_image_import, execute_video_import,
     get_import_path, check_disk_space,
     set_staging_source, cleanup_import_source,
 )

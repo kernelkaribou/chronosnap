@@ -6,7 +6,6 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from typing import List, Optional
 import os
-import json
 import logging
 
 from ..models import VideoCreate, VideoResponse
@@ -14,7 +13,7 @@ from ..database import get_db, dict_from_row
 from ..services.video_processor import process_video, cancel_video
 from ..utils import get_now, to_iso
 from ..helpers.db_helpers import get_or_404, normalize_favorite, fetch_tags_for_videos, fetch_tags_for_jobs, set_video_tags
-from ..helpers.file_helpers import validate_writable_directory, delete_video_files, resolve_video_path, make_relative
+from ..helpers.file_helpers import delete_video_files, resolve_video_path, make_relative
 from ..services.event_service import add_event
 
 router = APIRouter()
@@ -304,68 +303,40 @@ async def rename_video(video_id: int, body: VideoRenameRequest):
         old_thumb_path = video['thumbnail_path']
         old_ext = os.path.splitext(old_file_path)[1]  # .mp4
         
-        # Detect folder structure depth
-        # New structure: {job_folder}/{video_id}_{name}/{name}.mp4 (2 dirs)
-        # Old structure: {job_folder}/{name}.mp4 (1 dir)
-        path_parts = old_file_path.replace('\\', '/').split('/')
+        # Structure: {job_folder}/{video_id}_{name}/{name}.mp4
+        old_video_dir = os.path.dirname(old_file_path)
+        job_folder = os.path.dirname(old_video_dir)
         
-        if len(path_parts) >= 3:
-            # New structure: rename video subfolder and files inside
-            old_video_dir = os.path.dirname(old_file_path)
-            job_folder = os.path.dirname(old_video_dir)
-            
-            new_video_folder = f"{video_id}_{sanitized}"
-            new_video_dir = os.path.join(job_folder, new_video_folder)
-            new_file_path = os.path.join(new_video_dir, f"{sanitized}{old_ext}")
-            new_thumb_path = os.path.join(new_video_dir, f"{sanitized}_thumb.jpg") if old_thumb_path else None
-            
-            abs_old_dir = os.path.join(videos_path, old_video_dir)
-            abs_new_dir = os.path.join(videos_path, new_video_dir)
-            
-            if abs_old_dir != abs_new_dir and os.path.isdir(abs_old_dir):
-                if os.path.exists(abs_new_dir):
-                    raise HTTPException(status_code=409, detail=f"A folder named '{new_video_folder}' already exists")
-                os.rename(abs_old_dir, abs_new_dir)
-            elif not os.path.isdir(abs_old_dir):
-                os.makedirs(abs_new_dir, exist_ok=True)
-            
-            # Rename files inside the (now-renamed) folder
-            old_filename = os.path.basename(old_file_path)
-            new_filename = f"{sanitized}{old_ext}"
-            if old_filename != new_filename:
-                abs_old_file = os.path.join(abs_new_dir, old_filename)
-                abs_new_file = os.path.join(abs_new_dir, new_filename)
-                if os.path.exists(abs_old_file):
-                    os.rename(abs_old_file, abs_new_file)
-            
-            if old_thumb_path:
-                old_thumb_filename = os.path.basename(old_thumb_path)
-                new_thumb_filename = f"{sanitized}_thumb.jpg"
-                if old_thumb_filename != new_thumb_filename:
-                    abs_old_thumb = os.path.join(abs_new_dir, old_thumb_filename)
-                    abs_new_thumb = os.path.join(abs_new_dir, new_thumb_filename)
-                    if os.path.exists(abs_old_thumb):
-                        os.rename(abs_old_thumb, abs_new_thumb)
-        else:
-            # Old/flat structure: migrate to new structure during rename
-            old_dir = os.path.dirname(old_file_path)
-            new_video_folder = f"{video_id}_{sanitized}"
-            new_video_dir = os.path.join(old_dir, new_video_folder)
-            new_file_path = os.path.join(new_video_dir, f"{sanitized}{old_ext}")
-            new_thumb_path = os.path.join(new_video_dir, f"{sanitized}_thumb.jpg") if old_thumb_path else None
-            
-            abs_new_dir = os.path.join(videos_path, new_video_dir)
+        new_video_folder = f"{video_id}_{sanitized}"
+        new_video_dir = os.path.join(job_folder, new_video_folder)
+        new_file_path = os.path.join(new_video_dir, f"{sanitized}{old_ext}")
+        new_thumb_path = os.path.join(new_video_dir, f"{sanitized}_thumb.jpg") if old_thumb_path else None
+        
+        abs_old_dir = os.path.join(videos_path, old_video_dir)
+        abs_new_dir = os.path.join(videos_path, new_video_dir)
+        
+        if abs_old_dir != abs_new_dir and os.path.isdir(abs_old_dir):
+            if os.path.exists(abs_new_dir):
+                raise HTTPException(status_code=409, detail=f"A folder named '{new_video_folder}' already exists")
+            os.rename(abs_old_dir, abs_new_dir)
+        elif not os.path.isdir(abs_old_dir):
             os.makedirs(abs_new_dir, exist_ok=True)
-            
-            # Move files into new subfolder
-            abs_old_file = os.path.join(videos_path, old_file_path)
-            abs_new_file = os.path.join(abs_new_dir, f"{sanitized}{old_ext}")
+        
+        # Rename files inside the (now-renamed) folder
+        old_filename = os.path.basename(old_file_path)
+        new_filename = f"{sanitized}{old_ext}"
+        if old_filename != new_filename:
+            abs_old_file = os.path.join(abs_new_dir, old_filename)
+            abs_new_file = os.path.join(abs_new_dir, new_filename)
             if os.path.exists(abs_old_file):
                 os.rename(abs_old_file, abs_new_file)
-            
-            if old_thumb_path:
-                abs_old_thumb = os.path.join(videos_path, old_thumb_path)
-                abs_new_thumb = os.path.join(abs_new_dir, f"{sanitized}_thumb.jpg")
+        
+        if old_thumb_path:
+            old_thumb_filename = os.path.basename(old_thumb_path)
+            new_thumb_filename = f"{sanitized}_thumb.jpg"
+            if old_thumb_filename != new_thumb_filename:
+                abs_old_thumb = os.path.join(abs_new_dir, old_thumb_filename)
+                abs_new_thumb = os.path.join(abs_new_dir, new_thumb_filename)
                 if os.path.exists(abs_old_thumb):
                     os.rename(abs_old_thumb, abs_new_thumb)
         

@@ -3,14 +3,13 @@ Settings API endpoints
 """
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import List
 from urllib.parse import urlparse
 import logging
 
 from ..database import get_db, generate_api_key
 from ..utils import get_now, to_iso
 from ..services.webhook import send_test_webhook, DEFAULT_PAYLOAD_TEMPLATE
-from .. import config
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

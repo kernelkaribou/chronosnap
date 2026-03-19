@@ -11,7 +11,6 @@ from typing import Optional
 
 from ..database import get_db, dict_from_row
 from ..utils import get_now, to_iso, parse_iso
-from .. import config
 from .video_processor import process_video
 from .event_service import add_event
 from .webhook import send_webhook_event

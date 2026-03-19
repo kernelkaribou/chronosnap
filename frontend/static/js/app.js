@@ -185,20 +185,6 @@ function setValues(values) {
  * Clear form elements
  * @param {string[]} ids - Array of element IDs to clear
  */
-function clearValues(ids) {
-    ids.forEach(id => {
-        const element = document.getElementById(id);
-        if (!element) return;
-        
-        if (element.type === 'checkbox') {
-            element.checked = false;
-        } else if (element.tagName === 'FORM') {
-            element.reset();
-        } else {
-            element.value = '';
-        }
-    });
-}
 
 // =============================================================================
 // End Universal Utilities
@@ -694,13 +680,6 @@ function parseRoute(pathname) {
 }
 
 function handleRoute(pushState = false) {
-    // Legacy hash redirect
-    const hash = window.location.hash.slice(1);
-    if (hash && !window.location.pathname.match(/^\/(jobs|timelapses|captures|storage|settings)/)) {
-        const hashMap = { 'jobs': '/jobs', 'videos': '/timelapses', 'captures': '/captures', 'storage': '/storage', 'settings': '/settings' };
-        if (hashMap[hash]) { history.replaceState(null, '', hashMap[hash]); }
-    }
-
     const route = parseRoute();
     if (route.view === 'job-detail' && route.id) {
         switchView('job-detail', pushState);
@@ -3434,7 +3413,7 @@ function debouncedOverlayPreview() {
 async function updateOverlayPreview() {
     const config = readOverlayConfig('build');
     const captureId = window._overlayPreviewCaptureId;
-    if (!config || !captureId) { console.warn('Build overlay preview: missing config or captureId', { hasConfig: !!config, captureId }); resetOverlayPreview(); return; }
+    if (!config || !captureId) { resetOverlayPreview(); return; }
 
     try {
         const resp = await fetch(`${API_BASE}/videos/text-overlay-preview`, {
@@ -3525,7 +3504,7 @@ function initEditJobOverlay(job) {
 async function loadOverlayPreviewImage(prefix, job) {
     const img = document.getElementById(`${prefix}-overlay-preview-img`);
     const placeholder = document.getElementById(`${prefix}-overlay-preview-placeholder`);
-    if (!img) { console.warn(`loadOverlayPreviewImage: #${prefix}-overlay-preview-img not found`); return; }
+    if (!img) return;
 
     if (placeholder) placeholder.innerHTML = '<div style="font-size:0.8rem; color:var(--text-secondary);">Loading preview…</div>';
 
@@ -3654,12 +3633,12 @@ async function updateOverlayFromUrl(prefix) {
 async function updateGenericOverlayPreview(prefix, job) {
     const config = readOverlayConfig(prefix);
     const img = document.getElementById(`${prefix}-overlay-preview-img`);
-    if (!img) { console.warn(`Overlay preview: img element #${prefix}-overlay-preview-img not found`); return; }
+    if (!img) return;
     // Delegate to URL-based previewer if we have base64 but no capture
     if (!img._captureId && img._base64) {
         return updateOverlayFromUrl(prefix);
     }
-    if (!img._captureId) { console.warn('Overlay preview: no _captureId on image'); return; }
+    if (!img._captureId) return;
     if (!config) {
         // Restore original
         if (img._originalSrc) img.src = img._originalSrc;
@@ -3727,20 +3706,8 @@ async function processVideo(event) {
     }
 }
 
-function playVideo(videoId, videoName) {
-    openVideoDetail(videoId);
-}
-
-function closeVideoPlayer() {
-    closeVideoDetail();
-}
-
 function navigateToJob(jobId) {
     navigateTo(`/jobs/${jobId}`);
-}
-
-async function deleteVideo(videoId, videoName) {
-    deleteVideoFromDetail(videoId, videoName);
 }
 
 // Modal management
@@ -4466,9 +4433,7 @@ async function duplicateJob(jobId) {
                     // Mount widget first, then populate
                     initCreateJobOverlay();
                     writeOverlayConfig('create-ab', overlayConfig);
-                } catch (e) {
-                    console.warn('Failed to parse auto_build_text_overlay for duplicate:', e);
-                }
+                } catch (e) { /* ignore invalid overlay config */ }
             }
         } else {
             abEnabled.checked = false;
@@ -4498,13 +4463,6 @@ function updateEndDateMin() {
         const intervalSeconds = parseInt(intervalInput.value) || 60;
         // Min validation is handled by validation logic in createJob()
     }
-}
-
-// Utility functions
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 function getStreamHost(url) {
@@ -4562,14 +4520,6 @@ function toISOStringForQuery(localDateTimeString, isEndTime) {
     const minutes = String(date.getMinutes()).padStart(2, '0');
     const seconds = isEndTime ? '59' : '00';  // Use 59 for end times to be inclusive
     return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
-}
-
-function formatBytes(bytes) {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
 function formatDateTime(isoString) {
@@ -5146,20 +5096,6 @@ async function performMaintenanceActions(jobId, jobName) {
     }
 }
 
-function confirmMaintenanceCleanup(jobId, jobName) {
-    confirmAction(
-        `Are you absolutely sure you want to remove ${maintenanceData.missing_count} database record(s) for missing files? This action cannot be undone.`,
-        () => performMaintenanceCleanup(jobId, jobName)
-    );
-}
-
-function confirmMaintenanceImport(jobId, jobName) {
-    confirmAction(
-        `Import ${maintenanceData.orphaned_count} orphaned file(s) into the database? Timestamps will be extracted from the files.`,
-        () => performMaintenanceImport(jobId, jobName)
-    );
-}
-
 async function performMaintenanceImport(jobId, jobName) {
     const content = document.getElementById('maintenance-content');
     
@@ -5282,50 +5218,6 @@ function closeMaintenance() {
 }
 
 // ===== Custom 24-Hour Time Picker Functions =====
-
-function populateHourOptions(selectId) {
-    const select = document.getElementById(selectId);
-    if (!select) return;
-    
-    // Clear all existing options
-    while (select.options.length > 0) {
-        select.remove(0);
-    }
-    
-    for (let i = 0; i < 24; i++) {
-        const option = document.createElement('option');
-        option.value = i.toString().padStart(2, '0');
-        option.textContent = i.toString().padStart(2, '0');
-        select.appendChild(option);
-    }
-    
-    // Default to 00 if no value is set
-    if (!select.value) {
-        select.value = '00';
-    }
-}
-
-function populateMinuteOptions(selectId) {
-    const select = document.getElementById(selectId);
-    if (!select) return;
-    
-    // Clear all existing options
-    while (select.options.length > 0) {
-        select.remove(0);
-    }
-    
-    for (let i = 0; i < 60; i++) {
-        const option = document.createElement('option');
-        option.value = i.toString().padStart(2, '0');
-        option.textContent = i.toString().padStart(2, '0');
-        select.appendChild(option);
-    }
-    
-    // Default to 00 if no value is set
-    if (!select.value) {
-        select.value = '00';
-    }
-}
 
 function initializeTimePickers() {
     // Setup universal time input sync for time window fields only

@@ -8,7 +8,7 @@ import logging
 
 from zoneinfo import ZoneInfo
 
-from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware, get_local_timezone
+from ..utils import to_iso, parse_iso, get_local_timezone
 
 logger = logging.getLogger(__name__)
 
