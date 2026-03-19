@@ -121,8 +121,8 @@ async def list_fonts():
 
 
 class TextOverlayPreviewRequest(BaseModel):
-    image_path: Optional[str] = None
-    image_data: Optional[str] = None  # Base64-encoded image (from test-url)
+    capture_id: Optional[int] = None
+    image_data: Optional[str] = None  # Base64-encoded image (from test-url/preview)
     config: dict
     job_name: str = "Sample Job"
 
@@ -133,14 +133,18 @@ async def text_overlay_preview(request: TextOverlayPreviewRequest):
     from ..services.text_overlay import render_preview_bytes
     from ..helpers.file_helpers import resolve_capture_path
 
-    if not request.image_path and not request.image_data:
-        raise HTTPException(status_code=400, detail="Either image_path or image_data required")
+    if not request.capture_id and not request.image_data:
+        raise HTTPException(status_code=400, detail="Either capture_id or image_data required")
 
     resolved_path = None
-    if request.image_path:
-        resolved_path = resolve_capture_path(request.image_path)
+    if request.capture_id:
+        with get_db() as conn:
+            row = conn.execute("SELECT file_path FROM captures WHERE id = ?", (request.capture_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Capture not found")
+        resolved_path = resolve_capture_path(row[0])
         if not os.path.isfile(resolved_path):
-            raise HTTPException(status_code=404, detail="Image not found")
+            raise HTTPException(status_code=404, detail="Capture image file not found on disk")
 
     # Build sample variables for preview
     from ..utils import get_now

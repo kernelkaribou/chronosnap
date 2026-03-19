@@ -2805,7 +2805,7 @@ async function showProcessVideoModal(jobId, jobName) {
         // Reset text overlay
         const buildOverlayContainer = document.getElementById('build-overlay-container');
         if (buildOverlayContainer) buildOverlayContainer.innerHTML = '';
-        window._overlayPreviewPath = null;
+        window._overlayPreviewCaptureId = null;
         window._overlayJobName = null;
         const previewImage = document.getElementById('builder-preview-image');
         const previewPlaceholder = document.getElementById('builder-preview-placeholder');
@@ -2934,8 +2934,8 @@ async function populateVideoFormFromJob(jobId, jobName) {
         document.getElementById('job-preview-label').textContent = `Latest capture: ${formatDateTime(cap.captured_at)}`;
         previewImage.style.display = 'flex';
         if (previewPlaceholder) previewPlaceholder.style.display = 'none';
-        // Store file_path for text overlay preview
-        window._overlayPreviewPath = cap.file_path;
+        // Store capture_id for text overlay preview
+        window._overlayPreviewCaptureId = cap.id;
         window._overlayJobName = jobName;
         // Mount overlay widget now that we have a preview image
         initBuildOverlay();
@@ -3431,14 +3431,14 @@ function debouncedOverlayPreview() {
 
 async function updateOverlayPreview() {
     const config = readOverlayConfig('build');
-    const imagePath = window._overlayPreviewPath;
-    if (!config || !imagePath) { console.warn('Build overlay preview: missing config or imagePath', { hasConfig: !!config, imagePath }); resetOverlayPreview(); return; }
+    const captureId = window._overlayPreviewCaptureId;
+    if (!config || !captureId) { console.warn('Build overlay preview: missing config or captureId', { hasConfig: !!config, captureId }); resetOverlayPreview(); return; }
 
     try {
         const resp = await fetch(`${API_BASE}/videos/text-overlay-preview`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Referer': window.location.href },
-            body: JSON.stringify({ image_path: imagePath, config, job_name: window._overlayJobName || 'Sample Job' })
+            body: JSON.stringify({ capture_id: captureId, config, job_name: window._overlayJobName || 'Sample Job' })
         });
         if (!resp.ok) { console.error('Build overlay preview API error:', resp.status); return; }
         const blob = await resp.blob();
@@ -3530,7 +3530,7 @@ async function loadOverlayPreviewImage(prefix, job) {
         const capsData = await apiRequest('/captures/', { query: { job_id: job.id, page_size: 1, sort_order: 'desc' } });
         if (capsData.captures && capsData.captures.length > 0) {
             const cap = capsData.captures[0];
-            img._filePath = cap.file_path;
+            img._captureId = cap.id;
             img._originalSrc = `${API_BASE}/captures/${cap.id}/image`;
             img.src = img._originalSrc;
             img.style.display = 'block';
@@ -3619,10 +3619,10 @@ async function updateOverlayFromUrl(prefix) {
         if (img._overlayUrl) { URL.revokeObjectURL(img._overlayUrl); img._overlayUrl = null; }
         return;
     }
-    // Need either file_path or base64
-    const hasFile = img._filePath;
+    // Need either capture_id or base64
+    const hasCaptureId = img._captureId;
     const hasBase64 = img._base64;
-    if (!hasFile && !hasBase64) return;
+    if (!hasCaptureId && !hasBase64) return;
 
     const jobName = prefix === 'create-ab'
         ? (document.getElementById('job_name')?.value || 'New Job')
@@ -3630,7 +3630,7 @@ async function updateOverlayFromUrl(prefix) {
 
     try {
         const body = { config, job_name: jobName };
-        if (hasFile) body.image_path = img._filePath;
+        if (hasCaptureId) body.capture_id = img._captureId;
         else body.image_data = img._base64;
 
         const resp = await fetch(`${API_BASE}/videos/text-overlay-preview`, {
@@ -3651,11 +3651,11 @@ async function updateGenericOverlayPreview(prefix, job) {
     const config = readOverlayConfig(prefix);
     const img = document.getElementById(`${prefix}-overlay-preview-img`);
     if (!img) { console.warn(`Overlay preview: img element #${prefix}-overlay-preview-img not found`); return; }
-    // Delegate to URL-based previewer if we have base64 but no file
-    if (!img._filePath && img._base64) {
+    // Delegate to URL-based previewer if we have base64 but no capture
+    if (!img._captureId && img._base64) {
         return updateOverlayFromUrl(prefix);
     }
-    if (!img._filePath) { console.warn('Overlay preview: no _filePath on image'); return; }
+    if (!img._captureId) { console.warn('Overlay preview: no _captureId on image'); return; }
     if (!config) {
         // Restore original
         if (img._originalSrc) img.src = img._originalSrc;
@@ -3666,7 +3666,7 @@ async function updateGenericOverlayPreview(prefix, job) {
         const resp = await fetch(`${API_BASE}/videos/text-overlay-preview`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Referer': window.location.href },
-            body: JSON.stringify({ image_path: img._filePath, config, job_name: job.name || 'Sample Job' })
+            body: JSON.stringify({ capture_id: img._captureId, config, job_name: job.name || 'Sample Job' })
         });
         if (!resp.ok) { console.error('Overlay preview API error:', resp.status); return; }
         const blob = await resp.blob();
