@@ -3432,7 +3432,7 @@ function debouncedOverlayPreview() {
 async function updateOverlayPreview() {
     const config = readOverlayConfig('build');
     const imagePath = window._overlayPreviewPath;
-    if (!config || !imagePath) { resetOverlayPreview(); return; }
+    if (!config || !imagePath) { console.warn('Build overlay preview: missing config or imagePath', { hasConfig: !!config, imagePath }); resetOverlayPreview(); return; }
 
     try {
         const resp = await fetch(`${API_BASE}/videos/text-overlay-preview`, {
@@ -3440,7 +3440,7 @@ async function updateOverlayPreview() {
             headers: { 'Content-Type': 'application/json', 'Referer': window.location.href },
             body: JSON.stringify({ image_path: imagePath, config, job_name: window._overlayJobName || 'Sample Job' })
         });
-        if (!resp.ok) throw new Error('Preview failed');
+        if (!resp.ok) { console.error('Build overlay preview API error:', resp.status); return; }
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         const img = document.getElementById('job-preview-img');
@@ -3523,7 +3523,7 @@ function initEditJobOverlay(job) {
 async function loadOverlayPreviewImage(prefix, job) {
     const img = document.getElementById(`${prefix}-overlay-preview-img`);
     const placeholder = document.getElementById(`${prefix}-overlay-preview-placeholder`);
-    if (!img) return;
+    if (!img) { console.warn(`loadOverlayPreviewImage: #${prefix}-overlay-preview-img not found`); return; }
 
     try {
         // Use the job's latest capture for the preview
@@ -3538,13 +3538,14 @@ async function loadOverlayPreviewImage(prefix, job) {
             // If overlay is already enabled, render preview
             const cb = document.getElementById(`${prefix}-overlay-enabled`);
             if (cb && cb.checked) {
-                setTimeout(() => updateGenericOverlayPreview(prefix, job), 100);
+                setTimeout(() => updateGenericOverlayPreview(prefix, job), 200);
             }
         } else {
-            // No captures — try to fetch from the job's URL
+            // No captures -- try to fetch from the job's URL
             showOverlayPreviewPlaceholder(prefix, 'No captures yet', job.url);
         }
     } catch (e) {
+        console.error('loadOverlayPreviewImage error:', e);
         showOverlayPreviewPlaceholder(prefix, 'Preview unavailable');
     }
 }
@@ -3649,12 +3650,12 @@ async function updateOverlayFromUrl(prefix) {
 async function updateGenericOverlayPreview(prefix, job) {
     const config = readOverlayConfig(prefix);
     const img = document.getElementById(`${prefix}-overlay-preview-img`);
-    if (!img) return;
+    if (!img) { console.warn(`Overlay preview: img element #${prefix}-overlay-preview-img not found`); return; }
     // Delegate to URL-based previewer if we have base64 but no file
     if (!img._filePath && img._base64) {
         return updateOverlayFromUrl(prefix);
     }
-    if (!img._filePath) return;
+    if (!img._filePath) { console.warn('Overlay preview: no _filePath on image'); return; }
     if (!config) {
         // Restore original
         if (img._originalSrc) img.src = img._originalSrc;
@@ -3667,7 +3668,7 @@ async function updateGenericOverlayPreview(prefix, job) {
             headers: { 'Content-Type': 'application/json', 'Referer': window.location.href },
             body: JSON.stringify({ image_path: img._filePath, config, job_name: job.name || 'Sample Job' })
         });
-        if (!resp.ok) throw new Error('Preview failed');
+        if (!resp.ok) { console.error('Overlay preview API error:', resp.status); return; }
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         if (img._overlayUrl) URL.revokeObjectURL(img._overlayUrl);
