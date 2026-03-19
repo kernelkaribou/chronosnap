@@ -6,7 +6,6 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from typing import List, Optional
 import os
-import json
 import logging
 
 from ..models import VideoCreate, VideoResponse
@@ -14,7 +13,7 @@ from ..database import get_db, dict_from_row
 from ..services.video_processor import process_video, cancel_video
 from ..utils import get_now, to_iso
 from ..helpers.db_helpers import get_or_404, normalize_favorite, fetch_tags_for_videos, fetch_tags_for_jobs, set_video_tags
-from ..helpers.file_helpers import validate_writable_directory, delete_video_files, resolve_video_path, make_relative
+from ..helpers.file_helpers import delete_video_files, resolve_video_path, make_relative
 from ..services.event_service import add_event
 
 router = APIRouter()

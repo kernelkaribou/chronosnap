@@ -1,7 +1,7 @@
 """
 Pydantic models for request/response validation
 """
-from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from enum import Enum
@@ -324,13 +324,3 @@ class MaintenanceImport(BaseModel):
     orphaned_files: List[Dict[str, Any]]
 
 
-class DirectoryScanRequest(BaseModel):
-    directory: str
-
-
-class DirectoryImportRequest(BaseModel):
-    name: str
-    directory: str
-    url: Optional[str] = None
-    stream_type: str = "rtsp"
-    interval_seconds: int = Field(default=60, gt=0)

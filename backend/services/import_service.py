@@ -13,7 +13,7 @@ import tarfile
 import subprocess
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Tuple, Set
+from typing import Dict, List, Any, Optional
 
 from .. import config
 from ..utils import get_now, to_iso
@@ -943,7 +943,7 @@ def execute_image_import(
     
     Returns dict with job_id, job_name, imported_count, total_size.
     """
-    from ..database import get_db, dict_from_row
+    from ..database import get_db
     
     if not images:
         raise ValueError("No images to import")
@@ -1056,7 +1056,7 @@ def execute_video_import(
     
     Returns dict with video_id, name, file_path.
     """
-    from ..database import get_db, dict_from_row
+    from ..database import get_db
     
     src_path = video['file_path']
     if not os.path.exists(src_path):

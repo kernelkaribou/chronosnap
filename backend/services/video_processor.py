@@ -4,12 +4,10 @@ Video processing service - builds timelapse videos from captured images
 import subprocess
 import os
 import threading
-from datetime import datetime
 from typing import Dict, Any, Optional
 import logging
 
 from ..database import get_db
-from .. import config
 from .event_service import add_event
 
 logger = logging.getLogger(__name__)

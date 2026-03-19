@@ -4,8 +4,8 @@ REFACTORED: Uses context-aware job_state calculator
 """
 import threading
 import time
-from typing import Dict, Optional
-from datetime import datetime, timedelta
+from typing import Dict
+from datetime import datetime
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 

@@ -4,12 +4,10 @@ Storage statistics API endpoints
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import List
-import os
 import shutil
 import logging
 
 from ..database import get_db, dict_from_row
-from .. import config
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -185,20 +185,6 @@ function setValues(values) {
  * Clear form elements
  * @param {string[]} ids - Array of element IDs to clear
  */
-function clearValues(ids) {
-    ids.forEach(id => {
-        const element = document.getElementById(id);
-        if (!element) return;
-        
-        if (element.type === 'checkbox') {
-            element.checked = false;
-        } else if (element.tagName === 'FORM') {
-            element.reset();
-        } else {
-            element.value = '';
-        }
-    });
-}
 
 // =============================================================================
 // End Universal Utilities
@@ -3720,20 +3706,8 @@ async function processVideo(event) {
     }
 }
 
-function playVideo(videoId, videoName) {
-    openVideoDetail(videoId);
-}
-
-function closeVideoPlayer() {
-    closeVideoDetail();
-}
-
 function navigateToJob(jobId) {
     navigateTo(`/jobs/${jobId}`);
-}
-
-async function deleteVideo(videoId, videoName) {
-    deleteVideoFromDetail(videoId, videoName);
 }
 
 // Modal management
@@ -4491,13 +4465,6 @@ function updateEndDateMin() {
     }
 }
 
-// Utility functions
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
 function getStreamHost(url) {
     // Extract protocol and host/domain from URL (e.g., http://example.com:8080)
     // This removes the path, query params, and fragments
@@ -4553,14 +4520,6 @@ function toISOStringForQuery(localDateTimeString, isEndTime) {
     const minutes = String(date.getMinutes()).padStart(2, '0');
     const seconds = isEndTime ? '59' : '00';  // Use 59 for end times to be inclusive
     return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
-}
-
-function formatBytes(bytes) {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
 function formatDateTime(isoString) {
@@ -5137,20 +5096,6 @@ async function performMaintenanceActions(jobId, jobName) {
     }
 }
 
-function confirmMaintenanceCleanup(jobId, jobName) {
-    confirmAction(
-        `Are you absolutely sure you want to remove ${maintenanceData.missing_count} database record(s) for missing files? This action cannot be undone.`,
-        () => performMaintenanceCleanup(jobId, jobName)
-    );
-}
-
-function confirmMaintenanceImport(jobId, jobName) {
-    confirmAction(
-        `Import ${maintenanceData.orphaned_count} orphaned file(s) into the database? Timestamps will be extracted from the files.`,
-        () => performMaintenanceImport(jobId, jobName)
-    );
-}
-
 async function performMaintenanceImport(jobId, jobName) {
     const content = document.getElementById('maintenance-content');
     
@@ -5273,50 +5218,6 @@ function closeMaintenance() {
 }
 
 // ===== Custom 24-Hour Time Picker Functions =====
-
-function populateHourOptions(selectId) {
-    const select = document.getElementById(selectId);
-    if (!select) return;
-    
-    // Clear all existing options
-    while (select.options.length > 0) {
-        select.remove(0);
-    }
-    
-    for (let i = 0; i < 24; i++) {
-        const option = document.createElement('option');
-        option.value = i.toString().padStart(2, '0');
-        option.textContent = i.toString().padStart(2, '0');
-        select.appendChild(option);
-    }
-    
-    // Default to 00 if no value is set
-    if (!select.value) {
-        select.value = '00';
-    }
-}
-
-function populateMinuteOptions(selectId) {
-    const select = document.getElementById(selectId);
-    if (!select) return;
-    
-    // Clear all existing options
-    while (select.options.length > 0) {
-        select.remove(0);
-    }
-    
-    for (let i = 0; i < 60; i++) {
-        const option = document.createElement('option');
-        option.value = i.toString().padStart(2, '0');
-        option.textContent = i.toString().padStart(2, '0');
-        select.appendChild(option);
-    }
-    
-    // Default to 00 if no value is set
-    if (!select.value) {
-        select.value = '00';
-    }
-}
 
 function initializeTimePickers() {
     // Setup universal time input sync for time window fields only

@@ -9,23 +9,21 @@ import re
 import json
 import logging
 import time
-from datetime import datetime
 from urllib.parse import urlparse, urlunparse
 
-from ..models import JobCreate, JobUpdate, JobResponse, TestUrlResponse, DurationEstimate, DurationCalculation, MaintenanceResult, MaintenanceCleanup, MaintenanceImport, DirectoryScanRequest, DirectoryImportRequest
+from ..models import JobCreate, JobUpdate, JobResponse, TestUrlResponse, DurationEstimate, MaintenanceResult, MaintenanceCleanup, MaintenanceImport
 from ..database import get_db, dict_from_row
 from ..services.url_tester import test_stream_url
 from ..services.duration_calculator import calculate_duration
 from ..services.image_capture import capture_image
 from ..services.event_service import add_event
 from ..services.capture_scheduler import get_scheduler
-from ..services.maintenance import scan_job_files, cleanup_missing_captures, import_orphaned_files, scan_directory
+from ..services.maintenance import scan_job_files, cleanup_missing_captures, import_orphaned_files
 from ..services.job_state import calculate_job_state
 from ..services.auto_builder import get_next_auto_build_at
 from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware
 from ..helpers.db_helpers import get_or_404, fetch_tags_for_jobs, set_job_tags
-from ..helpers.file_helpers import validate_writable_directory, make_relative, resolve_capture_path
-from .. import config
+from ..helpers.file_helpers import validate_writable_directory, resolve_capture_path
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -775,25 +773,5 @@ async def export_job(job_id: int):
         headers={
             'Content-Disposition': f'attachment; filename="{zip_name}"',
         }
-    )
-
-
-# ── Directory Import ─────────────────────────────────────────────────────
-
-@router.post("/import/scan")
-async def scan_import_directory(request: DirectoryScanRequest):
-    """Deprecated: Use POST /api/import/scan instead."""
-    raise HTTPException(
-        status_code=410,
-        detail="This endpoint has been replaced by POST /api/import/scan"
-    )
-
-
-@router.post("/import", response_model=JobResponse)
-async def import_directory(request: DirectoryImportRequest):
-    """Deprecated: Use POST /api/import/{session_id}/execute instead."""
-    raise HTTPException(
-        status_code=410,
-        detail="This endpoint has been replaced by the /api/import/ pipeline (scan → analyze → execute)"
     )
 

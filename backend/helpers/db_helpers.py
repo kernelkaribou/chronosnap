@@ -22,15 +22,6 @@ def fetch_one(cursor, query: str, params: tuple) -> dict | None:
     return dict(row) if row else None
 
 
-def ensure_column(cursor, table: str, column: str, definition: str):
-    """Add a column to a table if it doesn't already exist."""
-    cursor.execute(f"PRAGMA table_info({table})")
-    columns = [col[1] for col in cursor.fetchall()]
-    if column not in columns:
-        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
-        logger.info(f"Migration: added {table}.{column}")
-
-
 def decrement_job_stats(cursor, job_id: int, file_size: int, now_iso: str):
     """Decrement a job's capture_count and storage_size after a capture deletion."""
     cursor.execute("""
