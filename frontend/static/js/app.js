@@ -7194,7 +7194,10 @@ function renderHomepageVideos(videos) {
 
 function renderHomepageJobs(jobs) {
     const container = document.getElementById('homepage-jobs');
-    const active = jobs.filter(j => j.status === 'active').slice(0, 5);
+    const active = jobs
+        .filter(j => j.status === 'active')
+        .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+        .slice(0, 5);
 
     if (!active.length) {
         container.innerHTML = `
@@ -7210,19 +7213,18 @@ function renderHomepageJobs(jobs) {
     }
 
     container.innerHTML = active.map(j => {
-        const nextCapture = j.next_capture ? formatDateTime(j.next_capture) : '—';
+        const thumbSrc = j.latest_capture ? `${API_BASE}/captures/${j.latest_capture.id}/thumbnail` : '';
         return `
-        <div class="homepage-job-card" onclick="navigateTo('/jobs/${j.id}')">
-            <div class="homepage-job-header">
-                <span class="homepage-job-name">${escapeHtml(j.name)}</span>
-                <span class="job-status running">Active</span>
-            </div>
-            <div class="homepage-job-details">
-                <span>Every ${j.interval_seconds >= 3600 ? Math.round(j.interval_seconds / 3600) + 'h' : j.interval_seconds >= 60 ? Math.round(j.interval_seconds / 60) + 'm' : j.interval_seconds + 's'}</span>
-                <span>·</span>
-                <span>${j.capture_count || 0} captures</span>
-                <span>·</span>
-                <span>Next: ${nextCapture}</span>
+        <div class="homepage-capture-card" onclick="navigateTo('/jobs/${j.id}')" title="${escapeHtml(j.name)}">
+            ${thumbSrc ?
+                `<img src="${thumbSrc}" alt="" loading="lazy"
+                      onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22112%22%3E%3Crect width=%22200%22 height=%22112%22 fill=%22%231e293b%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23cbd5e1%22 font-family=%22sans-serif%22%3ENo Captures%3C/text%3E%3C/svg%3E'">` :
+                `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-muted);">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                </div>`}
+            <div class="homepage-card-overlay">
+                <div class="homepage-card-title">${escapeHtml(j.name)}</div>
+                <div class="homepage-card-sub">${j.capture_count || 0} captures · <span class="job-status running" style="font-size:0.65rem;padding:1px 6px;">Active</span></div>
             </div>
         </div>`;
     }).join('');

@@ -2918,9 +2918,21 @@ body.detail-view-active {
 }
 
 .homepage-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    display: flex;
     gap: 0.75rem;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    padding-bottom: 0.25rem;
+    scrollbar-width: thin;
+}
+
+.homepage-grid::-webkit-scrollbar {
+    height: 4px;
+}
+
+.homepage-grid::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 2px;
 }
 
 .homepage-capture-card {
@@ -2928,10 +2940,13 @@ body.detail-view-active {
     border-radius: var(--radius-md);
     overflow: hidden;
     cursor: pointer;
+    min-width: 260px;
     aspect-ratio: 16/10;
     background: var(--surface-color);
     border: 1px solid var(--border-color);
     transition: all var(--transition-fast);
+    scroll-snap-align: start;
+    flex-shrink: 0;
 }
 
 .homepage-capture-card:hover {
@@ -2976,6 +2991,9 @@ body.detail-view-active {
     overflow: hidden;
     cursor: pointer;
     transition: all var(--transition-fast);
+    min-width: 260px;
+    flex-shrink: 0;
+    scroll-snap-align: start;
 }
 
 .homepage-video-card:hover {
@@ -3008,48 +3026,19 @@ body.detail-view-active {
     padding: 0.5rem 0.625rem;
 }
 
-.homepage-job-card {
-    background: var(--surface-color);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 0.875rem 1rem;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    grid-column: span 2;
-}
-
-.homepage-job-card:hover {
-    border-color: var(--primary-color);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 20px var(--primary-glow);
-}
-
-.homepage-job-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0.375rem;
-}
-
-.homepage-job-name {
-    font-weight: 600;
-    font-size: 0.9rem;
-    color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.homepage-job-details {
-    display: flex;
-    gap: 0.375rem;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    flex-wrap: wrap;
+@media (max-width: 768px) {
+    .homepage-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .homepage-capture-card,
+    .homepage-video-card {
+        min-width: 220px;
+    }
 }
 
 .homepage-empty {
-    grid-column: 1 / -1;
+    flex: 1;
+    min-width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -3073,15 +3062,6 @@ body.detail-view-active {
 
 .homepage-empty .btn {
     margin-top: 0.5rem;
-}
-
-@media (max-width: 768px) {
-    .homepage-stats {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    .homepage-job-card {
-        grid-column: span 1;
-    }
 }
 
 /* Bulk favorite buttons in selection bar */
