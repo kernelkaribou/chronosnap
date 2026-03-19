@@ -770,6 +770,10 @@ function switchView(view, pushState = true) {
         v.classList.toggle('active', v.id === `${view}-view`);
     });
     
+    // Lock page scroll when a detail view is active (sidebar stays static, only config scrolls)
+    const isDetail = (view === 'job-detail' || view === 'video-detail');
+    document.body.classList.toggle('detail-view-active', isDetail);
+    
     currentView = view;
     
     // Push to browser history if requested
@@ -784,6 +788,29 @@ function switchView(view, pushState = true) {
     if (view === 'settings') loadSettings();
     if (view === 'captures') loadCaptures();
 }
+
+// Size detail panels so sidebar + main fill viewport below the header.
+// Called after loading a detail view and on window resize.
+function sizeDetailPanels() {
+    const sidebar = document.querySelector('.detail-sidebar');
+    const main = document.querySelector('.detail-main');
+    if (!sidebar || !main) return;
+    
+    // Measure where the panels start
+    const top = sidebar.getBoundingClientRect().top;
+    const available = window.innerHeight - top;
+    
+    sidebar.style.maxHeight = available + 'px';
+    sidebar.style.overflowY = 'auto';
+    main.style.maxHeight = available + 'px';
+    main.style.overflowY = 'auto';
+}
+
+window.addEventListener('resize', () => {
+    if (currentView === 'job-detail' || currentView === 'video-detail') {
+        sizeDetailPanels();
+    }
+});
 
 // Jobs
 let allJobs = [];
@@ -1305,6 +1332,9 @@ async function loadJobDetail(jobId) {
         
         // Scroll to top of detail page
         content.scrollTop = 0;
+        
+        // Size the detail panels to fill viewport (sidebar static, main scrolls)
+        sizeDetailPanels();
         
         // Initialize custom time pickers for edit modal
         initializeEditTimePickers(job);

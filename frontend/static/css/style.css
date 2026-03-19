@@ -705,26 +705,14 @@ body {
 
 .detail-page-content {
     max-width: 100%;
-    height: 100%;
 }
 
-/* Detail view: fixed header + sidebar, only settings scroll */
-#job-detail-view.active,
-#video-detail-view.active {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
+/* Detail view: lock page scroll on desktop, JS sizes the panels */
+body.detail-view-active {
     overflow: hidden;
 }
 
-/* Prevent main-content from scrolling when detail view is active */
-.main-content:has(#job-detail-view.active),
-.main-content:has(#video-detail-view.active) {
-    overflow: hidden;
-    height: calc(100vh - var(--navbar-height, 52px));
-    padding-bottom: 0;
-}
-
+/* Detail view header stays at top */
 .detail-view-header {
     flex-shrink: 0;
     background: var(--bg-color);
@@ -734,23 +722,17 @@ body {
 }
 
 .detail-view-body {
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
+    padding-top: var(--space-lg);
 }
 
-/* Job detail: sidebar (preview + meta + actions) fixed, main scrolls */
+/* Job detail: sidebar (preview + meta + actions) + main (settings) */
 .detail-layout {
     display: grid;
     grid-template-columns: 320px 1fr;
     gap: var(--space-xl);
-    height: 100%;
-    min-height: 0;
 }
 
 .detail-sidebar {
-    overflow-y: auto;
-    padding-top: var(--space-lg);
     padding-bottom: var(--space-xl);
 }
 
@@ -784,7 +766,6 @@ body {
 .detail-main {
     min-width: 0;
     overflow-y: auto;
-    padding-top: var(--space-lg);
     padding-bottom: var(--space-xl);
     padding-right: var(--space-sm);
 }
@@ -855,26 +836,16 @@ body {
 
 @media (max-width: 900px) {
     /* On mobile, revert to normal scrolling page */
-    #job-detail-view.active,
-    #video-detail-view.active {
-        height: auto;
+    body.detail-view-active {
         overflow: visible;
     }
-    .main-content:has(#job-detail-view.active),
-    .main-content:has(#video-detail-view.active) {
-        overflow: visible;
-        height: auto;
-        padding-bottom: 2rem;
-    }
-    .detail-view-body {
+    body.detail-view-active .main-content {
         overflow: visible;
     }
     .detail-layout {
         grid-template-columns: 1fr;
-        height: auto;
     }
     .detail-sidebar {
-        overflow-y: visible;
         position: static;
     }
     .detail-sidebar img {
@@ -882,6 +853,7 @@ body {
     }
     .detail-main {
         overflow-y: visible;
+        max-height: none;
         padding-right: 0;
     }
 }
