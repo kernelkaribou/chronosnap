@@ -501,6 +501,7 @@ class BulkDeleteRequest(BaseModel):
 async def delete_multiple_videos(request: BulkDeleteRequest):
     """Delete multiple processed videos"""
     deleted = 0
+    deleted_names = []
     
     with get_db() as conn:
         cursor = conn.cursor()
@@ -521,10 +522,13 @@ async def delete_multiple_videos(request: BulkDeleteRequest):
             
             cursor.execute("DELETE FROM processed_videos WHERE id = ?", (video_id,))
             deleted += 1
+            deleted_names.append(vid['name'])
             logger.info(f"Deleted video '{vid['name']}' (ID: {video_id})")
     
-    if deleted > 0:
-        add_event(f"{deleted} video(s) deleted", "video")
+    if deleted == 1:
+        add_event(f"Video '{deleted_names[0]}' deleted", "video")
+    elif deleted > 1:
+        add_event(f"{deleted} videos deleted", "video")
     
     return {"deleted": deleted, "requested": len(request.video_ids)}
 
