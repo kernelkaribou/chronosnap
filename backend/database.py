@@ -182,6 +182,25 @@ def init_db():
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_shared_links_token ON shared_links(token)")
         
+        # Seed default tags on fresh database
+        default_tags = [
+            ('Daily',        '#6366f1'),  # indigo
+            ('Weekly',       '#8b5cf6'),  # violet
+            ('Seasonal',     '#10b981'),  # emerald
+            ('Construction', '#f59e0b'),  # amber
+            ('Project',      '#3b82f6'),  # blue
+            ('Nature',       '#22c55e'),  # green
+            ('Weather',      '#06b6d4'),  # cyan
+            ('Security',     '#ef4444'),  # red
+            ('Event',        '#ec4899'),  # pink
+            ('Archival',     '#78716c'),  # stone
+        ]
+        now = to_iso(get_now())
+        cursor.executemany(
+            "INSERT OR IGNORE INTO tags (name, color, created_at) VALUES (?, ?, ?)",
+            [(name, color, now) for name, color in default_tags]
+        )
+
         # Initialize API key if not exists
         cursor.execute("SELECT value FROM settings WHERE key = 'api_key'")
         if not cursor.fetchone():
