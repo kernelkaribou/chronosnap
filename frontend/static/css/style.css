@@ -2715,11 +2715,14 @@ body.detail-view-active {
     background: var(--surface-color);
     border: 1px solid var(--border-color);
     font-size: 1rem;
-    padding: 0.35rem 0.55rem;
+    padding: 0.4rem 0.6rem;
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: all var(--transition-fast);
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .fav-filter-btn:hover {
@@ -2739,11 +2742,14 @@ body.detail-view-active {
     background: var(--surface-color);
     border: 1px solid var(--border-color);
     font-size: 1rem;
-    padding: 0.35rem 0.55rem;
+    padding: 0.4rem 0.6rem;
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: all var(--transition-fast);
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     color: var(--primary-color);
 }
 .share-filter-btn:hover {
@@ -2764,11 +2770,14 @@ body.detail-view-active {
     background: var(--surface-color);
     border: 1px solid var(--border-color);
     font-size: 1rem;
-    padding: 0.35rem 0.55rem;
+    padding: 0.4rem 0.6rem;
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: all var(--transition-fast);
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     color: var(--text-secondary);
 }
 .source-filter-btn:hover {
