@@ -3057,6 +3057,21 @@ body.detail-view-active {
     object-fit: cover;
 }
 
+.homepage-card-new {
+    animation: homepageSlideIn 0.5s ease-out;
+}
+
+@keyframes homepageSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-30px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}
+
 .homepage-card-overlay {
     position: absolute;
     bottom: 0;
@@ -3080,48 +3095,6 @@ body.detail-view-active {
     color: rgba(255,255,255,0.7);
 }
 
-.homepage-video-card {
-    background: var(--surface-color);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    overflow: hidden;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    min-width: 260px;
-    flex-shrink: 0;
-    scroll-snap-align: start;
-}
-
-.homepage-video-card:hover {
-    border-color: var(--primary-color);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 20px var(--primary-glow);
-}
-
-.homepage-video-thumb {
-    position: relative;
-    aspect-ratio: 16/9;
-    background: var(--bg-color);
-}
-
-.homepage-video-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.homepage-video-thumb .thumb-placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--text-muted);
-}
-
-.homepage-card-info {
-    padding: 0.5rem 0.625rem;
-}
-
 @media (max-width: 768px) {
     .homepage-stats {
         grid-template-columns: repeat(2, 1fr);
@@ -3132,8 +3105,7 @@ body.detail-view-active {
     .homepage-spotlight-card {
         height: 180px;
     }
-    .homepage-capture-card,
-    .homepage-video-card {
+    .homepage-capture-card {
         width: 220px;
         height: 138px;
     }

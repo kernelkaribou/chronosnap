@@ -738,6 +738,8 @@ function switchView(view, pushState = true) {
         clearInterval(_videoDetailPollInterval);
         _videoDetailPollInterval = null;
     }
+    // Clean up homepage polling when leaving
+    if (view !== 'homepage') stopHomepagePoll();
     
     // Update navigation highlights (Jobs active for job-detail, Timelapses for video-detail, none for homepage)
     const navView = (view === 'job-detail') ? 'jobs' : (view === 'video-detail') ? 'videos' : view;
@@ -7086,6 +7088,10 @@ async function viewJobTimelapses(jobId) {
 
 
 // ===== Homepage =====
+let _homepagePollInterval = null;
+let _homepageKnownCaptureIds = new Set();
+let _homepageKnownVideoIds = new Set();
+
 async function loadHomepage() {
     const [stats, captures, videos, allVideos, jobs] = await Promise.all([
         apiRequest('/storage/stats'),
@@ -7095,11 +7101,129 @@ async function loadHomepage() {
         apiRequest('/jobs/')
     ]);
 
+    // Track known IDs for live update detection
+    _homepageKnownCaptureIds = new Set((captures.captures || []).map(c => c.id));
+    _homepageKnownVideoIds = new Set(allVideos.filter(v => v.status === 'completed').map(v => v.id));
+
     renderHomepageStats(stats, captures, allVideos, jobs);
     renderHomepageSpotlight(captures, allVideos);
     renderHomepageCaptures(captures);
     renderHomepageVideos(videos);
-    renderHomepageRandomVideos(allVideos);
+
+    startHomepagePoll();
+}
+
+function startHomepagePoll() {
+    stopHomepagePoll();
+    _homepagePollInterval = setInterval(pollHomepageUpdates, 10000);
+}
+
+function stopHomepagePoll() {
+    if (_homepagePollInterval) {
+        clearInterval(_homepagePollInterval);
+        _homepagePollInterval = null;
+    }
+}
+
+async function pollHomepageUpdates() {
+    if (currentView !== 'homepage') {
+        stopHomepagePoll();
+        return;
+    }
+
+    try {
+        const [stats, captures, videos, allVideos, jobs] = await Promise.all([
+            apiRequest('/storage/stats'),
+            apiRequest('/captures/', { query: { page: 1, page_size: 5, sort_order: 'desc' } }),
+            apiRequest('/videos/', { query: { limit: 5 } }),
+            apiRequest('/videos/'),
+            apiRequest('/jobs/')
+        ]);
+
+        // Always refresh stats
+        renderHomepageStats(stats, captures, allVideos, jobs);
+
+        // Check for new captures
+        const currentCaptures = captures.captures || [];
+        const newCaptures = currentCaptures.filter(c => !_homepageKnownCaptureIds.has(c.id));
+        if (newCaptures.length > 0) {
+            newCaptures.forEach(c => _homepageKnownCaptureIds.add(c.id));
+            prependHomepageCaptures(newCaptures, currentCaptures);
+        }
+
+        // Check for new completed videos
+        const completedVideos = allVideos.filter(v => v.status === 'completed');
+        const newVideos = completedVideos.filter(v => !_homepageKnownVideoIds.has(v.id));
+        if (newVideos.length > 0) {
+            newVideos.forEach(v => _homepageKnownVideoIds.add(v.id));
+            prependHomepageVideos(newVideos, videos);
+        }
+    } catch (e) {
+        // Silent fail on poll
+    }
+}
+
+function prependHomepageCaptures(newCaptures, allRecent) {
+    const container = document.getElementById('homepage-captures');
+
+    // If container was showing empty state, re-render fully
+    if (container.querySelector('.homepage-empty')) {
+        renderHomepageCaptures({ captures: allRecent });
+        return;
+    }
+
+    // Prepend new cards with slide-in animation
+    const html = newCaptures.map(c => `
+        <div class="homepage-capture-card homepage-card-new" onclick="navigateTo('/captures'); setTimeout(() => showCapturePreview(${c.id}), 300)" title="${escapeHtml(c.job_name || 'Capture')} · ${formatDateTime(c.captured_at)}">
+            <img src="${API_BASE}/captures/${c.id}/thumbnail" alt="" loading="lazy"
+                 onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22112%22%3E%3Crect width=%22200%22 height=%22112%22 fill=%22%231e293b%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23cbd5e1%22 font-family=%22sans-serif%22%3ENo Preview%3C/text%3E%3C/svg%3E'">
+            <div class="homepage-card-overlay">
+                <div class="homepage-card-title">${escapeHtml(c.job_name || 'Unknown')}</div>
+                <div class="homepage-card-sub">${formatDateTime(c.captured_at)}</div>
+            </div>
+        </div>
+    `).join('');
+
+    container.insertAdjacentHTML('afterbegin', html);
+
+    // Trim to 5
+    const cards = container.querySelectorAll('.homepage-capture-card');
+    for (let i = 5; i < cards.length; i++) cards[i].remove();
+
+    // Scroll to start
+    container.scrollTo({ left: 0, behavior: 'smooth' });
+}
+
+function prependHomepageVideos(newVideos, recentVideos) {
+    const container = document.getElementById('homepage-videos');
+
+    if (container.querySelector('.homepage-empty')) {
+        renderHomepageVideos(recentVideos);
+        return;
+    }
+
+    const html = newVideos.map(v => {
+        const thumbSrc = v.thumbnail_path ? `${API_BASE}/videos/${v.id}/thumbnail` : '';
+        return `
+        <div class="homepage-capture-card homepage-card-new" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeHtml(v.name)}">
+            ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy">` :
+                `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-muted);position:absolute;inset:0;">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                </div>`}
+            <div class="homepage-card-overlay">
+                <div class="homepage-card-title">${escapeHtml(v.name)}</div>
+                <div class="homepage-card-sub">${v.duration_seconds ? formatDuration(v.duration_seconds) : ''} ${v.job_name ? '· ' + escapeHtml(v.job_name) : ''}</div>
+            </div>
+        </div>`;
+    }).join('');
+
+    container.insertAdjacentHTML('afterbegin', html);
+
+    const cards = container.querySelectorAll('.homepage-capture-card');
+    for (let i = 5; i < cards.length; i++) cards[i].remove();
+
+    container.scrollTo({ left: 0, behavior: 'smooth' });
+}
 }
 
 function renderHomepageStats(stats, captures, videos, jobs) {
@@ -7267,41 +7391,7 @@ function renderHomepageVideos(videos) {
     }).join('');
 }
 
-function renderHomepageRandomVideos(videos) {
-    const container = document.getElementById('homepage-random-videos');
-    const completed = videos.filter(v => v.status === 'completed');
 
-    if (!completed.length) {
-        container.innerHTML = `
-            <div class="homepage-empty">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.4">
-                    <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
-                </svg>
-                <p>No timelapses yet</p>
-                <span>Time to create your first timelapse! Set up a capture job and start collecting frames.</span>
-                <button class="btn btn-accent btn-sm" onclick="showCreateJobModal()">+ Create Job</button>
-            </div>`;
-        return;
-    }
-
-    // Shuffle and pick up to 5
-    const shuffled = [...completed].sort(() => Math.random() - 0.5).slice(0, 5);
-
-    container.innerHTML = shuffled.map(v => {
-        const thumbSrc = v.thumbnail_path ? `${API_BASE}/videos/${v.id}/thumbnail` : '';
-        return `
-        <div class="homepage-capture-card" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeHtml(v.name)}">
-            ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy">` :
-                `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-muted);">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-                </div>`}
-            <div class="homepage-card-overlay">
-                <div class="homepage-card-title">${escapeHtml(v.name)}</div>
-                <div class="homepage-card-sub">${v.duration_seconds ? formatDuration(v.duration_seconds) : ''} ${v.job_name ? '· ' + escapeHtml(v.job_name) : ''}</div>
-            </div>
-        </div>`;
-    }).join('');
-}
 
 
 // ===== Capture Comparison =====
