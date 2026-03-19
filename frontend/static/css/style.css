@@ -211,12 +211,12 @@
     --accent-glow: rgba(244, 244, 245, 0.1);
     --secondary-color: #71717a;
     --secondary-hover: #a1a1aa;
-    --success-color: #86efac;
-    --success-hover: #4ade80;
-    --danger-color: #fca5a5;
-    --danger-hover: #f87171;
-    --warning-color: #fcd34d;
-    --warning-hover: #fbbf24;
+    --success-color: #4ade80;
+    --success-hover: #22c55e;
+    --danger-color: #f87171;
+    --danger-hover: #ef4444;
+    --warning-color: #fbbf24;
+    --warning-hover: #f59e0b;
     --purple-mid: #d4d4d8;
     --gradient-primary: linear-gradient(135deg, #a1a1aa, #d4d4d8, #f4f4f5);
     --gradient-accent: linear-gradient(135deg, #a1a1aa, #d4d4d8);
@@ -280,6 +280,67 @@
     --gradient-primary: linear-gradient(135deg, #ea580c, #db2777, #9333ea);
     --gradient-accent: linear-gradient(135deg, #db2777, #9333ea);
     --gradient-glow: linear-gradient(135deg, rgba(234,88,12,0.15), rgba(219,39,119,0.15), rgba(147,51,234,0.15));
+}
+
+/* Ember */
+[data-preset="ember"][data-theme="dark"],
+[data-preset="ember"]:not([data-theme="light"]) {
+    --primary-color: #ef4444;
+    --primary-hover: #dc2626;
+    --primary-glow: rgba(239, 68, 68, 0.12);
+    --primary-text-on: #fff;
+    --accent-color: #f97316;
+    --accent-hover: #ea580c;
+    --accent-glow: rgba(249, 115, 22, 0.15);
+    --secondary-color: #a6877c;
+    --secondary-hover: #94756b;
+    --danger-color: #f43f5e;
+    --danger-hover: #e11d48;
+    --success-color: #f59e0b;
+    --success-hover: #d97706;
+    --warning-color: #fbbf24;
+    --warning-hover: #f59e0b;
+    --purple-mid: #f97316;
+    --gradient-primary: linear-gradient(135deg, #ef4444, #f97316, #fbbf24);
+    --gradient-accent: linear-gradient(135deg, #ef4444, #f97316);
+    --gradient-glow: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(249,115,22,0.15), rgba(251,191,36,0.15));
+    --bg-color: #0c0504;
+    --bg-subtle: #140908;
+    --surface-color: #1a0e0b;
+    --surface-hover: #2a1812;
+    --card-bg: #221410;
+    --text-primary: #f0e4dc;
+    --text-secondary: #b0948a;
+    --border-color: #3a1e16;
+    --border-hover: #4d2a1e;
+}
+[data-preset="ember"][data-theme="light"] {
+    --primary-color: #dc2626;
+    --primary-hover: #b91c1c;
+    --primary-glow: rgba(220, 38, 38, 0.12);
+    --primary-text-on: #fff;
+    --accent-color: #ea580c;
+    --accent-hover: #c2410c;
+    --accent-glow: rgba(234, 88, 12, 0.12);
+    --danger-color: #e11d48;
+    --danger-hover: #be123c;
+    --success-color: #d97706;
+    --success-hover: #b45309;
+    --warning-color: #eab308;
+    --warning-hover: #ca8a04;
+    --purple-mid: #ea580c;
+    --gradient-primary: linear-gradient(135deg, #dc2626, #ea580c, #eab308);
+    --gradient-accent: linear-gradient(135deg, #dc2626, #ea580c);
+    --gradient-glow: linear-gradient(135deg, rgba(220,38,38,0.15), rgba(234,88,12,0.15), rgba(234,179,8,0.15));
+    --bg-color: #fdf5f3;
+    --bg-subtle: #fefaf8;
+    --surface-color: #ffffff;
+    --surface-hover: #fef2ee;
+    --card-bg: #ffffff;
+    --text-primary: #1c0a04;
+    --text-secondary: #78503e;
+    --border-color: #f0d8cc;
+    --border-hover: #e0c0b0;
 }
 
 * {
@@ -943,7 +1004,7 @@ body.detail-view-active {
 
 .btn-warning {
     background: var(--warning-color);
-    color: white;
+    color: #1a1a2e;
 }
 
 .btn-warning:hover {
@@ -952,7 +1013,7 @@ body.detail-view-active {
 
 .btn-success {
     background: var(--success-color);
-    color: white;
+    color: #1a1a2e;
 }
 
 .btn-success:hover {
@@ -2107,7 +2168,7 @@ body.detail-view-active {
 .storage-card-icon svg {
     width: 32px;
     height: 32px;
-    color: var(--accent-purple);
+    color: var(--accent-color);
 }
 
 .storage-card-value {
@@ -2329,17 +2390,17 @@ body.detail-view-active {
 
 .method-get {
     background: var(--success-color);
-    color: white;
+    color: #1a1a2e;
 }
 
 .method-post {
     background: var(--primary-color);
-    color: white;
+    color: var(--primary-text-on);
 }
 
 .method-patch {
     background: var(--warning-color);
-    color: white;
+    color: #1a1a2e;
 }
 
 .method-delete {
@@ -2451,7 +2512,7 @@ body.detail-view-active {
 
 .webhook-variables code {
     background: var(--bg-secondary);
-    color: var(--accent-purple);
+    color: var(--accent-color);
     padding: 0.15rem 0.5rem;
     border-radius: var(--radius-sm);
     font-size: 0.8rem;
@@ -2509,8 +2570,8 @@ body.detail-view-active {
 }
 
 .toggle-switch input:checked + .toggle-slider {
-    background-color: var(--accent-purple);
-    border-color: var(--accent-purple);
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
 }
 
 .toggle-switch input:checked + .toggle-slider:before {
@@ -3352,8 +3413,8 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     border-radius: 999px;
     font-size: 0.85rem; font-weight: 500;
     cursor: pointer;
-    background: var(--accent-purple);
-    color: #fff;
+    background: var(--accent-color);
+    color: var(--primary-text-on);
     border: none;
     transition: opacity 0.15s;
 }
@@ -3394,7 +3455,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     color: var(--text-primary);
 }
 .tag-filter-trigger .tag-filter-count {
-    background: var(--primary-color); color: #fff;
+    background: var(--primary-color); color: var(--primary-text-on);
     font-size: 0.65rem; padding: 0.05rem 0.35rem;
     border-radius: 999px; font-weight: 600;
 }
@@ -3516,7 +3577,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     gap: 0.5rem;
     padding: 0.5rem 0.75rem;
     background: var(--primary-color);
-    color: #fff;
+    color: var(--primary-text-on);
     border-radius: 8px;
     font-size: 0.85rem;
     font-weight: 500;
@@ -3524,7 +3585,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 }
 .compare-mode-banner .btn {
     margin-left: auto;
-    color: #fff;
+    color: var(--primary-text-on);
     border-color: rgba(255,255,255,0.3);
 }
 .compare-mode-banner .btn:hover {
@@ -3561,7 +3622,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 }
 .compare-btn.active {
     background: var(--gradient-glow);
-    color: #fff;
+    color: var(--text-primary);
 }
 .compare-mode .video-gallery-card {
     cursor: pointer;

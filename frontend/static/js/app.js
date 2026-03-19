@@ -17,6 +17,7 @@ const THEME_PRESETS = {
     ocean:   { name: 'Ocean',   colors: ['#38bdf8', '#818cf8', '#a78bfa'] },
     forest:  { name: 'Forest',  colors: ['#4ade80', '#a3e635', '#f59e0b'] },
     sunset:  { name: 'Sunset',  colors: ['#fb923c', '#f472b6', '#c084fc'] },
+    ember:   { name: 'Ember',   colors: ['#ef4444', '#f97316', '#fbbf24'] },
     minimal: { name: 'Minimal', colors: ['#a1a1aa', '#d4d4d8', '#f4f4f5'] },
 };
 
@@ -6582,9 +6583,9 @@ function displayOrphanedResults(data) {
         const typeLabel = group.type === 'both' ? 'Files + DB Records' 
             : group.type === 'database' ? 'DB Records Only' 
             : 'Files Only';
-        const typeBadgeColor = group.type === 'both' ? '#e74c3c' 
-            : group.type === 'database' ? '#3498db' 
-            : '#e67e22';
+        const typeBadgeColor = group.type === 'both' ? 'var(--danger-color)' 
+            : group.type === 'database' ? 'var(--primary-color)' 
+            : 'var(--accent-color)';
         
         let details = '';
         if (group.type === 'filesystem') {
@@ -6607,7 +6608,7 @@ function displayOrphanedResults(data) {
                 <div style="flex: 1; min-width: 0;">
                     <div class="form-row-wrap">
                         <strong>${escapeHtml(group.original_job_name)}</strong>
-                        <span class="text-xs" style="padding: 0.1rem 0.4rem; border-radius: 0.25rem; background: ${typeBadgeColor}; color: white;">${typeLabel}</span>
+                        <span class="text-xs" style="padding: 0.1rem 0.4rem; border-radius: 0.25rem; background: ${typeBadgeColor}; color: var(--primary-text-on);">${typeLabel}</span>
                     </div>
                     <div class="text-sm text-secondary mt-sm">
                         ${details}
