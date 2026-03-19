@@ -657,11 +657,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Navigation & Routing
 const _routeMap = {
-    '/': 'jobs', '/jobs': 'jobs', '/timelapses': 'videos',
+    '/': 'homepage', '/jobs': 'jobs', '/timelapses': 'videos',
     '/captures': 'captures', '/storage': 'storage', '/settings': 'settings',
 };
 const _viewToPath = {
-    'jobs': '/jobs', 'videos': '/timelapses', 'captures': '/captures',
+    'homepage': '/', 'jobs': '/jobs', 'videos': '/timelapses', 'captures': '/captures',
     'storage': '/storage', 'settings': '/settings',
     'job-detail': '/jobs', 'video-detail': '/timelapses',
 };
@@ -675,8 +675,8 @@ function parseRoute(pathname) {
     if (jobMatch) return { view: 'job-detail', id: parseInt(jobMatch[1]) };
     const videoMatch = pathname.match(/^\/timelapses\/(\d+)$/);
     if (videoMatch) return { view: 'video-detail', id: parseInt(videoMatch[1]) };
-    // Unknown route falls back to jobs
-    return { view: 'jobs', id: null };
+    // Unknown route falls back to homepage
+    return { view: 'homepage', id: null };
 }
 
 function handleRoute(pushState = false) {
@@ -739,7 +739,7 @@ function switchView(view, pushState = true) {
         _videoDetailPollInterval = null;
     }
     
-    // Update navigation highlights (Jobs active for job-detail, Timelapses for video-detail)
+    // Update navigation highlights (Jobs active for job-detail, Timelapses for video-detail, none for homepage)
     const navView = (view === 'job-detail') ? 'jobs' : (view === 'video-detail') ? 'videos' : view;
     document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.toggle('active', link.dataset.view === navView);
@@ -762,6 +762,7 @@ function switchView(view, pushState = true) {
     }
     
     // Load data for list views
+    if (view === 'homepage') loadHomepage();
     if (view === 'jobs') loadJobs();
     if (view === 'videos') loadVideos();
     if (view === 'storage') loadStorage();
@@ -7082,6 +7083,150 @@ async function viewJobTimelapses(jobId) {
     }
 }
 
+
+
+// ===== Homepage =====
+async function loadHomepage() {
+    const [stats, captures, videos, jobs] = await Promise.all([
+        apiRequest('/storage/stats'),
+        apiRequest('/captures/', { query: { page: 1, page_size: 5, sort_order: 'desc' } }),
+        apiRequest('/videos/', { query: { limit: 5 } }),
+        apiRequest('/jobs/')
+    ]);
+
+    renderHomepageStats(stats, captures, videos, jobs);
+    renderHomepageCaptures(captures);
+    renderHomepageVideos(videos);
+    renderHomepageJobs(jobs);
+}
+
+function renderHomepageStats(stats, captures, videos, jobs) {
+    const container = document.getElementById('homepage-stats');
+    const activeJobs = jobs.filter(j => j.status === 'running').length;
+    const totalJobs = jobs.length;
+
+    container.innerHTML = `
+        <div class="homepage-stat-card" onclick="navigateTo('/jobs')" title="View jobs">
+            <div class="homepage-stat-value">${totalJobs}</div>
+            <div class="homepage-stat-label">Jobs</div>
+            <div class="homepage-stat-sub">${activeJobs} active</div>
+        </div>
+        <div class="homepage-stat-card" onclick="navigateTo('/captures')" title="View captures">
+            <div class="homepage-stat-value">${stats.captures_total_count.toLocaleString()}</div>
+            <div class="homepage-stat-label">Captures</div>
+            <div class="homepage-stat-sub">${formatBytes(stats.captures_total_size)}</div>
+        </div>
+        <div class="homepage-stat-card" onclick="navigateTo('/timelapses')" title="View timelapses">
+            <div class="homepage-stat-value">${stats.videos_total_count}</div>
+            <div class="homepage-stat-label">Timelapses</div>
+            <div class="homepage-stat-sub">${formatBytes(stats.videos_total_size)}</div>
+        </div>
+        <div class="homepage-stat-card" onclick="navigateTo('/storage')" title="View storage">
+            <div class="homepage-stat-value">${formatBytes(stats.disk_used)}</div>
+            <div class="homepage-stat-label">Storage Used</div>
+            <div class="homepage-stat-sub">${formatBytes(stats.disk_free)} free</div>
+        </div>
+    `;
+}
+
+function renderHomepageCaptures(data) {
+    const container = document.getElementById('homepage-captures');
+    const captures = data.captures || [];
+
+    if (!captures.length) {
+        container.innerHTML = `
+            <div class="homepage-empty">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.4">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
+                </svg>
+                <p>No captures yet</p>
+                <span>Create a job to start capturing images on a schedule</span>
+                <button class="btn btn-accent btn-sm" onclick="navigateTo('/jobs')">Go to Jobs →</button>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = captures.map(c => `
+        <div class="homepage-capture-card" onclick="navigateTo('/captures')" title="${escapeHtml(c.job_name || 'Capture')} · ${formatDateTime(c.captured_at)}">
+            <img src="${API_BASE}/captures/${c.id}/thumbnail" alt="" loading="lazy"
+                 onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22112%22%3E%3Crect width=%22200%22 height=%22112%22 fill=%22%231e293b%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23cbd5e1%22 font-family=%22sans-serif%22%3ENo Preview%3C/text%3E%3C/svg%3E'">
+            <div class="homepage-card-overlay">
+                <div class="homepage-card-title">${escapeHtml(c.job_name || 'Unknown')}</div>
+                <div class="homepage-card-sub">${formatDateTime(c.captured_at)}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderHomepageVideos(videos) {
+    const container = document.getElementById('homepage-videos');
+    const completed = videos.filter(v => v.status === 'completed').slice(0, 5);
+
+    if (!completed.length) {
+        container.innerHTML = `
+            <div class="homepage-empty">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.4">
+                    <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+                </svg>
+                <p>No timelapses yet</p>
+                <span>Build a timelapse from your captures or import existing videos</span>
+                <button class="btn btn-accent btn-sm" onclick="navigateTo('/timelapses')">Go to Timelapses →</button>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = completed.map(v => {
+        const thumbSrc = v.thumbnail_path ? `${API_BASE}/videos/${v.id}/thumbnail` : '';
+        return `
+        <div class="homepage-video-card" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeHtml(v.name)}">
+            <div class="homepage-video-thumb">
+                ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy">` :
+                    `<div class="thumb-placeholder"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></div>`}
+                ${v.duration_seconds ? `<div class="video-gallery-duration">${formatDuration(v.duration_seconds)}</div>` : ''}
+            </div>
+            <div class="homepage-card-info">
+                <div class="homepage-card-title">${escapeHtml(v.name)}</div>
+                <div class="homepage-card-sub">${v.job_name ? escapeHtml(v.job_name) : 'No job'}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderHomepageJobs(jobs) {
+    const container = document.getElementById('homepage-jobs');
+    const active = jobs.filter(j => j.status === 'running').slice(0, 5);
+
+    if (!active.length) {
+        container.innerHTML = `
+            <div class="homepage-empty">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.4">
+                    <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
+                </svg>
+                <p>No active jobs</p>
+                <span>Create a capture job to start building your timelapse library</span>
+                <button class="btn btn-accent btn-sm" onclick="navigateTo('/jobs')">Create a Job →</button>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = active.map(j => {
+        const nextCapture = j.next_capture ? formatDateTime(j.next_capture) : '—';
+        return `
+        <div class="homepage-job-card" onclick="navigateTo('/jobs/${j.id}')">
+            <div class="homepage-job-header">
+                <span class="homepage-job-name">${escapeHtml(j.name)}</span>
+                <span class="job-status running">Running</span>
+            </div>
+            <div class="homepage-job-details">
+                <span>Every ${j.interval_seconds >= 3600 ? Math.round(j.interval_seconds / 3600) + 'h' : j.interval_seconds >= 60 ? Math.round(j.interval_seconds / 60) + 'm' : j.interval_seconds + 's'}</span>
+                <span>·</span>
+                <span>${j.capture_count || 0} captures</span>
+                <span>·</span>
+                <span>Next: ${nextCapture}</span>
+            </div>
+        </div>`;
+    }).join('');
+}
 
 
 // ===== Capture Comparison =====

@@ -27,7 +27,7 @@
     <div class="app-container">
         <!-- Navigation -->
         <nav class="navbar">
-            <div class="nav-brand">
+            <div class="nav-brand" onclick="navigateTo('/')" style="cursor:pointer;" title="Home">
                 <img src="/static/img/chronosnap.png" alt="" class="nav-brand-icon">
                 <h1><span class="brand-bold">chrono</span><span class="brand-light">snap</span></h1>
             </div>
@@ -72,8 +72,36 @@
 
         <!-- Main Content -->
         <main class="main-content">
+            <!-- Homepage View -->
+            <div id="homepage-view" class="view active">
+                <div class="homepage">
+                    <div class="homepage-stats" id="homepage-stats"></div>
+                    <div class="homepage-section">
+                        <div class="homepage-section-header">
+                            <h3>Recent Captures</h3>
+                            <a href="/captures" class="homepage-view-all" onclick="event.preventDefault(); navigateTo('/captures')">View All →</a>
+                        </div>
+                        <div class="homepage-grid" id="homepage-captures"></div>
+                    </div>
+                    <div class="homepage-section">
+                        <div class="homepage-section-header">
+                            <h3>Recent Timelapses</h3>
+                            <a href="/timelapses" class="homepage-view-all" onclick="event.preventDefault(); navigateTo('/timelapses')">View All →</a>
+                        </div>
+                        <div class="homepage-grid" id="homepage-videos"></div>
+                    </div>
+                    <div class="homepage-section">
+                        <div class="homepage-section-header">
+                            <h3>Active Jobs</h3>
+                            <a href="/jobs" class="homepage-view-all" onclick="event.preventDefault(); navigateTo('/jobs')">View All →</a>
+                        </div>
+                        <div class="homepage-grid" id="homepage-jobs"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Jobs View -->
-            <div id="jobs-view" class="view active">
+            <div id="jobs-view" class="view">
                 <div class="view-header">
                     <h2>Jobs</h2>
                     <div style="display:flex;gap:0.5rem;">
