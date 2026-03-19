@@ -151,7 +151,6 @@ async def update_naming_pattern(body: dict):
                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
                 ('default_naming_pattern', pattern, now)
             )
-            conn.commit()
         logger.info(f"Default naming pattern updated to: {pattern}")
         return {'naming_pattern': pattern}
     except Exception as e:

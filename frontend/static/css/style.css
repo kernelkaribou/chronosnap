@@ -699,8 +699,8 @@ body {
 
 .event-item-dot.cat-job { background: var(--primary-color); }
 .event-item-dot.cat-video { background: var(--purple-mid); }
-.event-item-dot.cat-import { background: #34d399; }
-.event-item-dot.cat-export { background: #fbbf24; }
+.event-item-dot.cat-import { background: var(--success-color); }
+.event-item-dot.cat-export { background: var(--warning-color); }
 .event-item-dot.cat-system { background: var(--text-secondary); }
 
 .event-item-content {
@@ -1723,7 +1723,7 @@ body.detail-view-active {
 .overlay-lightbox {
     position: fixed;
     inset: 0;
-    z-index: 10000;
+    z-index: 3000;
     background: rgba(0, 0, 0, 0.9);
     display: flex;
     align-items: center;

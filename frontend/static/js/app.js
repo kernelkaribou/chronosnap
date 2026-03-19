@@ -304,6 +304,12 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+// Escape a string for safe use inside JS string literals within HTML onclick attributes
+function escapeAttr(str) {
+    if (str == null) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/\\/g, '\\\\').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function startEventPolling() {
     fetchEvents();
     _eventPollTimer = setInterval(fetchEvents, 30000);
@@ -1061,7 +1067,7 @@ async function loadJobDetail(jobId) {
                                    style="color: var(--primary-color); text-decoration: none;" title="View captures">
                                     ${job.capture_count}
                                 </a>
-                                <button class="btn-icon" onclick="event.stopPropagation(); manualCapture(${job.id}, '${escapeHtml(job.name)}')" title="Take Snapshot">
+                                <button class="btn-icon" onclick="event.stopPropagation(); manualCapture(${job.id}, '${escapeAttr(job.name)}')" title="Take Snapshot">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
                                         <circle cx="12" cy="13" r="4"></circle>
@@ -1076,7 +1082,7 @@ async function loadJobDetail(jobId) {
                                         <rect x="12" y="2" width="10" height="20" rx="2" fill="currentColor" opacity="0.15" stroke="none"/>
                                     </svg>
                                 </button>
-                                <button class="btn-icon" onclick="event.stopPropagation(); performMaintenanceScan(${job.id}, '${escapeHtml(job.name)}')" title="Sync">
+                                <button class="btn-icon" onclick="event.stopPropagation(); performMaintenanceScan(${job.id}, '${escapeAttr(job.name)}')" title="Sync">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <polyline points="23 4 23 10 17 10"></polyline>
                                         <polyline points="1 20 1 14 7 14"></polyline>
@@ -1096,22 +1102,22 @@ async function loadJobDetail(jobId) {
                             <button id="save-job-btn" class="btn btn-primary" onclick="saveJobChanges(${job.id})" disabled style="width: 100%;">
                                 Save Changes
                             </button>
-                            <button class="btn btn-accent btn-sm" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')" style="width: 100%;">
+                            <button class="btn btn-accent btn-sm" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeAttr(job.name)}')" style="width: 100%;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                                 Build Timelapse
                             </button>
                             <div class="detail-sidebar-actions-row">
                                 ${job.status !== 'completed' ? 
-                                    `<button class="btn-icon" onclick="confirmCompleteJob(${job.id}, '${escapeHtml(job.name)}')" title="Complete Job">
+                                    `<button class="btn-icon" onclick="confirmCompleteJob(${job.id}, '${escapeAttr(job.name)}')" title="Complete Job">
                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                                     </button>` : ''
                                 }
                                 ${job.status === 'active' || job.status === 'sleeping' ? 
-                                    `<button class="btn-icon" onclick="confirmDisableJob(${job.id}, '${escapeHtml(job.name)}')" title="Disable Job">
+                                    `<button class="btn-icon" onclick="confirmDisableJob(${job.id}, '${escapeAttr(job.name)}')" title="Disable Job">
                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></svg>
                                     </button>` :
                                     job.status === 'disabled' ?
-                                    `<button class="btn-icon" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')" title="Enable Job">
+                                    `<button class="btn-icon" onclick="confirmEnableJob(${job.id}, '${escapeAttr(job.name)}')" title="Enable Job">
                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
                                     </button>` : ''
                                 }
@@ -1121,12 +1127,12 @@ async function loadJobDetail(jobId) {
                                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                                     </svg>
                                 </button>
-                                <button class="btn-icon" onclick="exportJob(${job.id}, '${escapeHtml(job.name)}')" title="Export Job">
+                                <button class="btn-icon" onclick="exportJob(${job.id}, '${escapeAttr(job.name)}')" title="Export Job">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
                                     </svg>
                                 </button>
-                                <button class="btn-icon" onclick="deleteJob(${job.id}, '${escapeHtml(job.name)}')" title="Delete Job">
+                                <button class="btn-icon" onclick="deleteJob(${job.id}, '${escapeAttr(job.name)}')" title="Delete Job">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <polyline points="3 6 5 6 21 6"></polyline>
                                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -2426,12 +2432,12 @@ async function loadVideoDetail(videoId) {
         // Build actions
         let actionsHtml = '';
         if (video.status === 'processing') {
-            actionsHtml += `<button class="btn btn-danger btn-sm" onclick="cancelVideoBuild(${video.id}, '${escapeHtml(video.name)}')">Cancel</button>`;
+            actionsHtml += `<button class="btn btn-danger btn-sm" onclick="cancelVideoBuild(${video.id}, '${escapeAttr(video.name)}')">Cancel</button>`;
         } else {
             if (video.status === 'completed') {
                 actionsHtml += `<a href="${API_BASE}/videos/${video.id}/download" class="btn btn-primary btn-sm">Download</a>`;
             }
-            actionsHtml += `<button class="btn btn-danger btn-sm" onclick="deleteVideoFromDetail(${video.id}, '${escapeHtml(video.name)}')">Delete</button>`;
+            actionsHtml += `<button class="btn btn-danger btn-sm" onclick="deleteVideoFromDetail(${video.id}, '${escapeAttr(video.name)}')">Delete</button>`;
             if (video.status === 'completed') {
                 actionsHtml += shareToggleHTML(video.id, video.share_token || null);
             }
@@ -3097,6 +3103,7 @@ async function populateVideoFormFromJob(jobId, jobName) {
         
         // Set up event listeners for duration updates when time range changes
         const updateDuration = debounce(updateVideoDurationEstimate, 300);
+        window._videoModalListeners = updateDuration;
         
         [startInput, endInput].forEach(input => {
             if (input) {
@@ -4090,7 +4097,7 @@ async function loadImportBrowse(path) {
                          e.type === 'archive' ? '📦' : '📄';
             const sizeStr = e.type === 'folder' ? '' : formatBytes(e.size);
             const clickAction = e.type === 'folder'
-                ? `loadImportBrowse('${escapeHtml(_importBrowsePath + '/' + e.name)}')`
+                ? `loadImportBrowse('${escapeAttr(_importBrowsePath + '/' + e.name)}')`
                 : '';
             return `<div class="import-browse-item" ${clickAction ? `onclick="${clickAction}"` : ''}>
                 <span class="browse-icon">${icon}</span>
@@ -5130,7 +5137,7 @@ function displayMaintenanceResults(jobId, jobName) {
                 ${data.missing_count > 0 || data.orphaned_count > 0 ? `
                 <div class="modal-actions">
                     <button class="btn btn-secondary" onclick="closeMaintenance()">Cancel</button>
-                    <button class="btn btn-primary" onclick="confirmMaintenanceSubmit(${jobId}, '${escapeHtml(jobName)}')">
+                    <button class="btn btn-primary" onclick="confirmMaintenanceSubmit(${jobId}, '${escapeAttr(jobName)}')">
                         Submit
                     </button>
                 </div>
@@ -6079,7 +6086,7 @@ function renderTagList() {
                 <button onclick="editTagInline(${tag.id})" title="Edit" class="tag-action-btn">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                 </button>
-                <button onclick="deleteTag(${tag.id}, '${escapeHtml(tag.name)}')" title="Delete" class="tag-action-btn tag-action-delete">
+                <button onclick="deleteTag(${tag.id}, '${escapeAttr(tag.name)}')" title="Delete" class="tag-action-btn tag-action-delete">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
                 </button>
             </span>
@@ -6223,10 +6230,13 @@ function showInlineTagCreate(containerId) {
     addBtn.onclick = () => submitInlineTag(containerId);
     cancelBtn.onclick = () => cancelInlineTagCreate(containerId);
     input.focus();
-    input.addEventListener('keydown', e => {
-        if (e.key === 'Enter') submitInlineTag(containerId);
-        if (e.key === 'Escape') cancelInlineTagCreate(containerId);
-    });
+    if (!input._keydownHandler) {
+        input._keydownHandler = e => {
+            if (e.key === 'Enter') submitInlineTag(containerId);
+            if (e.key === 'Escape') cancelInlineTagCreate(containerId);
+        };
+        input.addEventListener('keydown', input._keydownHandler);
+    }
 }
 
 function cancelInlineTagCreate(containerId) {
@@ -6306,15 +6316,17 @@ function renderTagFilter(wrapId, onChange) {
 
     populateTagFilterList(wrapId);
 
-    // Close on outside click
-    document.addEventListener('click', (e) => {
+    // Close on outside click (remove previous handler to prevent leaks)
+    if (wrap._outsideClickHandler) document.removeEventListener('click', wrap._outsideClickHandler);
+    wrap._outsideClickHandler = (e) => {
         if (!wrap.contains(e.target)) {
             const dd = document.getElementById(`${wrapId}-dropdown`);
             if (dd) dd.classList.remove('open');
             const trigger = wrap.querySelector('.tag-filter-trigger');
             if (trigger) trigger.classList.remove('active');
         }
-    });
+    };
+    document.addEventListener('click', wrap._outsideClickHandler);
 }
 
 function populateTagFilterList(wrapId) {
@@ -6441,14 +6453,16 @@ function renderStatusFilter(wrapId, onChange) {
         </div>
     `;
 
-    document.addEventListener('click', (e) => {
+    if (wrap._outsideClickHandler) document.removeEventListener('click', wrap._outsideClickHandler);
+    wrap._outsideClickHandler = (e) => {
         if (!wrap.contains(e.target)) {
             const dd = document.getElementById(`${wrapId}-dropdown`);
             if (dd) dd.classList.remove('open');
             const trigger = wrap.querySelector('.tag-filter-trigger');
             if (trigger) trigger.classList.remove('active');
         }
-    });
+    };
+    document.addEventListener('click', wrap._outsideClickHandler);
 }
 
 function toggleStatusFilterDropdown(wrapId) {
@@ -6656,10 +6670,10 @@ function displayOrphanedResults(data) {
         
         // Build cleanup params based on type
         const cleanupArg = group.type === 'filesystem' 
-            ? `'fs', '${escapeHtml(group.folder_path)}', null`
+            ? `'fs', '${escapeAttr(group.folder_path)}', null`
             : group.type === 'database'
             ? `'db', null, ${group.original_job_id}`
-            : `'both', '${escapeHtml(group.folder_path)}', ${group.original_job_id}`;
+            : `'both', '${escapeAttr(group.folder_path)}', ${group.original_job_id}`;
         
         return `
             <div class="flex-between" style="padding: 0.75rem; background: var(--bg-color); border-radius: var(--radius-sm); margin-bottom: 0.5rem;">
@@ -6673,7 +6687,7 @@ function displayOrphanedResults(data) {
                     </div>
                 </div>
                 <button class="btn btn-danger btn-sm" style="white-space: nowrap; margin-left: 0.5rem;" 
-                    onclick="deleteOrphanedGroup(${cleanupArg}, '${escapeHtml(group.original_job_name)}')">
+                    onclick="deleteOrphanedGroup(${cleanupArg}, '${escapeAttr(group.original_job_name)}')">
                     Delete
                 </button>
             </div>
