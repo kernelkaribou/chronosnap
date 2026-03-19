@@ -1,4 +1,8 @@
-# ChronoSnap
+<p align="center">
+  <img src="frontend/static/img/chronosnap.png" alt="ChronoSnap" width="120">
+</p>
+<h1 align="center">ChronoSnap</h1>
+<p align="center"><em>Timelapse Manager</em></p>
 
 A self-hosted timelapse management application that automates the capture, organization, and video creation of timelapse projects. Configure a capture source, set a schedule, and let it run -- whether that is a few hours or an entire year.
 
@@ -12,6 +16,32 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 - Automate a 3D print timelapse by capturing at regular intervals during a print job
 - Import a batch of photos you already took and turn them into a timelapse video
 - ...and more
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+  - [Quick Start](#quick-start)
+  - [Docker Compose Configuration](#docker-compose-configuration)
+  - [Volumes](#volumes)
+  - [Environment Variables](#environment-variables)
+  - [Resource Limits](#resource-limits)
+- [Capture Sources](#capture-sources)
+  - [Network Streams (RTSP / HTTP)](#network-streams-rtsp--http)
+  - [Local Cameras](#local-cameras)
+- [Scheduling Guides](#scheduling-guides)
+  - [Short-Term Capture](#short-term-capture-hours-to-days)
+  - [Long-Term Capture](#long-term-capture-weeks-to-months)
+  - [Daily Snapshot Over Time](#daily-snapshot-over-time-months-to-years)
+- [Technical Overview](#technical-overview)
+  - [Architecture](#architecture)
+  - [Data Storage](#data-storage)
+  - [Security and Privacy](#security-and-privacy)
+  - [API](#api)
+- [Considerations](#considerations)
+- [Technology Stack](#technology-stack)
 
 ---
 
@@ -149,23 +179,23 @@ services:
 
 ### Volumes
 
-| Path | Purpose | Required |
-|------|---------|----------|
-| `/captures` | Stored capture images, organized by job | Yes |
-| `/timelapses` | Built timelapse videos and thumbnails | Yes |
-| `/app/data` | SQLite database and application settings | Yes |
-| `/imports` | Server-side directory for bulk imports | No |
+| Container Path | Purpose |
+|----------------|---------|
+| `/captures` | Stored capture images, organized by job |
+| `/timelapses` | Built timelapse videos and thumbnails |
+| `/app/data` | SQLite database and application settings |
+| `/imports` | Server-side directory for bulk imports |
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PUID` | `0` | User ID for file ownership. Set to match your host user. |
-| `PGID` | `0` | Group ID for file ownership. Set to match your host user. |
-| `TZ` | `Etc/UTC` | Timezone for scheduling and timestamps. Use a valid tz identifier. |
-| `LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
-| `PORT` | `8080` | Port the application listens on inside the container. |
-| `FFMPEG_TIMEOUT` | `10` | Timeout in seconds for ffmpeg frame capture operations. |
+| Variable | Default | Required | Description |
+|----------|---------|----------|-------------|
+| `PUID` | `0` | No | User ID for file ownership. Set to match your host user. |
+| `PGID` | `0` | No | Group ID for file ownership. Set to match your host user. |
+| `TZ` | `Etc/UTC` | Recommended | Timezone for scheduling and timestamps. Use a valid tz identifier. |
+| `LOG_LEVEL` | `INFO` | No | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
+| `PORT` | `8080` | No | Port the application listens on inside the container. |
+| `FFMPEG_TIMEOUT` | `10` | No | Timeout in seconds for ffmpeg frame capture operations. |
 
 ### Resource Limits
 
@@ -190,7 +220,7 @@ rtsps://10.0.10.1:7441/your-stream-token
 
 ```
 http://192.168.1.50:8080/snapshot.jpg
-https://radar.weather.gov/ridge/standard/CONUS_loop.gif
+https://radar.weather.gov/ridge/standard/CONUS_0.gif
 ```
 
 When creating a job, use the "Test URL" button to verify the source is reachable and see a preview of what will be captured.
@@ -225,7 +255,36 @@ services:
     # - /dev/vchiq:/dev/vchiq
 ```
 
-For Raspberry Pi CSI cameras using `libcamera`, additional library mounts may be needed. Refer to your Pi's libcamera documentation for the shared library paths.
+For Raspberry Pi CSI cameras, ChronoSnap uses `rpicam-apps` (the current Raspberry Pi camera stack, which replaced the older `libcamera-apps`). Additional device nodes and shared library mounts may be needed depending on your Pi model and OS version. On a typical Pi 4 or Pi 5 running Raspberry Pi OS:
+
+```yaml
+services:
+  timelapse-manager:
+    devices:
+      - /dev/video0:/dev/video0
+      - /dev/vchiq:/dev/vchiq         # VideoCore interface
+    volumes:
+      # Standard mounts:
+      - ./captures:/captures
+      - ./timelapses:/timelapses
+      - ./data:/app/data
+      # rpicam shared libraries (paths may vary by OS):
+      - /usr/lib/aarch64-linux-gnu/libcamera:/usr/lib/aarch64-linux-gnu/libcamera:ro
+      - /usr/lib/aarch64-linux-gnu/rpicam-apps:/usr/lib/aarch64-linux-gnu/rpicam-apps:ro
+```
+
+You can verify the camera works on the host before configuring Docker:
+
+```bash
+# List detected cameras
+rpicam-hello --list-cameras
+
+# Test a capture
+rpicam-still -o test.jpg
+
+# Find required shared libraries
+ldd $(which rpicam-still)
+```
 
 **Step 3: Create the job**
 
