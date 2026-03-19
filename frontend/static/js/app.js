@@ -3831,6 +3831,8 @@ function resetImportModal() {
     document.getElementById('import-staging-preview').style.display = 'none';
     document.getElementById('import-upload-progress').style.display = 'none';
     document.getElementById('import-folder-input').value = '';
+    const fileInput = document.getElementById('import-file-input');
+    if (fileInput) fileInput.value = '';
     document.getElementById('import-job-name').value = '';
     const metaBanner = document.getElementById('import-export-metadata');
     metaBanner.style.display = 'none';
