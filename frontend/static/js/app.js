@@ -310,6 +310,14 @@ function escapeAttr(str) {
     return String(str).replace(/&/g, '&amp;').replace(/\\/g, '\\\\').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function detectStreamType(url) {
+    if (!url) return 'http';
+    if (url.startsWith('/dev/video')) return 'device';
+    const lower = url.toLowerCase();
+    if (lower.startsWith('rtsp://') || lower.startsWith('rtsps://')) return 'rtsp';
+    return 'http';
+}
+
 function startEventPolling() {
     fetchEvents();
     _eventPollTimer = setInterval(fetchEvents, 30000);
@@ -1435,7 +1443,7 @@ async function createJob(event) {
     }
     
     // Determine source URL and stream type based on source type toggle
-    let jobUrl, stream_type;
+    let jobUrl;
     const warningThresholdVal = values.warning_threshold || 3;
     if (_createSourceType === 'device') {
         jobUrl = document.getElementById('device_path').value;
@@ -1443,15 +1451,14 @@ async function createJob(event) {
             showNotification('Please select a camera device', 'error');
             return;
         }
-        stream_type = 'device';
     } else {
         jobUrl = values.job_url;
         if (!jobUrl) {
             showNotification('Please enter a stream URL', 'error');
             return;
         }
-        stream_type = jobUrl.toLowerCase().startsWith('rtsp://') || jobUrl.toLowerCase().startsWith('rtsps://') ? 'rtsp' : 'http';
     }
+    const stream_type = detectStreamType(jobUrl);
     
     // Validate dates
     const startDate = new Date(values.start_datetime);
@@ -1694,14 +1701,7 @@ async function updateJobUrl(jobId) {
         return;
     }
     
-    let stream_type;
-    if (url.startsWith('/dev/video')) {
-        stream_type = 'device';
-    } else if (url.toLowerCase().startsWith('rtsp://') || url.toLowerCase().startsWith('rtsps://')) {
-        stream_type = 'rtsp';
-    } else {
-        stream_type = 'http';
-    }
+    let stream_type = detectStreamType(url);
     
     try {
         await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { url, stream_type } });
@@ -1807,14 +1807,7 @@ async function saveJobChanges(jobId) {
     }
     
     // Detect stream type from URL
-    let stream_type;
-    if (url.startsWith('/dev/video')) {
-        stream_type = 'device';
-    } else if (url.toLowerCase().startsWith('rtsp://') || url.toLowerCase().startsWith('rtsps://')) {
-        stream_type = 'rtsp';
-    } else {
-        stream_type = 'http';
-    }
+    let stream_type = detectStreamType(url);
     
     // Build update payload
     const updateData = {
@@ -1973,14 +1966,13 @@ async function previewStream(urlInputId, resultDivId, qualityId, resolutionId, i
     }
     
     // Determine stream type for the query
-    const streamType = url.startsWith('/dev/video') ? 'device' : null;
+    const streamType = detectStreamType(url);
     
     resultDiv.innerHTML = '<div style="display:flex;justify-content:center;padding:2rem 0;"><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;padding:0.75rem 1.5rem;display:flex;align-items:center;gap:0.5rem;"><span class="spinner" style="width:14px;height:14px;border-width:2px;"></span><span style="color:var(--text-secondary);font-size:0.85rem;">Loading preview</span></div></div>';
     resultDiv.className = 'test-result';
     
     try {
-        const query = { url };
-        if (streamType) query.stream_type = streamType;
+        const query = { url, stream_type: streamType };
         if (qualityId) {
             const qEl = document.getElementById(qualityId);
             if (qEl) query.quality = qEl.value;
@@ -2885,6 +2877,7 @@ async function showProcessVideoModal(jobId, jobName) {
         document.getElementById('video-duration-estimate').innerHTML = '<span style="color: var(--text-secondary); font-size: 0.85rem;">No job selected</span>';
         document.getElementById('available-range-info').style.display = 'none';
         // Reset text overlay
+        resetOverlayPreview();
         const buildOverlayContainer = document.getElementById('build-overlay-container');
         if (buildOverlayContainer) buildOverlayContainer.innerHTML = '';
         window._overlayPreviewCaptureId = null;
@@ -3074,19 +3067,8 @@ async function populateVideoFormFromJob(jobId, jobName) {
         const rangeSpan = document.getElementById('capture-time-range');
         
         if (rangeInfo && rangeSpan) {
-            const use12 = getTimeFormat() === '12';
-            const formatOptions = { 
-                year: 'numeric', 
-                month: '2-digit', 
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: use12
-            };
-            const locale = use12 ? 'en-US' : 'en-CA';
-            const firstFormatted = firstDate.toLocaleString(locale, formatOptions);
-            const lastFormatted = lastDate.toLocaleString(locale, formatOptions);
+            const firstFormatted = formatDateTime(firstDate.toISOString());
+            const lastFormatted = formatDateTime(lastDate.toISOString());
             rangeSpan.textContent = `${firstFormatted} - ${lastFormatted}`;
             rangeInfo.style.display = 'block';
         }
@@ -4682,35 +4664,25 @@ function toISOStringForQuery(localDateTimeString, isEndTime) {
     return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
 }
 
-function formatDateTime(isoString) {
+function formatDateTime(isoString, { showSeconds = true } = {}) {
     if (!isoString) return 'N/A';
     const date = new Date(isoString);
     if (isNaN(date.getTime())) return isoString;
     const use12 = getTimeFormat() === '12';
-    return date.toLocaleString(use12 ? 'en-US' : 'en-CA', { 
+    const opts = { 
         year: 'numeric', 
         month: '2-digit', 
         day: '2-digit',
         hour: '2-digit', 
         minute: '2-digit', 
-        second: '2-digit',
         hour12: use12 
-    });
+    };
+    if (showSeconds) opts.second = '2-digit';
+    return date.toLocaleString(use12 ? 'en-US' : 'en-CA', opts);
 }
 
 function formatDateTimeNoSeconds(isoString) {
-    if (!isoString) return 'N/A';
-    const date = new Date(isoString);
-    if (isNaN(date.getTime())) return isoString;
-    const use12 = getTimeFormat() === '12';
-    return date.toLocaleString(use12 ? 'en-US' : 'en-CA', { 
-        year: 'numeric', 
-        month: '2-digit', 
-        day: '2-digit',
-        hour: '2-digit', 
-        minute: '2-digit', 
-        hour12: use12 
-    });
+    return formatDateTime(isoString, { showSeconds: false });
 }
 
 /** Convert a datetime-local input value to ISO with local timezone offset */
@@ -7217,34 +7189,48 @@ async function pollHomepageUpdates() {
     }
 }
 
+const PLACEHOLDER_IMG_SVG = "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22112%22%3E%3Crect width=%22200%22 height=%22112%22 fill=%22%231e293b%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23cbd5e1%22 font-family=%22sans-serif%22%3ENo Preview%3C/text%3E%3C/svg%3E";
+const VIDEO_PLACEHOLDER_SVG = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>';
+
+function buildCaptureCardHtml(c, extraClass) {
+    return `
+        <div class="homepage-capture-card${extraClass ? ' ' + extraClass : ''}" onclick="navigateTo('/captures'); setTimeout(() => showCapturePreview(${c.id}), 300)" title="${escapeHtml(c.job_name || 'Capture')} · ${formatDateTime(c.captured_at)}">
+            <img src="${API_BASE}/captures/${c.id}/thumbnail" alt="" loading="lazy" onerror="this.src='${PLACEHOLDER_IMG_SVG}'">
+            <div class="homepage-card-overlay">
+                <div class="homepage-card-title">${escapeHtml(c.job_name || 'Unknown')}</div>
+                <div class="homepage-card-sub">${formatDateTime(c.captured_at)}</div>
+            </div>
+        </div>`;
+}
+
+function buildVideoCardHtml(v, extraClass) {
+    const thumbSrc = v.thumbnail_path ? `${API_BASE}/videos/${v.id}/thumbnail` : '';
+    return `
+        <div class="homepage-capture-card${extraClass ? ' ' + extraClass : ''}" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeHtml(v.name)}">
+            ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy">` :
+                `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-muted);position:absolute;inset:0;">
+                    ${VIDEO_PLACEHOLDER_SVG}
+                </div>`}
+            <div class="homepage-card-overlay">
+                <div class="homepage-card-title">${escapeHtml(v.name)}</div>
+                <div class="homepage-card-sub">${v.duration_seconds ? formatDuration(v.duration_seconds) : ''} ${v.job_name ? '· ' + escapeHtml(v.job_name) : ''}</div>
+            </div>
+        </div>`;
+}
+
 function prependHomepageCaptures(newCaptures, allRecent) {
     const container = document.getElementById('homepage-captures');
 
-    // If container was showing empty state, re-render fully
     if (container.querySelector('.homepage-empty')) {
         renderHomepageCaptures({ captures: allRecent });
         return;
     }
 
-    // Prepend new cards with slide-in animation
-    const html = newCaptures.map(c => `
-        <div class="homepage-capture-card homepage-card-new" onclick="navigateTo('/captures'); setTimeout(() => showCapturePreview(${c.id}), 300)" title="${escapeHtml(c.job_name || 'Capture')} · ${formatDateTime(c.captured_at)}">
-            <img src="${API_BASE}/captures/${c.id}/thumbnail" alt="" loading="lazy"
-                 onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22112%22%3E%3Crect width=%22200%22 height=%22112%22 fill=%22%231e293b%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23cbd5e1%22 font-family=%22sans-serif%22%3ENo Preview%3C/text%3E%3C/svg%3E'">
-            <div class="homepage-card-overlay">
-                <div class="homepage-card-title">${escapeHtml(c.job_name || 'Unknown')}</div>
-                <div class="homepage-card-sub">${formatDateTime(c.captured_at)}</div>
-            </div>
-        </div>
-    `).join('');
+    container.insertAdjacentHTML('afterbegin', newCaptures.map(c => buildCaptureCardHtml(c, 'homepage-card-new')).join(''));
 
-    container.insertAdjacentHTML('afterbegin', html);
-
-    // Trim to 5
     const cards = container.querySelectorAll('.homepage-capture-card');
     for (let i = 5; i < cards.length; i++) cards[i].remove();
 
-    // Scroll to start
     container.scrollTo({ left: 0, behavior: 'smooth' });
 }
 
@@ -7256,22 +7242,7 @@ function prependHomepageVideos(newVideos, recentVideos) {
         return;
     }
 
-    const html = newVideos.map(v => {
-        const thumbSrc = v.thumbnail_path ? `${API_BASE}/videos/${v.id}/thumbnail` : '';
-        return `
-        <div class="homepage-capture-card homepage-card-new" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeHtml(v.name)}">
-            ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy">` :
-                `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-muted);position:absolute;inset:0;">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-                </div>`}
-            <div class="homepage-card-overlay">
-                <div class="homepage-card-title">${escapeHtml(v.name)}</div>
-                <div class="homepage-card-sub">${v.duration_seconds ? formatDuration(v.duration_seconds) : ''} ${v.job_name ? '· ' + escapeHtml(v.job_name) : ''}</div>
-            </div>
-        </div>`;
-    }).join('');
-
-    container.insertAdjacentHTML('afterbegin', html);
+    container.insertAdjacentHTML('afterbegin', newVideos.map(v => buildVideoCardHtml(v, 'homepage-card-new')).join(''));
 
     const cards = container.querySelectorAll('.homepage-capture-card');
     for (let i = 5; i < cards.length; i++) cards[i].remove();
@@ -7372,8 +7343,7 @@ function renderHomepageSpotlight(captureData, allVideos) {
         captureCard = `
             <div class="homepage-spotlight-card" onclick="navigateTo('/captures'); setTimeout(() => showCapturePreview(${c.id}), 300)" title="${escapeHtml(c.job_name || 'Capture')} · ${formatDateTime(c.captured_at)}">
                 <div class="homepage-spotlight-badge">Capture</div>
-                <img src="${API_BASE}/captures/${c.id}/thumbnail" alt="" loading="lazy"
-                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22250%22%3E%3Crect width=%22400%22 height=%22250%22 fill=%22%231e293b%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23cbd5e1%22 font-family=%22sans-serif%22%3ENo Preview%3C/text%3E%3C/svg%3E'">
+                <img src="${API_BASE}/captures/${c.id}/thumbnail" alt="" loading="lazy" onerror="this.src='${PLACEHOLDER_IMG_SVG}'">
                 <div class="homepage-card-overlay">
                     <div class="homepage-card-title">${escapeHtml(c.job_name || 'Unknown')}</div>
                     <div class="homepage-card-sub">${formatDateTime(c.captured_at)}</div>
@@ -7437,16 +7407,7 @@ function renderHomepageCaptures(data) {
         return;
     }
 
-    container.innerHTML = captures.map(c => `
-        <div class="homepage-capture-card" onclick="navigateTo('/captures'); setTimeout(() => showCapturePreview(${c.id}), 300)" title="${escapeHtml(c.job_name || 'Capture')} · ${formatDateTime(c.captured_at)}">
-            <img src="${API_BASE}/captures/${c.id}/thumbnail" alt="" loading="lazy"
-                 onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22112%22%3E%3Crect width=%22200%22 height=%22112%22 fill=%22%231e293b%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23cbd5e1%22 font-family=%22sans-serif%22%3ENo Preview%3C/text%3E%3C/svg%3E'">
-            <div class="homepage-card-overlay">
-                <div class="homepage-card-title">${escapeHtml(c.job_name || 'Unknown')}</div>
-                <div class="homepage-card-sub">${formatDateTime(c.captured_at)}</div>
-            </div>
-        </div>
-    `).join('');
+    container.innerHTML = captures.map(c => buildCaptureCardHtml(c)).join('');
 }
 
 function renderHomepageVideos(videos) {
@@ -7466,20 +7427,7 @@ function renderHomepageVideos(videos) {
         return;
     }
 
-    container.innerHTML = completed.map(v => {
-        const thumbSrc = v.thumbnail_path ? `${API_BASE}/videos/${v.id}/thumbnail` : '';
-        return `
-        <div class="homepage-capture-card" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeHtml(v.name)}">
-            ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy">` :
-                `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-muted);">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-                </div>`}
-            <div class="homepage-card-overlay">
-                <div class="homepage-card-title">${escapeHtml(v.name)}</div>
-                <div class="homepage-card-sub">${v.duration_seconds ? formatDuration(v.duration_seconds) : ''} ${v.job_name ? '· ' + escapeHtml(v.job_name) : ''}</div>
-            </div>
-        </div>`;
-    }).join('');
+    container.innerHTML = completed.map(v => buildVideoCardHtml(v)).join('');
 }
 
 
