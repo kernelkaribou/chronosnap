@@ -153,6 +153,9 @@ async def text_overlay_preview(request: TextOverlayPreviewRequest):
         'date': now.strftime('%Y-%m-%d'),
         'time': now.strftime('%H:%M:%S'),
         'datetime': now.strftime('%Y-%m-%d %H:%M:%S'),
+        'month': now.strftime('%m'),
+        'day': now.strftime('%d'),
+        'hour': now.strftime('%H'),
         'frame': '1',
         'total_frames': '100',
     }

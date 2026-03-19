@@ -93,6 +93,9 @@ def resolve_template(text: str, variables: Dict[str, str]) -> str:
         {date}          - Capture date (YYYY-MM-DD)
         {time}          - Capture time (HH:MM:SS)
         {datetime}      - Capture date and time
+        {month}         - Capture month (01-12)
+        {day}           - Capture day (01-31)
+        {hour}          - Capture hour, 24-hour (00-23)
         {frame}         - Current frame number
         {total_frames}  - Total frame count
     """
@@ -313,10 +316,16 @@ def process_frames_with_overlay(
                 variables['date'] = dt.strftime('%Y-%m-%d')
                 variables['time'] = dt.strftime('%H:%M:%S')
                 variables['datetime'] = dt.strftime('%Y-%m-%d %H:%M:%S')
+                variables['month'] = dt.strftime('%m')
+                variables['day'] = dt.strftime('%d')
+                variables['hour'] = dt.strftime('%H')
             except Exception:
                 variables['date'] = ''
                 variables['time'] = ''
                 variables['datetime'] = ''
+                variables['month'] = ''
+                variables['day'] = ''
+                variables['hour'] = ''
 
         out_name = f"frame_{i:06d}.jpg"
         out_path = os.path.join(temp_dir, out_name)
@@ -351,5 +360,5 @@ def process_frames_with_overlay(
 
 def _has_dynamic_variables(text: str) -> bool:
     """Check if text contains per-frame dynamic variables."""
-    dynamic_vars = ['{date}', '{time}', '{datetime}', '{frame}', '{total_frames}']
+    dynamic_vars = ['{date}', '{time}', '{datetime}', '{month}', '{day}', '{hour}', '{frame}', '{total_frames}']
     return any(v in text for v in dynamic_vars)

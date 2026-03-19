@@ -438,7 +438,7 @@
                     <!-- Default Naming Pattern Section -->
                     <div class="settings-section">
                         <h3>Default Naming Pattern</h3>
-                        <p class="settings-description">Default file naming pattern for new capture jobs. Available tokens: <code>{job_name}</code>, <code>{count}</code>, <code>{timestamp}</code>, <code>{num}</code></p>
+                        <p class="settings-description">Default file naming pattern for new capture jobs. Available tokens: <code>{job_name}</code>, <code>{count}</code>, <code>{timestamp}</code>, <code>{month}</code>, <code>{day}</code>, <code>{hour}</code>, <code>{num}</code></p>
                         <div style="display:flex;gap:0.75rem;align-items:center;margin-top:0.75rem;">
                             <input type="text" id="default-naming-pattern" class="form-control" style="max-width:20rem;" placeholder="{job_name}_{count}_{timestamp}">
                             <button class="btn btn-sm btn-accent" onclick="saveNamingPattern()">Save</button>
@@ -756,7 +756,7 @@
                             <label>Naming Pattern</label>
                             <input type="text" id="naming_pattern" class="form-control" oninput="updateNamingPreview()">
                             <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.25rem;display:flex;align-items:baseline;gap:0.5rem;flex-wrap:wrap;">
-                                <span>Variables: <code>{job_name}</code> <code>{count}</code> <code>{timestamp}</code></span>
+                                <span>Variables: <code>{job_name}</code> <code>{count}</code> <code>{timestamp}</code> <code>{month}</code> <code>{day}</code> <code>{hour}</code></span>
                                 <span id="naming-preview" style="font-family:monospace;"></span>
                             </div>
                         </div>

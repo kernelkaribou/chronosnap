@@ -3297,7 +3297,7 @@ function generateOverlayHTML(prefix, opts = {}) {
                             <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr} style="margin-top:10px; margin-left:6px;">
                         </div>
                     </div>
-                    <small style="color: var(--text-secondary); font-size:0.6rem;"><code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code></small>
+                    <small style="color: var(--text-secondary); font-size:0.6rem;"><code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{month}</code> <code>{day}</code> <code>{hour}</code> <code>{frame}</code></small>
                     <div style="display:flex; gap:0.3rem; align-items:center;">
                         <span style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">Text:</span>
                         <input type="color" id="${prefix}-overlay-color" value="#FFFFFF" style="border:none;padding:0;height:18px;width:18px;border-radius:50%;cursor:pointer;background:none;"${inputEvent}>
@@ -4389,11 +4389,17 @@ function updateNamingPreview() {
     const now = new Date();
     const ts = now.getFullYear() + (now.getMonth()+1+'').padStart(2,'0') + (now.getDate()+'').padStart(2,'0')
         + '_' + (now.getHours()+'').padStart(2,'0') + (now.getMinutes()+'').padStart(2,'0') + (now.getSeconds()+'').padStart(2,'0');
+    const month = (now.getMonth()+1+'').padStart(2,'0');
+    const day = (now.getDate()+'').padStart(2,'0');
+    const hour = (now.getHours()+'').padStart(2,'0');
     const example = pattern
         .replace('{job_name}', jobName)
         .replace('{count}', '000001')
         .replace(/\{num(?::0?(\d+)d)?\}/, '000001')
-        .replace('{timestamp}', ts);
+        .replace('{timestamp}', ts)
+        .replace('{month}', month)
+        .replace('{day}', day)
+        .replace('{hour}', hour);
     const el = document.getElementById('naming-preview');
     if (el) el.textContent = `Example: ${example}.jpg`;
 }

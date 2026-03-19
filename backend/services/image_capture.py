@@ -70,7 +70,10 @@ def capture_image(job: Dict[str, Any]) -> tuple[bool, Optional[str]]:
             job_name=job['name'],
             num=count_val,
             timestamp=timestamp,
-            created_timestamp=timestamp
+            created_timestamp=timestamp,
+            month=now.strftime('%m'),
+            day=now.strftime('%d'),
+            hour=now.strftime('%H'),
         )
         filename += ".jpg"
         
