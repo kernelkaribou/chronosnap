@@ -32,5 +32,10 @@ fi
 # Set ownership of directories (ignore errors for NFS/read-only mounts)
 chown -R "$PUID:$PGID" /app/data /captures /timelapses /imports 2>/dev/null || true
 
+# Add appuser to the video group for V4L2 device access
+if getent group video > /dev/null 2>&1; then
+    usermod -aG video appuser 2>/dev/null || true
+fi
+
 # Switch to app user and execute the command
-exec gosu "$PUID:$PGID" "$@"
+exec gosu appuser "$@"

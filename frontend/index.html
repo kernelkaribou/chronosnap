@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TimeLapse-Manager</title>
-    <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
+    <title>ChronoSnap</title>
+    <link rel="icon" type="image/png" sizes="48x48" href="/static/img/favicon-48.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png">
@@ -28,15 +28,15 @@
         <!-- Navigation -->
         <nav class="navbar">
             <div class="nav-brand">
-                <img src="/static/img/favicon.svg" alt="" class="nav-brand-icon">
-                <h1>TimeLapse-Manager</h1>
+                <img src="/static/img/chronosnap.png" alt="" class="nav-brand-icon">
+                <h1><span class="brand-bold">chrono</span><span class="brand-light">snap</span></h1>
             </div>
             <div class="nav-links">
-                <a href="#" data-view="jobs" class="nav-link active">Jobs</a>
-                <a href="#" data-view="videos" class="nav-link">Timelapses</a>
-                <a href="#" data-view="captures" class="nav-link">Captures</a>
-                <a href="#" data-view="storage" class="nav-link">Storage</a>
-                <a href="#" data-view="settings" class="nav-link">Settings</a>
+                <a href="/jobs" data-view="jobs" class="nav-link active">Jobs</a>
+                <a href="/timelapses" data-view="videos" class="nav-link">Timelapses</a>
+                <a href="/captures" data-view="captures" class="nav-link">Captures</a>
+                <a href="/storage" data-view="storage" class="nav-link">Storage</a>
+                <a href="/settings" data-view="settings" class="nav-link">Settings</a>
             </div>
             <div class="nav-actions">
                 <button class="event-bell" onclick="toggleEventPanel()" title="Event log">
@@ -81,7 +81,7 @@
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                             Import
                         </button>
-                        <button class="btn btn-purple" onclick="showCreateJobModal()">+ Create Job</button>
+                        <button class="btn btn-accent" onclick="showCreateJobModal()">+ Create Job</button>
                     </div>
                 </div>
                 <div class="gallery-filters" id="job-filter-bar">
@@ -103,6 +103,22 @@
                 <div id="jobs-list" class="jobs-grid"></div>
             </div>
 
+            <!-- Job Detail View -->
+            <div id="job-detail-view" class="view">
+                <div class="view-header detail-view-header">
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <button class="btn btn-secondary btn-sm" onclick="navigateTo('/jobs')" title="Back to Jobs" style="display:inline-flex;align-items:center;gap:0.35rem;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                            Jobs
+                        </button>
+                        <h2 id="job-detail-title">Job Details</h2>
+                    </div>
+                </div>
+                <div class="detail-view-body">
+                    <div id="job-detail-content" class="detail-page-content"></div>
+                </div>
+            </div>
+
             <!-- Timelapses View -->
             <div id="videos-view" class="view">
                 <div class="view-header">
@@ -112,7 +128,7 @@
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="10" height="18" rx="1"/><rect x="13" y="3" width="10" height="18" rx="1"/><polyline points="3,17 6,12 9,17"/><polyline points="15,17 18,12 21,17"/></svg>
                             Compare
                         </button>
-                        <button class="btn btn-purple" onclick="showProcessVideoModal()">+ Build Timelapse</button>
+                        <button class="btn btn-accent" onclick="showProcessVideoModal()">+ Build Timelapse</button>
                     </div>
                 </div>
                 <div class="gallery-filters">
@@ -151,19 +167,54 @@
                 <div class="compare-mode-banner" id="compare-mode-banner" style="display:none;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="10" height="18" rx="1"/><rect x="13" y="3" width="10" height="18" rx="1"/><polyline points="3,17 6,12 9,17"/><polyline points="15,17 18,12 21,17"/></svg>
                     <span id="compare-mode-text">Select 2-4 timelapses to compare</span>
-                    <button class="btn btn-purple btn-sm" id="compare-launch-btn" style="display:none;" onclick="openComparison()">Compare</button>
+                    <button class="btn btn-accent btn-sm" id="compare-launch-btn" style="display:none;" onclick="openComparison()">Compare</button>
                     <button class="btn btn-secondary btn-sm" onclick="toggleCompareMode()">Cancel</button>
                 </div>
-                <div class="captures-selection-controls" id="video-selection-controls" style="display: none;">
+                <div class="selection-controls" id="video-selection-controls" style="display: none;">
                     <span class="selection-clear" onclick="videoSelection.clear()" title="Clear selection">&times;</span>
                     <span id="video-selected-count">0 selected</span>
-                    <button class="btn btn-purple btn-sm" id="video-compare-selected-btn" style="display:none;" onclick="openComparison()">Compare</button>
+                    <button class="btn btn-accent btn-sm" id="video-compare-selected-btn" style="display:none;" onclick="openComparison()">Compare</button>
                     <button class="btn btn-secondary btn-sm" id="video-toggle-selection-btn" onclick="videoSelection.toggleAll()">Select Visible</button>
                     <button class="btn btn-sm btn-fav-bulk" onclick="videoSelection.favoriteSelected(true)" title="Favorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Favorite</button>
                     <button class="btn btn-sm btn-unfav-bulk" onclick="videoSelection.favoriteSelected(false)" title="Unfavorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Unfavorite</button>
                     <button class="btn btn-danger btn-sm" onclick="videoSelection.deleteSelected()">Delete Selected</button>
                 </div>
                 <div id="videos-list" class="videos-grid"></div>
+            </div>
+
+            <!-- Video Detail View -->
+            <div id="video-detail-view" class="view">
+                <div class="view-header detail-view-header">
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <button class="btn btn-secondary btn-sm" onclick="navigateTo('/timelapses')" title="Back to Timelapses" style="display:inline-flex;align-items:center;gap:0.35rem;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                            Timelapses
+                        </button>
+                        <h2 class="video-detail-title-row">
+                            <span id="video-detail-title">Video Details</span>
+                            <button id="video-rename-btn" class="btn-icon" title="Rename" onclick="startVideoRename()" style="padding:0.2rem;margin-left:0.4rem;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                            </button>
+                            <input type="text" id="video-rename-input" class="form-control" style="display:none;font-size:1rem;padding:0.2rem 0.5rem;max-width:20rem;">
+                            <button id="video-rename-save" class="btn btn-sm btn-accent" style="display:none;" onclick="saveVideoRename()">Save</button>
+                            <button id="video-rename-cancel" class="btn btn-sm btn-secondary" style="display:none;" onclick="cancelVideoRename()">Cancel</button>
+                        </h2>
+                    </div>
+                </div>
+                <div class="detail-view-body">
+                    <div class="detail-page-content">
+                        <div class="video-detail-layout">
+                            <div class="video-detail-player">
+                                <video id="video-detail-player" controls>
+                                    <source id="video-detail-source" type="video/mp4">
+                                </video>
+                            </div>
+                            <dl class="video-detail-meta" id="video-detail-meta"></dl>
+                            <div id="video-detail-tags"></div>
+                            <div class="video-detail-actions" id="video-detail-actions"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Captures View -->
@@ -181,7 +232,7 @@
                             </svg>
                             Compare
                         </button>
-                        <button class="btn btn-purple" onclick="scanOrphanedCaptures()">
+                        <button class="btn btn-accent" onclick="scanOrphanedCaptures()">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 0.25rem;">
                                 <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
                             </svg>
@@ -217,7 +268,7 @@
                 </div>
 
                 <!-- Selection controls -->
-                <div class="captures-selection-controls" id="captures-selection-controls" style="display: none;">
+                <div class="selection-controls" id="selection-controls" style="display: none;">
                     <span class="selection-clear" onclick="captureSelection.clear()" title="Clear selection">&times;</span>
                     <span id="captures-selected-count">0 selected</span>
                     <button class="btn btn-secondary btn-sm" id="toggle-selection-btn" onclick="captureSelection.toggleAll()">Select Visible</button>
@@ -243,7 +294,7 @@
                     <div class="storage-summary">
                         <div class="storage-card">
                             <div class="storage-card-icon">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                             </div>
                             <div class="storage-card-value" id="stat-total-captures">—</div>
                             <div class="storage-card-label">Total Captures</div>
@@ -257,10 +308,10 @@
                         </div>
                         <div class="storage-card">
                             <div class="storage-card-icon">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5c0 1.66 4 3 9 3s9-1.34 9-3v14c0 1.66-4 3-9 3s-9-1.34-9-3V5" fill="currentColor" opacity="0.3"/><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
                             </div>
                             <div class="storage-card-value" id="stat-total-storage">—</div>
-                            <div class="storage-card-label">Total Storage Used</div>
+                            <div class="storage-card-label">Storage Used</div>
                         </div>
                         <div class="storage-card">
                             <div class="storage-card-icon">
@@ -303,6 +354,15 @@
                     <h2>Settings</h2>
                 </div>
                 <div class="settings-content">
+                    <!-- Theme Section -->
+                    <div class="settings-section">
+                        <h3>Theme</h3>
+                        <p class="settings-description">Choose a color scheme. Dark/light mode toggle is in the top navigation bar.</p>
+                        <div id="theme-preset-grid" class="theme-preset-grid">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
                     <!-- Display Preferences Section -->
                     <div class="settings-section">
                         <h3>Display</h3>
@@ -324,25 +384,11 @@
                             <div class="tag-create-row">
                                 <input type="text" id="tag-create-name" class="form-control" placeholder="New tag name..." maxlength="50">
                                 <div class="color-swatch-row" id="tag-create-swatches"></div>
-                                <button class="btn btn-purple btn-sm" onclick="createTag()">Add Tag</button>
+                                <button class="btn btn-accent btn-sm" onclick="createTag()">Add Tag</button>
                             </div>
                             <div id="tag-list" class="tag-list">
                                 <!-- Populated dynamically -->
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Server Paths Section -->
-                    <div class="settings-section">
-                        <h3>Server Paths</h3>
-                        <p class="settings-description">Server-side directories the container uses. Must be mounted as Docker volumes.</p>
-                        <div style="display:flex;gap:1rem;margin-top:0.75rem;">
-                            <div style="flex:1;min-width:0;" id="path-row-captures"></div>
-                            <div style="flex:1;min-width:0;" id="path-row-timelapses"></div>
-                        </div>
-                        <div style="display:flex;gap:1rem;margin-top:0.75rem;">
-                            <div style="flex:1;min-width:0;" id="path-row-import"></div>
-                            <div style="flex:1;min-width:0;" id="path-row-export"></div>
                         </div>
                     </div>
 
@@ -352,7 +398,7 @@
                         <p class="settings-description">Default file naming pattern for new capture jobs. Available tokens: <code>{job_name}</code>, <code>{count}</code>, <code>{timestamp}</code>, <code>{num}</code></p>
                         <div style="display:flex;gap:0.75rem;align-items:center;margin-top:0.75rem;">
                             <input type="text" id="default-naming-pattern" class="form-control" style="max-width:20rem;" placeholder="{job_name}_{count}_{timestamp}">
-                            <button class="btn btn-sm btn-purple" onclick="saveNamingPattern()">Save</button>
+                            <button class="btn btn-sm btn-accent" onclick="saveNamingPattern()">Save</button>
                         </div>
                     </div>
 
@@ -401,7 +447,7 @@
                             </div>
                             <div class="webhook-actions">
                                 <button class="btn btn-secondary compare-btn" onclick="testWebhook()">Test Webhook</button>
-                                <button class="btn btn-purple" id="webhook-save-btn" onclick="saveWebhookSettings()" disabled>Save</button>
+                                <button class="btn btn-accent" id="webhook-save-btn" onclick="saveWebhookSettings()" disabled>Save</button>
                             </div>
                         </div>
                     </div>
@@ -487,24 +533,47 @@
                 <div class="form-section">
                     <div class="form-section-title">Source</div>
                     <div class="form-group">
-                        <label>Stream URL *</label>
-                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <div class="source-row">
+                            <div class="source-icon-toggle">
+                                <button type="button" id="source-type-network" class="source-icon active" onclick="setSourceType('network')" title="Network Stream">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="2" y1="12" x2="22" y2="12"></line>
+                                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                                    </svg>
+                                </button>
+                                <button type="button" id="source-type-device" class="source-icon" onclick="setSourceType('device')" title="Local Camera">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                        <circle cx="12" cy="13" r="4"></circle>
+                                    </svg>
+                                </button>
+                            </div>
                             <input type="text" id="job_url" class="form-control" placeholder="http:// or rtsp://" required style="flex: 1; min-width: 0;">
-                            <button type="button" class="btn btn-secondary compare-btn" onclick="testUrl()" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
+                            <select id="device_path" class="form-control" style="flex: 1; min-width: 0; display: none;">
+                                <option value="">No devices</option>
+                            </select>
+                            <button type="button" id="device-refresh-btn" class="compare-btn" onclick="refreshDevices('device_path')" title="Refresh devices" style="display: none;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                </svg>
+                            </button>
+                            <input type="hidden" id="stream_type" value="http">
+                            <button type="button" class="btn btn-secondary compare-btn" onclick="_createSourceType === 'device' ? testDevice() : testUrl()" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                     <circle cx="12" cy="12" r="3"></circle>
                                 </svg>
                                 Preview
                             </button>
-                            <div style="flex: 0 0 auto; text-align: center;">
-                                <label style="font-size: 0.75rem; white-space: nowrap;">Warn After</label>
-                                <input type="number" id="warning_threshold" class="form-control" min="1" max="50" value="3" style="width: 72px;">
-                                <small style="font-size: 0.65rem;">failures</small>
+                            <div class="warn-after-group">
+                                <label>Warn After</label>
+                                <input type="number" id="warning_threshold" class="form-control" min="1" max="50" value="3">
                             </div>
                         </div>
-                        <input type="hidden" id="stream_type" value="http">
                         <div id="test-result" class="test-result"></div>
+                        <div id="device-test-result" class="test-result"></div>
                     </div>
 
                     <div id="capture-settings-row" class="form-row" style="margin-top: 0.75rem;">
@@ -654,20 +723,9 @@
 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" onclick="closeModal('create-job-modal')">Cancel</button>
-                    <button type="submit" class="btn btn-purple">Create</button>
+                    <button type="submit" class="btn btn-accent">Create</button>
                 </div>
             </form>
-        </div>
-    </div>
-
-    <!-- Job Details Modal -->
-    <div id="job-details-modal" class="modal">
-        <div class="modal-content large">
-            <div class="modal-header">
-                <h3 id="job-details-title">Job Details</h3>
-                <span class="close" onclick="closeModal('job-details-modal')">&times;</span>
-            </div>
-            <div id="job-details-content"></div>
         </div>
     </div>
 
@@ -778,39 +836,9 @@
 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" onclick="closeModal('process-video-modal')">Cancel</button>
-                    <button type="submit" id="create-video-btn" class="btn btn-purple">Create</button>
+                    <button type="submit" id="create-video-btn" class="btn btn-accent">Create</button>
                 </div>
             </form>
-        </div>
-    </div>
-
-    <!-- Video Player Modal -->
-    <div id="video-detail-modal" class="modal">
-        <div class="modal-content xlarge">
-            <div class="modal-header">
-                <h3 class="video-detail-title-row">
-                    <span id="video-detail-title">Video Details</span>
-                    <button id="video-rename-btn" class="btn-icon" title="Rename" onclick="startVideoRename()" style="padding:0.2rem;margin-left:0.4rem;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                    </button>
-                    <input type="text" id="video-rename-input" class="form-control" style="display:none;font-size:1rem;padding:0.2rem 0.5rem;max-width:20rem;">
-                    <button id="video-rename-save" class="btn btn-sm btn-purple" style="display:none;" onclick="saveVideoRename()">Save</button>
-                    <button id="video-rename-cancel" class="btn btn-sm btn-secondary" style="display:none;" onclick="cancelVideoRename()">Cancel</button>
-                </h3>
-                <span class="close" onclick="closeVideoDetail()">&times;</span>
-            </div>
-            <div style="padding: 1rem;">
-                <div class="video-detail-layout">
-                    <div class="video-detail-player">
-                        <video id="video-detail-player" controls>
-                            <source id="video-detail-source" type="video/mp4">
-                        </video>
-                    </div>
-                    <dl class="video-detail-meta" id="video-detail-meta"></dl>
-                    <div id="video-detail-tags"></div>
-                    <div class="video-detail-actions" id="video-detail-actions"></div>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -987,7 +1015,7 @@
                                 <!-- Populated dynamically -->
                             </div>
                             <div style="padding:0.5rem 0.75rem;border-top:1px solid var(--border-color);display:flex;gap:0.5rem;justify-content:flex-end;">
-                                <button class="btn btn-purple btn-sm" id="import-scan-btn" onclick="scanImportCurrentPath()" disabled>Import</button>
+                                <button class="btn btn-accent btn-sm" id="import-scan-btn" onclick="scanImportCurrentPath()" disabled>Import</button>
                             </div>
                         </div>
                     </div>
@@ -1046,7 +1074,7 @@
                         <!-- Actions -->
                         <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:1rem;">
                             <button class="btn btn-secondary" onclick="resetImportModal()">Back</button>
-                            <button class="btn btn-purple" id="import-execute-btn" onclick="executeImport()">Import</button>
+                            <button class="btn btn-accent" id="import-execute-btn" onclick="executeImport()">Import</button>
                         </div>
                     </div>
                 </div>

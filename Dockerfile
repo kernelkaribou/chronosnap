@@ -4,6 +4,7 @@ FROM python:3.11-slim
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ffmpeg \
+    v4l-utils \
     tzdata \
     gosu \
     curl \
@@ -49,7 +50,6 @@ ENV TZ=Etc/UTC
 ENV PORT=8080
 ENV LOG_LEVEL=INFO
 ENV FFMPEG_TIMEOUT=10
-ENV MAX_UPLOAD_SIZE=10737418240
 
 # Expose port (can be overridden)
 EXPOSE ${PORT}

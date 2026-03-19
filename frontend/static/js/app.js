@@ -9,15 +9,25 @@ let videoRefreshInterval = null;
 let confirmCallback = null;
 
 // =============================================================================
-// Theme Toggle
+// Theme Toggle & Presets
 // =============================================================================
+
+const THEME_PRESETS = {
+    cosmic:  { name: 'Cosmic',  colors: ['#56b8d6', '#a78bfa', '#e8457e'] },
+    ocean:   { name: 'Ocean',   colors: ['#38bdf8', '#818cf8', '#a78bfa'] },
+    forest:  { name: 'Forest',  colors: ['#4ade80', '#a3e635', '#f59e0b'] },
+    sunset:  { name: 'Sunset',  colors: ['#fb923c', '#f472b6', '#c084fc'] },
+    ember:   { name: 'Ember',   colors: ['#ef4444', '#f97316', '#fbbf24'] },
+    minimal: { name: 'Minimal', colors: ['#a1a1aa', '#d4d4d8', '#f4f4f5'] },
+};
 
 function initTheme() {
     const saved = localStorage.getItem('theme');
     if (saved) {
         document.documentElement.setAttribute('data-theme', saved);
     }
-    // Default is dark (handled by :root CSS)
+    const preset = localStorage.getItem('themePreset') || 'cosmic';
+    document.documentElement.setAttribute('data-preset', preset);
 }
 
 function toggleTheme() {
@@ -25,8 +35,29 @@ function toggleTheme() {
     const next = current === 'light' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', next);
     localStorage.setItem('theme', next);
-    // Re-render storage charts with updated theme colors
     if (currentView === 'storage') loadStorage();
+    renderThemePresets();
+}
+
+function setThemePreset(preset) {
+    document.documentElement.setAttribute('data-preset', preset);
+    localStorage.setItem('themePreset', preset);
+    if (currentView === 'storage') loadStorage();
+    renderThemePresets();
+}
+
+function renderThemePresets() {
+    const grid = document.getElementById('theme-preset-grid');
+    if (!grid) return;
+    const current = localStorage.getItem('themePreset') || 'cosmic';
+    grid.innerHTML = Object.entries(THEME_PRESETS).map(([key, preset]) => `
+        <div class="theme-preset-card ${key === current ? 'active' : ''}" onclick="setThemePreset('${key}')">
+            <div class="theme-preset-swatches">
+                ${preset.colors.map(c => `<span style="background:${c};"></span>`).join('')}
+            </div>
+            <div class="theme-preset-name">${preset.name}</div>
+        </div>
+    `).join('');
 }
 
 function getTimeFormat() {
@@ -377,8 +408,6 @@ function setButtonState(btnOrId, disabled) {
     const btn = typeof btnOrId === 'string' ? document.getElementById(btnOrId) : btnOrId;
     if (!btn) return;
     btn.disabled = disabled;
-    btn.style.opacity = disabled ? '0.5' : '1';
-    btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
 }
 
 // =============================================================================
@@ -559,20 +588,28 @@ function toggleTimeWindow() {
 document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
     
+    // Measure navbar height for detail view layout calculations
+    const navbar = document.querySelector('.navbar');
+    if (navbar) {
+        const updateNavbarHeight = () => {
+            document.documentElement.style.setProperty('--navbar-height', navbar.offsetHeight + 'px');
+        };
+        updateNavbarHeight();
+        window.addEventListener('resize', updateNavbarHeight);
+    }
     // Load tags globally (needed by tag pickers in modals)
     loadTagManager();
     
     // Start event log polling
     startEventPolling();
     
-    // Load initial view based on URL hash or default to jobs
-    const hash = window.location.hash.slice(1); // Remove #
-    const validViews = ['jobs', 'videos', 'settings'];
-    const initialView = validViews.includes(hash) ? hash : 'jobs';
-    switchView(initialView, false); // false = don't push, use replaceState from setupNavigation
+    // Route based on current URL path (with hash fallback for old bookmarks)
+    handleRoute();
     
     // Setup refresh intervals
-    refreshIntervals.push(setInterval(loadJobs, 5000)); // Refresh jobs every 5s
+    refreshIntervals.push(setInterval(() => {
+        if (currentView === 'jobs') loadJobs();
+    }, 5000));
     
     // Setup event listeners for job creation form
     const startInput = document.getElementById('start_datetime');
@@ -632,13 +669,64 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// Navigation
+// Navigation & Routing
+const _routeMap = {
+    '/': 'jobs', '/jobs': 'jobs', '/timelapses': 'videos',
+    '/captures': 'captures', '/storage': 'storage', '/settings': 'settings',
+};
+const _viewToPath = {
+    'jobs': '/jobs', 'videos': '/timelapses', 'captures': '/captures',
+    'storage': '/storage', 'settings': '/settings',
+    'job-detail': '/jobs', 'video-detail': '/timelapses',
+};
+
+function parseRoute(pathname) {
+    pathname = pathname || window.location.pathname;
+    // Direct view match
+    if (_routeMap[pathname]) return { view: _routeMap[pathname], id: null };
+    // Detail routes: /jobs/:id, /timelapses/:id
+    const jobMatch = pathname.match(/^\/jobs\/(\d+)$/);
+    if (jobMatch) return { view: 'job-detail', id: parseInt(jobMatch[1]) };
+    const videoMatch = pathname.match(/^\/timelapses\/(\d+)$/);
+    if (videoMatch) return { view: 'video-detail', id: parseInt(videoMatch[1]) };
+    // Unknown route falls back to jobs
+    return { view: 'jobs', id: null };
+}
+
+function handleRoute(pushState = false) {
+    // Legacy hash redirect
+    const hash = window.location.hash.slice(1);
+    if (hash && !window.location.pathname.match(/^\/(jobs|timelapses|captures|storage|settings)/)) {
+        const hashMap = { 'jobs': '/jobs', 'videos': '/timelapses', 'captures': '/captures', 'storage': '/storage', 'settings': '/settings' };
+        if (hashMap[hash]) { history.replaceState(null, '', hashMap[hash]); }
+    }
+
+    const route = parseRoute();
+    if (route.view === 'job-detail' && route.id) {
+        switchView('job-detail', pushState);
+        loadJobDetail(route.id);
+    } else if (route.view === 'video-detail' && route.id) {
+        switchView('video-detail', pushState);
+        loadVideoDetail(route.id);
+    } else {
+        switchView(route.view, pushState);
+    }
+}
+
+function navigateTo(path, replace = false) {
+    if (replace) {
+        history.replaceState({ path }, '', path);
+    } else {
+        history.pushState({ path }, '', path);
+    }
+    handleRoute(false);
+}
+
 function setupNavigation() {
     document.querySelectorAll('.nav-link').forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
-            const view = e.currentTarget.dataset.view;
-            switchView(view, true); // true = push to history
+            navigateTo(e.currentTarget.getAttribute('href'));
         });
     });
     
@@ -650,9 +738,7 @@ function setupNavigation() {
             _closingFromPopstate = true;
             _modalHistoryDepth = Math.max(0, _modalHistoryDepth - 1);
             const topModal = activeModals[activeModals.length - 1];
-            if (topModal.id === 'video-detail-modal') {
-                closeVideoDetail();
-            } else if (topModal.id === 'comparison-modal') {
+            if (topModal.id === 'comparison-modal') {
                 closeComparison();
             } else if (topModal.id === 'confirm-modal') {
                 topModal.classList.remove('active');
@@ -663,20 +749,21 @@ function setupNavigation() {
             return;
         }
         
-        if (e.state && e.state.view) {
-            switchView(e.state.view, false);
-        }
+        handleRoute(false);
     });
-    
-    // Set initial history state
-    const initialView = currentView || 'jobs';
-    history.replaceState({ view: initialView }, '', `#${initialView}`);
 }
 
 function switchView(view, pushState = true) {
-    // Update navigation
+    // Clean up video detail polling when leaving that view
+    if (view !== 'video-detail' && _videoDetailPollInterval) {
+        clearInterval(_videoDetailPollInterval);
+        _videoDetailPollInterval = null;
+    }
+    
+    // Update navigation highlights (Jobs active for job-detail, Timelapses for video-detail)
+    const navView = (view === 'job-detail') ? 'jobs' : (view === 'video-detail') ? 'videos' : view;
     document.querySelectorAll('.nav-link').forEach(link => {
-        link.classList.toggle('active', link.dataset.view === view);
+        link.classList.toggle('active', link.dataset.view === navView);
     });
     
     // Update content
@@ -684,20 +771,47 @@ function switchView(view, pushState = true) {
         v.classList.toggle('active', v.id === `${view}-view`);
     });
     
+    // Lock page scroll when a detail view is active (sidebar stays static, only config scrolls)
+    const isDetail = (view === 'job-detail' || view === 'video-detail');
+    document.body.classList.toggle('detail-view-active', isDetail);
+    
     currentView = view;
     
     // Push to browser history if requested
-    if (pushState) {
-        history.pushState({ view: view }, '', `#${view}`);
+    if (pushState && _viewToPath[view]) {
+        history.pushState({ path: _viewToPath[view] }, '', _viewToPath[view]);
     }
     
-    // Load data for view
+    // Load data for list views
     if (view === 'jobs') loadJobs();
     if (view === 'videos') loadVideos();
     if (view === 'storage') loadStorage();
     if (view === 'settings') loadSettings();
     if (view === 'captures') loadCaptures();
 }
+
+// Size detail panels so sidebar + main fill viewport below the header.
+// Called after loading a detail view and on window resize.
+function sizeDetailPanels() {
+    const sidebar = document.querySelector('.detail-sidebar');
+    const main = document.querySelector('.detail-main');
+    if (!sidebar || !main) return;
+    
+    // Measure where the panels start
+    const top = sidebar.getBoundingClientRect().top;
+    const available = window.innerHeight - top;
+    
+    sidebar.style.maxHeight = available + 'px';
+    sidebar.style.overflowY = 'auto';
+    main.style.maxHeight = available + 'px';
+    main.style.overflowY = 'auto';
+}
+
+window.addEventListener('resize', () => {
+    if (currentView === 'job-detail' || currentView === 'video-detail') {
+        sizeDetailPanels();
+    }
+});
 
 // Jobs
 let allJobs = [];
@@ -836,13 +950,13 @@ function renderJobs(jobs) {
         }
         
         return `
-        <div class="job-card" style="--i:${idx}" onclick="showJobDetails(${job.id})">
+        <div class="job-card" style="--i:${idx}" onclick="navigateTo('/jobs/${job.id}')">
             ${thumbnailHtml}
             <div class="job-card-header">
                 <div class="job-card-title">${escapeHtml(job.name)}</div>
             </div>
             <div class="job-info">
-                <div><strong>Stream URL:</strong> <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; max-width: 250px; vertical-align: bottom;">${escapeHtml(getStreamHost(job.url))}</span></div>
+                <div><strong>${job.stream_type === 'device' ? 'Device:' : 'Stream URL:'}</strong> <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; max-width: 250px; vertical-align: bottom;">${escapeHtml(job.stream_type === 'device' ? job.url : getStreamHost(job.url))}</span></div>
                 <div><strong>Interval:</strong> ${job.interval_seconds}s</div>
                 <div><strong>Capture:</strong> ${(job.capture_quality || 'maximum').charAt(0).toUpperCase() + (job.capture_quality || 'maximum').slice(1)}${job.capture_resolution && job.capture_resolution !== 'native' ? ` @ ${job.capture_resolution}` : ''}</div>
                 ${timeWindowInfo}
@@ -870,28 +984,18 @@ function renderJobs(jobs) {
     }).join('');
 }
 
-async function showJobDetails(jobId) {
+async function loadJobDetail(jobId) {
     try {
         const [job, capturesData] = await Promise.all([
             apiRequest(`/jobs/${jobId}`),
             apiRequest('/captures/', { query: { job_id: jobId, page: 1, page_size: 1, sort_order: 'desc' } })
         ]);
         
-        const modal = document.getElementById('job-details-modal');
-        const content = document.getElementById('job-details-content');
-        const title = document.getElementById('job-details-title');
+        const content = document.getElementById('job-detail-content');
+        const title = document.getElementById('job-detail-title');
         
-        // Update modal title with job name
-        title.textContent = `${job.name} - Details`;
-        
-        let latestImageHtml = '';
-        if (capturesData.captures && capturesData.captures.length > 0) {
-            latestImageHtml = `
-                <div style="margin: 0.5rem 0 1rem;">
-                    <img src="${API_BASE}/captures/${capturesData.captures[0].id}/image" alt="Latest capture" onclick="openOverlayLightbox(this)" style="max-width: 100%; border-radius: 0.5rem; border: 1px solid var(--border-color); cursor: pointer;" title="Click to enlarge">
-                </div>
-            `;
-        }
+        // Update page title
+        title.textContent = job.name;
         
         // End datetime will be set by initializeEditTimePickers if present
         
@@ -916,11 +1020,11 @@ async function showJobDetails(jobId) {
         if (job.time_window_enabled) {
             timeWindowHtml = `
                 <div class="info-box" style="margin: 1rem 0;">
-                    <div style="display: flex; align-items: start; gap: 0.5rem;">
+                    <div class="info-box">
                         <div>
                             <strong>Time Window Enabled</strong>
-                            <p style="margin-top: 0.25rem; font-size: 0.875rem;">Captures only happen between <strong>${job.time_window_start}</strong> and <strong>${job.time_window_end}</strong> each day.</p>
-                            ${job.time_window_start > job.time_window_end ? '<p style="margin-top: 0.25rem; font-size: 0.75rem; opacity: 0.8;">⏰ This window spans midnight (e.g., captures from evening to early morning)</p>' : ''}
+                            <p class="mt-sm text-base">Captures only happen between <strong>${job.time_window_start}</strong> and <strong>${job.time_window_end}</strong> each day.</p>
+                            ${job.time_window_start > job.time_window_end ? '<p class="mt-sm text-xs" style="opacity: 0.8;">⏰ This window spans midnight (e.g., captures from evening to early morning)</p>' : ''}
                         </div>
                     </div>
                 </div>
@@ -949,95 +1053,162 @@ async function showJobDetails(jobId) {
         }
         
         content.innerHTML = `
-            <div style="padding: 1.5rem;">
-                ${latestImageHtml}
-                
-                ${job.status === 'warning' && job.warning_message ? `
-                <div class="info-box" style="margin: 1rem 0; border-left-color: var(--warning-color);">
-                    <div style="display: flex; align-items: start; gap: 0.5rem;">
-                        <span style="font-size: 1.25rem;">⚠</span>
-                        <div>
-                            <strong>Capture Warning</strong>
-                            <p style="margin-top: 0.25rem; font-size: 0.875rem;">${escapeHtml(job.warning_message)}</p>
-                            <p style="margin-top: 0.5rem; font-size: 0.75rem; opacity: 0.8;">Verify settings for the job. The job will continue attempting captures in case this is a temporary issue.</p>
+                <div class="detail-layout">
+                    <div class="detail-sidebar">
+                        ${capturesData.captures && capturesData.captures.length > 0 ? `
+                            <img src="${API_BASE}/captures/${capturesData.captures[0].id}/image" alt="Latest capture" onclick="openOverlayLightbox(this)" title="Click to enlarge">
+                        ` : ''}
+                        <div class="detail-meta">
+                            <div><strong>Status:</strong> <span class="job-status ${statusClass}">${statusLabel}</span></div>
+                            <div><strong>Start:</strong> ${formatDateTimeNoSeconds(job.start_datetime)}</div>
+                            ${job.end_datetime ? `<div><strong>End:</strong> ${formatDateTimeNoSeconds(job.end_datetime)}</div>` : ''}
+                            ${nextCaptureHtml}
+                            ${nextAutoBuildHtml}
+                            ${lastCaptureHtml}
+                            <div><strong>Storage:</strong> ${formatBytes(job.storage_size)}</div>
+                            <div><strong>Pattern:</strong> <span class="text-xs" style="color: var(--text-secondary);">${escapeHtml(job.naming_pattern || '{job_name}_{count}_{timestamp}')}</span></div>
+                            <div><strong>Folder:</strong> <span class="text-xs" style="word-break: break-all;">${escapeHtml(job.capture_path)}</span></div>
+                            <div class="detail-meta-actions">
+                                <strong>Captures:</strong>
+                                <a href="#" onclick="event.stopPropagation(); viewJobCaptures(${job.id}); return false;" 
+                                   style="color: var(--primary-color); text-decoration: none;" title="View captures">
+                                    ${job.capture_count}
+                                </a>
+                                <button class="btn-icon" onclick="event.stopPropagation(); manualCapture(${job.id}, '${escapeHtml(job.name)}')" title="Take Snapshot">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                        <circle cx="12" cy="13" r="4"></circle>
+                                    </svg>
+                                </button>
+                                <button class="btn-icon" onclick="event.stopPropagation(); openCompareModal(${job.id})" title="Compare Captures">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="2" y="2" width="20" height="20" rx="2"/>
+                                        <path d="M12 2v20"/>
+                                        <circle cx="7.5" cy="7.5" r="1.5"/>
+                                        <path d="M6 18l3-4 2 2 4-5 3 4"/>
+                                        <rect x="12" y="2" width="10" height="20" rx="2" fill="currentColor" opacity="0.15" stroke="none"/>
+                                    </svg>
+                                </button>
+                                <button class="btn-icon" onclick="event.stopPropagation(); performMaintenanceScan(${job.id}, '${escapeHtml(job.name)}')" title="Sync">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="23 4 23 10 17 10"></polyline>
+                                        <polyline points="1 20 1 14 7 14"></polyline>
+                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="detail-sidebar-actions">
+                            <button id="save-job-btn" class="btn btn-primary" onclick="saveJobChanges(${job.id})" disabled style="width: 100%;">
+                                Save Changes
+                            </button>
+                            <button class="btn btn-accent btn-sm" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')" style="width: 100%;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                                Build Timelapse
+                            </button>
+                            <div class="detail-sidebar-actions-row">
+                                ${job.status !== 'completed' ? 
+                                    `<button class="btn-icon" onclick="confirmCompleteJob(${job.id}, '${escapeHtml(job.name)}')" title="Complete Job">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                    </button>` : ''
+                                }
+                                ${job.status === 'active' || job.status === 'sleeping' ? 
+                                    `<button class="btn-icon" onclick="confirmDisableJob(${job.id}, '${escapeHtml(job.name)}')" title="Disable Job">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></svg>
+                                    </button>` :
+                                    job.status === 'disabled' ?
+                                    `<button class="btn-icon" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')" title="Enable Job">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+                                    </button>` : ''
+                                }
+                                <button class="btn-icon" onclick="duplicateJob(${job.id})" title="Duplicate Job">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                </button>
+                                <button class="btn-icon" onclick="exportJob(${job.id}, '${escapeHtml(job.name)}')" title="Export Job">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                </button>
+                                <button class="btn-icon" onclick="deleteJob(${job.id}, '${escapeHtml(job.name)}')" title="Delete Job">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-                ` : ''}
-                
-                ${timeWindowHtml}
-                
-                <div style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem;">
-                    <div class="job-info" style="flex: 1; margin-bottom: 0;">
-                        <div><strong>Status:</strong> <span class="job-status ${statusClass}">${statusLabel}</span></div>
-                        <div><strong>Start:</strong> ${formatDateTimeNoSeconds(job.start_datetime)}</div>
-                        ${nextCaptureHtml}
-                        ${nextAutoBuildHtml}
-                        ${lastCaptureHtml}
-                    </div>
-                    
-                    <div class="job-info" style="flex: 1; margin-bottom: 0; padding-left: 1.5rem; border-left: 1px solid var(--border-color);">
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <strong>Captures:</strong> 
-                            <a href="#" onclick="event.stopPropagation(); viewJobCaptures(${job.id}); return false;" 
-                               style="color: var(--primary-color); text-decoration: none;"
-                               title="View captures">
-                                ${job.capture_count}
-                            </a>
-                            <button class="btn-icon" onclick="event.stopPropagation(); manualCapture(${job.id}, '${escapeHtml(job.name)}')" title="Take Snapshot" style="padding: 0.25rem;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                                    <circle cx="12" cy="13" r="4"></circle>
-                                </svg>
-                            </button>
-                            <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); openCompareModal(${job.id})" title="Compare Captures" style="padding: 0.25rem;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="2" y="2" width="20" height="20" rx="2"/>
-                                    <path d="M12 2v20"/>
-                                    <circle cx="7.5" cy="7.5" r="1.5"/>
-                                    <path d="M6 18l3-4 2 2 4-5 3 4"/>
-                                    <rect x="12" y="2" width="10" height="20" rx="2" fill="currentColor" opacity="0.15" stroke="none"/>
-                                </svg>
-                            </button>
-                            <button class="btn-icon" onclick="event.stopPropagation(); closeModal('job-details-modal'); performMaintenanceScan(${job.id}, '${escapeHtml(job.name)}')" title="Sync" style="padding: 0.25rem;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="23 4 23 10 17 10"></polyline>
-                                    <polyline points="1 20 1 14 7 14"></polyline>
-                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                                </svg>
-                            </button>
+
+                    <div class="detail-main">
+                        ${job.status === 'warning' && job.warning_message ? `
+                        <div class="info-box" style="margin-bottom: 1rem; border-left-color: var(--warning-color);">
+                            <div class="info-box">
+                                <span style="font-size: 1.25rem;">⚠</span>
+                                <div>
+                                    <strong>Capture Warning</strong>
+                                    <p class="mt-sm text-base">${escapeHtml(job.warning_message)}</p>
+                                    <p class="mt-sm text-xs" style="opacity: 0.8;">Verify settings for the job. The job will continue attempting captures in case this is a temporary issue.</p>
+                                </div>
+                            </div>
                         </div>
-                        <div><strong>Storage:</strong> ${formatBytes(job.storage_size)}</div>
-                        <div><strong>Folder:</strong> <span style="font-size: 0.8rem; word-break: break-all;">${escapeHtml(job.capture_path)}</span></div>
-                    </div>
-                </div>
-
-                <!-- Job Settings sections -->
-
-                <div class="form-section">
-                    <div class="form-section-title">Source</div>
+                        ` : ''}
+                        ${timeWindowHtml}
+                        <!-- Source -->
+                        <div class="form-section">
+                            <div class="form-section-title">Source</div>
                     <div class="form-group" style="margin-bottom: 0.75rem;">
-                        <label>Stream URL *</label>
-                        <div style="display: flex; gap: 0.5rem; align-items: center;">
-                            <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required style="flex: 1; min-width: 0;">
-                            <button type="button" class="btn btn-secondary" onclick="previewStream('edit_url', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
+                        ${job.stream_type === 'device' ? `
+                        <label>Camera Device</label>
+                        <div class="source-row">
+                            <select id="edit_device_path" class="form-control" style="flex: 1; min-width: 0;">
+                                <option value="${escapeHtml(job.url)}" selected>${escapeHtml(job.url)}</option>
+                            </select>
+                            <input type="hidden" id="edit_url" value="${escapeHtml(job.url)}">
+                            <button type="button" class="compare-btn" onclick="refreshDevices('edit_device_path')" title="Refresh devices" style="padding: 0.625rem 0.5rem;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                </svg>
+                            </button>
+                            <button type="button" class="compare-btn" onclick="previewStream('edit_device_path', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                     <circle cx="12" cy="12" r="3"></circle>
                                 </svg>
                                 Preview
                             </button>
-                            <div style="flex: 0 0 auto; text-align: center;">
-                                <label style="font-size: 0.75rem; white-space: nowrap;">Warn After</label>
-                                <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50" style="width: 72px;">
-                                <small style="font-size: 0.65rem;">failures</small>
+                            <div class="warn-after-group">
+                                <label>Warn After</label>
+                                <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50">
                             </div>
                         </div>
+                        ` : `
+                        <label>Stream URL *</label>
+                        <div class="source-row">
+                            <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required style="flex: 1; min-width: 0;">
+                            <button type="button" class="compare-btn" onclick="previewStream('edit_url', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                Preview
+                            </button>
+                            <div class="warn-after-group">
+                                <label>Warn After</label>
+                                <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50">
+                            </div>
+                        </div>
+                        `}
                         <div id="edit-preview-result" class="test-result"></div>
                     </div>
 
-                    <div id="edit-capture-settings-row" class="form-row" style="margin-top: 0.75rem;">
-                        <div class="form-group flex-1">
+                    <div class="form-row-wrap" style="gap: 1rem; margin-top: 0.75rem;">
+                        <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0;">
                             <label>Capture Quality</label>
                             <select id="edit_capture_quality" class="form-control">
                                 <option value="maximum" ${(!job.capture_quality || job.capture_quality === 'maximum') ? 'selected' : ''}>Maximum</option>
@@ -1046,14 +1217,14 @@ async function showJobDetails(jobId) {
                                 <option value="low" ${job.capture_quality === 'low' ? 'selected' : ''}>Low</option>
                             </select>
                         </div>
-                        <div class="form-group flex-1">
+                        <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0;">
                             <label>Capture Resolution</label>
                             <select id="edit_capture_resolution" class="form-control">
                                 <option value="native" selected>Native</option>
                                 ${job.capture_resolution && job.capture_resolution !== 'native' ? `<option value="${escapeHtml(job.capture_resolution)}" selected>${escapeHtml(job.capture_resolution)}</option>` : ''}
                             </select>
                         </div>
-                        <div class="form-group" id="edit-source-info" style="flex: 0 0 auto; display: none; align-self: flex-end; padding-bottom: 0.35rem;">
+                        <div class="form-group" id="edit-source-info" style="flex: 0 0 auto; display: none; align-self: flex-end; padding-bottom: 0.35rem; margin-bottom: 0;">
                             <small id="edit-source-dimensions" style="color: var(--text-secondary);"></small>
                         </div>
                     </div>
@@ -1063,23 +1234,23 @@ async function showJobDetails(jobId) {
                     <div class="form-section-title">Schedule</div>
                     <div class="form-group" style="margin-bottom: 1rem;">
                         <label>End Date & Time</label>
-                        <input type="datetime-local" id="edit_end_datetime" class="form-control">
+                        <input type="datetime-local" id="edit_end_datetime" class="form-control" style="max-width: 280px;">
                         <small style="color: var(--text-secondary);">Leave empty for ongoing capture</small>
                     </div>
                     
-                    <div class="form-group" style="margin-bottom: 1rem;">
-                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
+                    <div class="form-group mb-lg">
+                        <div class="form-row-wrap gap-md">
+                            <label class="form-row" style="cursor: pointer; margin: 0;">
                                 <input type="checkbox" id="edit_time_window_enabled" ${job.time_window_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditTimeWindow()">
                                 <span><strong>Daily Time Window</strong></span>
                             </label>
-                            <div id="edit-time-window-fields" class="toggle-fields ${job.time_window_enabled ? '' : 'disabled'}" style="display: flex; align-items: center; gap: 0.5rem;">
-                                <label style="font-size: 0.8rem; margin: 0;">Start</label>
+                            <div id="edit-time-window-fields" class="toggle-fields form-row ${job.time_window_enabled ? '' : 'disabled'}">
+                                <label class="text-sm" style="margin: 0;">Start</label>
                                 <div class="time-picker-container" style="margin: 0;">
                                     <input type="time" id="edit_time_window_start_time" class="form-control" style="padding: 0.3rem 0.5rem;">
                                 </div>
                                 <input type="hidden" id="edit_time_window_start">
-                                <label style="font-size: 0.8rem; margin: 0;">End</label>
+                                <label class="text-sm" style="margin: 0;">End</label>
                                 <div class="time-picker-container" style="margin: 0;">
                                     <input type="time" id="edit_time_window_end_time" class="form-control" style="padding: 0.3rem 0.5rem;">
                                 </div>
@@ -1088,18 +1259,16 @@ async function showJobDetails(jobId) {
                         </div>
                     </div>
 
-                    <div style="display: flex; gap: 0.75rem; align-items: stretch;">
-                        <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 0.5rem;">
-                            <div class="form-group" style="margin-bottom: 0;">
-                                <label>Capture Interval (s) *</label>
-                                <input type="number" id="edit_interval_seconds" class="form-control" value="${job.interval_seconds}" min="10" required style="width: 120px;">
-                            </div>
-                            <div class="form-group" style="margin-bottom: 0;">
-                                <label>Timelapse FPS</label>
-                                <input type="number" id="edit_framerate" class="form-control" value="30" min="1" max="120" required style="width: 120px;">
-                            </div>
+                    <div class="form-row-wrap" style="gap: 1rem; align-items: flex-start;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Capture Interval (s) *</label>
+                            <input type="number" id="edit_interval_seconds" class="form-control" value="${job.interval_seconds}" min="10" required style="width: 140px;">
                         </div>
-                        <div class="duration-estimate" id="edit-duration-estimate" style="flex: 1; margin: 0;"></div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Timelapse FPS</label>
+                            <input type="number" id="edit_framerate" class="form-control" value="30" min="1" max="120" required style="width: 140px;">
+                        </div>
+                        <div class="duration-estimate" id="edit-duration-estimate" style="flex: 1; min-width: 200px; margin: 0;"></div>
                     </div>
                 </div>
 
@@ -1163,49 +1332,17 @@ async function showJobDetails(jobId) {
                     </div>
                 </div>
 
+                    </div><!-- /detail-main -->
+                </div><!-- /detail-layout -->
+
                 <input type="hidden" id="edit_start_datetime" value="${job.start_datetime}">
-                
-                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: space-between; align-items: center; padding-top: 1rem; border-top: 2px solid var(--border-color);">
-                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-                        <button class="btn btn-secondary compare-btn" onclick="event.stopPropagation(); closeModal('job-details-modal'); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')">
-                            Build Timelapse
-                        </button>
-                        ${job.status !== 'completed' ? 
-                            `<button class="btn btn-secondary compare-btn" onclick="confirmCompleteJob(${job.id}, '${escapeHtml(job.name)}')">Complete</button>` : ''
-                        }
-                        ${job.status === 'active' || job.status === 'sleeping' ? 
-                            `<button class="btn btn-secondary compare-btn" onclick="confirmDisableJob(${job.id}, '${escapeHtml(job.name)}')">Disable</button>` :
-                            job.status === 'disabled' ?
-                            `<button class="btn btn-secondary compare-btn" onclick="confirmEnableJob(${job.id}, '${escapeHtml(job.name)}')">Enable</button>` : ''
-                        }
-                        <button class="btn-icon" onclick="duplicateJob(${job.id})" title="Duplicate Job" style="padding: 0.5rem;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                            </svg>
-                        </button>
-                        <button class="btn-icon" onclick="exportJob(${job.id}, '${escapeHtml(job.name)}')" title="Export Job" style="padding: 0.5rem;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                            </svg>
-                        </button>
-                        <button class="btn-icon" onclick="deleteJob(${job.id}, '${escapeHtml(job.name)}')" title="Delete Job" style="padding: 0.5rem;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="3 6 5 6 21 6"></polyline>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                <line x1="10" y1="11" x2="10" y2="17"></line>
-                                <line x1="14" y1="11" x2="14" y2="17"></line>
-                            </svg>
-                        </button>
-                    </div>
-                    <button id="save-job-btn" class="btn btn-purple" onclick="saveJobChanges(${job.id})" style="font-weight: 600;" disabled>
-                        Save
-                    </button>
-                </div>
-            </div>
         `;
         
-        showModal('job-details-modal');
+        // Scroll to top of detail page
+        content.scrollTop = 0;
+        
+        // Size the detail panels to fill viewport (sidebar static, main scrolls)
+        sizeDetailPanels();
         
         // Initialize custom time pickers for edit modal
         initializeEditTimePickers(job);
@@ -1220,6 +1357,14 @@ async function showJobDetails(jobId) {
             _nativeDimensions['edit_capture_resolution'] = { w: job.source_width, h: job.source_height };
             document.getElementById('edit-source-info').style.display = 'block';
             document.getElementById('edit-source-dimensions').textContent = `Source: ${job.source_width}x${job.source_height}`;
+        }
+        
+        // Load device list for device-type jobs
+        if (job.stream_type === 'device') {
+            refreshDevices('edit_device_path').then(() => {
+                const sel = document.getElementById('edit_device_path');
+                if (sel) sel.value = job.url;
+            });
         }
         
         // Add native resolution option to auto-build dropdown
@@ -1250,7 +1395,13 @@ async function showJobDetails(jobId) {
     } catch (error) {
         console.error('Failed to load job details:', error);
         showNotification('Failed to load job details', 'error');
+        navigateTo('/jobs');
     }
+}
+
+// Compatibility wrapper for internal calls that need to navigate to job detail
+function showJobDetails(jobId) {
+    navigateTo(`/jobs/${jobId}`);
 }
 
 async function createJob(event) {
@@ -1284,8 +1435,24 @@ async function createJob(event) {
         return;
     }
     
-    // Auto-detect stream type from URL
-    const stream_type = values.job_url.toLowerCase().startsWith('rtsp://') ? 'rtsp' : 'http';
+    // Determine source URL and stream type based on source type toggle
+    let jobUrl, stream_type;
+    const warningThresholdVal = values.warning_threshold || 3;
+    if (_createSourceType === 'device') {
+        jobUrl = document.getElementById('device_path').value;
+        if (!jobUrl) {
+            showNotification('Please select a camera device', 'error');
+            return;
+        }
+        stream_type = 'device';
+    } else {
+        jobUrl = values.job_url;
+        if (!jobUrl) {
+            showNotification('Please enter a stream URL', 'error');
+            return;
+        }
+        stream_type = jobUrl.toLowerCase().startsWith('rtsp://') || jobUrl.toLowerCase().startsWith('rtsps://') ? 'rtsp' : 'http';
+    }
     
     // Validate dates
     const startDate = new Date(values.start_datetime);
@@ -1313,14 +1480,14 @@ async function createJob(event) {
     
     const formData = {
         name: values.job_name,
-        url: values.job_url,
+        url: jobUrl,
         stream_type: stream_type,
         start_datetime: datetimeLocalToISO(values.start_datetime),
         end_datetime: values.end_datetime ? datetimeLocalToISO(values.end_datetime) : null,
         interval_seconds: values.interval_seconds,
         framerate: values.framerate,
         naming_pattern: values.naming_pattern,
-        warning_threshold: values.warning_threshold || 3,
+        warning_threshold: warningThresholdVal,
         time_window_enabled: values.time_window_enabled,
         time_window_start: values.time_window_enabled ? values.time_window_start : null,
         time_window_end: values.time_window_enabled ? values.time_window_end : null,
@@ -1380,6 +1547,7 @@ function setupJobEditChangeTracking(originalJob) {
         'edit_time_window_start_time',
         'edit_time_window_end_time',
         'edit_url',
+        'edit_device_path',
         'edit_stream_type',
         'edit_warning_threshold',
         'edit_capture_quality',
@@ -1447,24 +1615,21 @@ function setupJobEditChangeTracking(originalJob) {
 function confirmDisableJob(jobId, jobName) {
     confirmAction(
         `Are you sure you want to disable the job "${jobName}"? The job will stop capturing images until re-enabled.`,
-        () => updateJobStatus(jobId, 'disabled', jobName),
-        { closeModalId: 'job-details-modal' }
+        () => updateJobStatus(jobId, 'disabled', jobName)
     );
 }
 
 function confirmEnableJob(jobId, jobName) {
     confirmAction(
         `Are you sure you want to enable the job "${jobName}"? The job will start capturing images according to its schedule.`,
-        () => updateJobStatus(jobId, 'active', jobName),
-        { closeModalId: 'job-details-modal' }
+        () => updateJobStatus(jobId, 'active', jobName)
     );
 }
 
 function confirmCompleteJob(jobId, jobName) {
     confirmAction(
         `Are you sure you want to complete the job "${jobName}"? This will set the job's end time to now and mark it as completed.`,
-        () => completeJob(jobId, jobName),
-        { closeModalId: 'job-details-modal' }
+        () => completeJob(jobId, jobName)
     );
 }
 
@@ -1475,6 +1640,7 @@ async function completeJob(jobId, jobName) {
             body: { status: 'completed', end_datetime: new Date().toISOString() }
         });
         loadJobs();
+        loadJobDetail(jobId);
         showNotification(`Job "${jobName}" completed successfully`);
         refreshEventsSoon();
     } catch (error) {
@@ -1487,6 +1653,7 @@ async function updateJobStatus(jobId, status, jobName) {
     try {
         await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { status } });
         loadJobs();
+        loadJobDetail(jobId);
         const action = status === 'active' ? 'enabled' : 'disabled';
         showNotification(`Job "${jobName}" ${action} successfully`);
     } catch (error) {
@@ -1510,7 +1677,7 @@ async function updateJobEndTime(jobId) {
     
     try {
         await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { end_datetime: endDatetime } });
-        closeModal('job-details-modal');
+        loadJobDetail(jobId);
         loadJobs();
         showNotification('End time updated successfully');
     } catch (error) {
@@ -1520,19 +1687,27 @@ async function updateJobEndTime(jobId) {
 }
 
 async function updateJobUrl(jobId) {
-    const url = document.getElementById('edit_url').value.trim();
+    const editDeviceEl = document.getElementById('edit_device_path');
+    const url = editDeviceEl ? editDeviceEl.value : document.getElementById('edit_url').value.trim();
     
     if (!url) {
         showNotification('URL cannot be empty', 'error');
         return;
     }
     
-    const stream_type = url.toLowerCase().startsWith('rtsp://') ? 'rtsp' : 'http';
+    let stream_type;
+    if (url.startsWith('/dev/video')) {
+        stream_type = 'device';
+    } else if (url.toLowerCase().startsWith('rtsp://') || url.toLowerCase().startsWith('rtsps://')) {
+        stream_type = 'rtsp';
+    } else {
+        stream_type = 'http';
+    }
     
     try {
         await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { url, stream_type } });
         showNotification('Stream URL updated successfully');
-        showJobDetails(jobId);
+        loadJobDetail(jobId);
     } catch (error) {
         console.error('Failed to update URL:', error);
         showNotification(error.message || 'Failed to update URL', 'error');
@@ -1550,7 +1725,7 @@ async function updateJobInterval(jobId) {
     try {
         await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { interval_seconds: interval } });
         showNotification('Capture interval updated successfully');
-        showJobDetails(jobId);
+        loadJobDetail(jobId);
     } catch (error) {
         console.error('Failed to update interval:', error);
         showNotification(error.message || 'Failed to update interval', 'error');
@@ -1580,7 +1755,9 @@ function setAutoBuildInterval(inputId, hours) {
 async function saveJobChanges(jobId) {
     // Collect all form values
     const interval = parseInt(document.getElementById('edit_interval_seconds').value);
-    const url = document.getElementById('edit_url').value.trim();
+    // URL may come from device picker or text input
+    const editDeviceEl = document.getElementById('edit_device_path');
+    const url = editDeviceEl ? editDeviceEl.value : document.getElementById('edit_url').value.trim();
     const endDatetimeRaw = document.getElementById('edit_end_datetime').value || null;
     const endDatetime = endDatetimeRaw ? datetimeLocalToISO(endDatetimeRaw) : null;
     const timeWindowEnabled = document.getElementById('edit_time_window_enabled').checked;
@@ -1630,8 +1807,15 @@ async function saveJobChanges(jobId) {
         }
     }
     
-    // Auto-detect stream type from URL
-    const stream_type = url.toLowerCase().startsWith('rtsp://') ? 'rtsp' : 'http';
+    // Detect stream type from URL
+    let stream_type;
+    if (url.startsWith('/dev/video')) {
+        stream_type = 'device';
+    } else if (url.toLowerCase().startsWith('rtsp://') || url.toLowerCase().startsWith('rtsps://')) {
+        stream_type = 'rtsp';
+    } else {
+        stream_type = 'http';
+    }
     
     // Build update payload
     const updateData = {
@@ -1656,7 +1840,7 @@ async function saveJobChanges(jobId) {
     try {
         await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: updateData });
         await loadJobs();
-        closeModal('job-details-modal');
+        loadJobDetail(jobId);
         showNotification('Job settings updated successfully');
     } catch (error) {
         console.error('Failed to update job:', error);
@@ -1670,6 +1854,7 @@ async function deleteJob(jobId, jobName) {
         async () => {
             try {
                 await apiRequest(`/jobs/${jobId}`, { method: 'DELETE' });
+                navigateTo('/jobs');
                 loadJobs();
                 showNotification(`Job "${jobName}" and all captures deleted successfully`);
                 refreshEventsSoon();
@@ -1677,13 +1862,75 @@ async function deleteJob(jobId, jobName) {
                 console.error('Failed to delete job:', error);
                 showNotification(`Failed to delete job "${jobName}"`, 'error');
             }
-        },
-        { closeModalId: 'job-details-modal' }
+        }
     );
 }
 
 async function testUrl() {
     previewStream('job_url', 'test-result', 'capture_quality', 'capture_resolution', 'source-info', 'source-dimensions');
+}
+
+async function testDevice() {
+    const devicePath = document.getElementById('device_path').value;
+    if (!devicePath) {
+        showNotification('Please select a camera device first', 'warning');
+        return;
+    }
+    previewStream('device_path', 'device-test-result', 'capture_quality', 'capture_resolution', 'source-info', 'source-dimensions');
+}
+
+// Current source type state for create modal
+let _createSourceType = 'network';
+
+function setSourceType(type) {
+    _createSourceType = type;
+    const networkBtn = document.getElementById('source-type-network');
+    const deviceBtn = document.getElementById('source-type-device');
+    const urlInput = document.getElementById('job_url');
+    const deviceSelect = document.getElementById('device_path');
+    const refreshBtn = document.getElementById('device-refresh-btn');
+    
+    if (type === 'device') {
+        networkBtn.classList.remove('active');
+        deviceBtn.classList.add('active');
+        urlInput.style.display = 'none';
+        urlInput.removeAttribute('required');
+        deviceSelect.style.display = '';
+        refreshBtn.style.display = '';
+        refreshDevices('device_path');
+    } else {
+        deviceBtn.classList.remove('active');
+        networkBtn.classList.add('active');
+        deviceSelect.style.display = 'none';
+        refreshBtn.style.display = 'none';
+        urlInput.style.display = '';
+        urlInput.setAttribute('required', '');
+    }
+    // Clear preview results
+    document.getElementById('test-result').innerHTML = '';
+    document.getElementById('device-test-result').innerHTML = '';
+}
+
+async function refreshDevices(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = '<option value="">Scanning...</option>';
+    try {
+        const devices = await apiRequest('/devices/');
+        select.innerHTML = '';
+        if (devices.length === 0) {
+            select.innerHTML = '<option value="">No cameras detected</option>';
+            return;
+        }
+        for (const d of devices) {
+            const opt = document.createElement('option');
+            opt.value = d.path;
+            opt.textContent = `${d.name} (${d.path})`;
+            select.appendChild(opt);
+        }
+    } catch (err) {
+        select.innerHTML = '<option value="">Error loading devices</option>';
+    }
 }
 
 function _generateResolutionOptions(width, height, currentValue) {
@@ -1722,15 +1969,19 @@ async function previewStream(urlInputId, resultDivId, qualityId, resolutionId, i
     const resultDiv = document.getElementById(resultDivId);
     
     if (!url) {
-        showNotification('Please enter a URL first', 'warning');
+        showNotification('Please enter a URL or select a device first', 'warning');
         return;
     }
+    
+    // Determine stream type for the query
+    const streamType = url.startsWith('/dev/video') ? 'device' : null;
     
     resultDiv.innerHTML = '<div style="display:flex;justify-content:center;padding:2rem 0;"><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;padding:0.75rem 1.5rem;display:flex;align-items:center;gap:0.5rem;"><span class="spinner" style="width:14px;height:14px;border-width:2px;"></span><span style="color:var(--text-secondary);font-size:0.85rem;">Loading preview</span></div></div>';
     resultDiv.className = 'test-result';
     
     try {
         const query = { url };
+        if (streamType) query.stream_type = streamType;
         if (qualityId) {
             const qEl = document.getElementById(qualityId);
             if (qEl) query.quality = qEl.value;
@@ -2036,7 +2287,7 @@ function renderVideos(videos, isEmpty) {
             ` : ''}
             <div class="video-gallery-info">
                 <div class="video-gallery-name">${escapeHtml(video.name)}</div>
-                <div class="video-gallery-job">${video.build_source === 'imported' ? '<span class="auto-build-badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;">Imported</span>' : (video.job_name ? escapeHtml(video.job_name) : 'No job')}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}</div>
+                <div class="video-gallery-job">${video.build_source === 'imported' ? '<span class="auto-build-badge imported">Imported</span>' : (video.job_name ? escapeHtml(video.job_name) : 'No job')}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}</div>
                 ${video.tags && video.tags.length ? `<div class="card-tags">${video.tags.map(t => tagChipHTML(t, true)).join('')}</div>` : ''}
             </div>
         </div>`;
@@ -2046,13 +2297,13 @@ function renderVideos(videos, isEmpty) {
 }
 
 let _currentVideoDetailId = null;
+let _videoDetailPollInterval = null;
 
-async function openVideoDetail(videoId) {
+async function loadVideoDetail(videoId) {
     try {
         const video = await apiRequest(`/videos/${videoId}`);
         _currentVideoDetailId = video.id;
         
-        const modal = document.getElementById('video-detail-modal');
         const title = document.getElementById('video-detail-title');
         const meta = document.getElementById('video-detail-meta');
         const actions = document.getElementById('video-detail-actions');
@@ -2071,15 +2322,53 @@ async function openVideoDetail(videoId) {
             player.style.display = 'none';
         }
         
+        // Show progress bar for processing videos
+        let progressContainer = document.getElementById('video-detail-progress');
+        if (!progressContainer) {
+            progressContainer = document.createElement('div');
+            progressContainer.id = 'video-detail-progress';
+            meta.parentNode.insertBefore(progressContainer, meta);
+        }
+        if (video.status === 'processing') {
+            progressContainer.innerHTML = `
+                <div style="margin-bottom: 1rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
+                        <span style="font-size:0.85rem;color:var(--text-secondary);">Building timelapse...</span>
+                        <span style="font-size:0.85rem;font-weight:600;color:var(--primary-color);">${Math.round(video.progress)}%</span>
+                    </div>
+                    <div class="progress-bar" style="height:6px;">
+                        <div class="progress-fill" style="width:${video.progress}%;"></div>
+                    </div>
+                </div>`;
+            // Auto-refresh while processing
+            if (!_videoDetailPollInterval) {
+                _videoDetailPollInterval = setInterval(() => {
+                    const route = parseRoute();
+                    if (route.view === 'video-detail' && route.id) {
+                        loadVideoDetail(route.id);
+                    } else {
+                        clearInterval(_videoDetailPollInterval);
+                        _videoDetailPollInterval = null;
+                    }
+                }, 3000);
+            }
+        } else {
+            progressContainer.innerHTML = '';
+            if (_videoDetailPollInterval) {
+                clearInterval(_videoDetailPollInterval);
+                _videoDetailPollInterval = null;
+            }
+        }
+        
         // Build metadata in 3 dense rows of 4 columns each
         let metaHtml = '';
         
         // Row 1: Job, Duration, Size, Status
         const jobVal = video.build_source === 'imported'
-            ? '<span class="auto-build-badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;">Imported</span>'
+            ? '<span class="auto-build-badge imported">Imported</span>'
             : (video.job_name
                 ? (video.job_id
-                    ? `<a href="#" class="job-link" onclick="event.preventDefault(); closeVideoDetail(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a>`
+                    ? `<a href="/jobs/${video.job_id}" class="job-link" onclick="event.preventDefault(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a>`
                     : escapeHtml(video.job_name))
                 : 'None');
         const sizeVal = (video.status === 'completed' && video.file_size) ? formatBytes(video.file_size) : 'N/A';
@@ -2129,25 +2418,29 @@ async function openVideoDetail(videoId) {
             actionsHtml += shareToggleHTML(video.id, video.share_token || null);
         }
         actions.innerHTML = actionsHtml;
-        
-        showModal('video-detail-modal');
     } catch (error) {
         console.error('Failed to load video details:', error);
+        showNotification('Failed to load video details', 'error');
+        navigateTo('/timelapses');
     }
 }
 
+// Compatibility wrapper
+function openVideoDetail(videoId) {
+    navigateTo(`/timelapses/${videoId}`);
+}
+
 function closeVideoDetail() {
-    const modal = document.getElementById('video-detail-modal');
-    const wasActive = modal.classList.contains('active');
-    const player = document.getElementById('video-detail-player');
-    player.pause();
-    player.currentTime = 0;
-    modal.classList.remove('active');
-    
-    if (wasActive && _modalHistoryDepth > 0 && !_closingFromPopstate) {
-        _modalHistoryDepth--;
-        history.back();
+    if (_videoDetailPollInterval) {
+        clearInterval(_videoDetailPollInterval);
+        _videoDetailPollInterval = null;
     }
+    const player = document.getElementById('video-detail-player');
+    if (player) {
+        player.pause();
+        player.currentTime = 0;
+    }
+    navigateTo('/timelapses');
 }
 
 async function deleteVideoFromDetail(videoId, videoName) {
@@ -2314,7 +2607,7 @@ async function loadSharedVideosList() {
             `;
         }).join('');
     } catch (error) {
-        container.innerHTML = '<span style="color:#ef4444;font-size:0.85rem;">Failed to load shared videos</span>';
+        container.innerHTML = '<span class="text-danger text-sm">Failed to load shared videos</span>';
     }
 }
 
@@ -2748,8 +3041,6 @@ async function populateVideoFormFromJob(jobId, jobName) {
     const createBtn = document.getElementById('create-video-btn');
     if (createBtn) {
         createBtn.disabled = false;
-        createBtn.style.opacity = '1';
-        createBtn.style.cursor = 'pointer';
     }
     
     // Update tag picker with job's tags
@@ -3419,12 +3710,11 @@ async function processVideo(event) {
     };
     
     try {
-        await apiRequest('/videos/', { method: 'POST', body: formData });
-        // Close modal without history.back() since we're navigating to videos view
+        const video = await apiRequest('/videos/', { method: 'POST', body: formData });
         document.getElementById('process-video-modal').classList.remove('active');
         if (_modalHistoryDepth > 0) _modalHistoryDepth--;
         document.getElementById('process-video-form').reset();
-        switchView('videos');
+        navigateTo(`/timelapses/${video.id}`);
         showNotification('Video processing started');
     } catch (error) {
         console.error('Failed to process video:', error);
@@ -3441,10 +3731,7 @@ function closeVideoPlayer() {
 }
 
 function navigateToJob(jobId) {
-    // Switch to jobs view
-    switchView('jobs');
-    // Open job details modal
-    setTimeout(() => showJobDetails(jobId), 100);
+    navigateTo(`/jobs/${jobId}`);
 }
 
 async function deleteVideo(videoId, videoName) {
@@ -3523,13 +3810,7 @@ document.addEventListener('keydown', function(e) {
             return;
         }
         
-        // Check custom modals first (video detail, confirm dialog)
-        const videoDetail = document.getElementById('video-detail-modal');
-        if (videoDetail && videoDetail.classList.contains('active')) {
-            closeVideoDetail();
-            return;
-        }
-        
+        // Check custom modals first (confirm dialog)
         const confirmModal = document.getElementById('confirm-modal');
         if (confirmModal && confirmModal.classList.contains('active')) {
             confirmModal.classList.remove('active');
@@ -3955,86 +4236,6 @@ async function executeImport() {
     }
 }
 
-// --- Server path settings ---
-let _pathBackups = {};
-const _pathTypes = [
-    { key: 'captures', label: 'Captures Path', apiField: 'captures_path' },
-    { key: 'timelapses', label: 'Timelapses Path', apiField: 'timelapses_path' },
-    { key: 'import', label: 'Import Path', apiField: 'import_path' },
-];
-
-function renderPathRow(type) {
-    const editSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
-    const saveSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
-    const cancelSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-    const container = document.getElementById(`path-row-${type.key}`);
-    if (!container) return;
-    container.innerHTML = `
-        <label style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">${type.label}</label>
-        <div style="display:flex;gap:0.5rem;align-items:center;">
-            <input type="text" id="${type.key}-path-input" class="form-control" style="flex:1;opacity:0.6;" readonly>
-            <button class="btn-icon" id="${type.key}-path-edit-btn" onclick="togglePathEdit('${type.key}', true)" title="Edit">${editSvg}</button>
-            <button class="btn-icon" id="${type.key}-path-save-btn" onclick="saveServerPath('${type.key}')" title="Save" style="display:none;color:var(--success-color);">${saveSvg}</button>
-            <button class="btn-icon" id="${type.key}-path-cancel-btn" onclick="togglePathEdit('${type.key}', false)" title="Cancel" style="display:none;color:var(--danger-color);">${cancelSvg}</button>
-        </div>`;
-}
-
-async function loadServerPaths() {
-    _pathTypes.forEach(t => renderPathRow(t));
-    try {
-        const result = await apiRequest('/import/settings/path');
-        _pathTypes.forEach(t => {
-            const val = result[t.apiField] || '';
-            document.getElementById(`${t.key}-path-input`).value = val;
-            _pathBackups[t.key] = val;
-        });
-        _importBrowsePath = result.import_path || '/imports';
-    } catch (e) {
-        _pathTypes.forEach(t => {
-            document.getElementById(`${t.key}-path-input`).value = '';
-        });
-        _importBrowsePath = '/imports';
-    }
-}
-
-function togglePathEdit(type, editing) {
-    const input = document.getElementById(`${type}-path-input`);
-    const editBtn = document.getElementById(`${type}-path-edit-btn`);
-    const saveBtn = document.getElementById(`${type}-path-save-btn`);
-    const cancelBtn = document.getElementById(`${type}-path-cancel-btn`);
-    if (editing) {
-        _pathBackups[type] = input.value;
-        input.removeAttribute('readonly');
-        input.style.opacity = '1';
-        editBtn.style.display = 'none';
-        saveBtn.style.display = '';
-        cancelBtn.style.display = '';
-        input.focus();
-    } else {
-        input.value = _pathBackups[type];
-        input.setAttribute('readonly', '');
-        input.style.opacity = '0.6';
-        editBtn.style.display = '';
-        saveBtn.style.display = 'none';
-        cancelBtn.style.display = 'none';
-    }
-}
-
-async function saveServerPath(type) {
-    const path = document.getElementById(`${type}-path-input`).value.trim();
-    const label = _pathTypes.find(t => t.key === type)?.label || type;
-    if (!path) { showNotification(`${label} cannot be empty`, 'error'); return; }
-    try {
-        await apiRequest(`/import/settings/path/${type}`, { method: 'PUT', body: { path } });
-        _pathBackups[type] = path;
-        if (type === 'import') _importBrowsePath = path;
-        togglePathEdit(type, false);
-        showNotification(`${label} updated`, 'success');
-    } catch (error) {
-        showNotification(error.message || `Failed to update ${label.toLowerCase()}`, 'error');
-    }
-}
-
 async function loadNamingPattern() {
     try {
         const result = await apiRequest('/settings/naming-pattern');
@@ -4078,8 +4279,13 @@ async function showCreateJobModal() {
     // Reset the form to clear any previous values
     document.getElementById('create-job-form').reset();
     
+    // Reset source type to network
+    _createSourceType = 'network';
+    setSourceType('network');
+    
     // Clear test results and estimates
     document.getElementById('test-result').innerHTML = '';
+    document.getElementById('device-test-result').innerHTML = '';
     document.getElementById('duration-estimate').innerHTML = '';
     
     // Set default datetime to now
@@ -4167,19 +4373,30 @@ async function duplicateJob(jobId) {
     try {
         const job = await apiRequest(`/jobs/${jobId}`);
         
-        closeModal('job-details-modal');
-        
         // Open create modal and pre-fill with job data
         document.getElementById('create-job-form').reset();
         document.getElementById('test-result').innerHTML = '';
+        document.getElementById('device-test-result').innerHTML = '';
         document.getElementById('duration-estimate').innerHTML = '';
+        
+        // Set source type based on job
+        if (job.stream_type === 'device') {
+            setSourceType('device');
+            const deviceSelect = document.getElementById('device_path');
+            deviceSelect.innerHTML = `<option value="${escapeHtml(job.url)}" selected>${escapeHtml(job.url)}</option>`;
+            refreshDevices('device_path').then(() => {
+                deviceSelect.value = job.url;
+            });
+        } else {
+            setSourceType('network');
+            document.getElementById('job_url').value = job.url;
+        }
+        document.getElementById('warning_threshold').value = job.warning_threshold || 3;
         
         // Pre-fill fields from source job
         document.getElementById('job_name').value = `${job.name} (Copy)`;
-        document.getElementById('job_url').value = job.url;
         document.getElementById('interval_seconds').value = job.interval_seconds;
         document.getElementById('framerate').value = job.framerate || 30;
-        document.getElementById('warning_threshold').value = job.warning_threshold || 3;
         document.getElementById('naming_pattern').value = job.naming_pattern || '{job_name}_{count}_{timestamp}';
         document.getElementById('capture_quality').value = job.capture_quality || 'maximum';
         // Populate resolution dropdown from source dimensions before setting value
@@ -4642,7 +4859,7 @@ async function manualCapture(jobId, jobName) {
                 showNotification('Snapshot captured successfully!', 'success');
                 
                 // Refresh job details to show updated capture count
-                await showJobDetails(jobId);
+                await loadJobDetail(jobId);
             } catch (error) {
                 console.error('Manual capture failed:', error);
                 showNotification(`Snapshot failed: ${error.message}`, 'error');
@@ -4684,7 +4901,7 @@ async function performMaintenanceScan(jobId, jobName) {
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
                 </p>
-                <button class="btn btn-secondary" style="margin-top: 1rem;" onclick="closeMaintenance()">Close</button>
+                <button class="btn btn-secondary mt-lg" onclick="closeMaintenance()">Close</button>
             </div>
         `;
     }
@@ -4702,7 +4919,7 @@ function displayMaintenanceResults(jobId, jobName) {
                 <p style="color: var(--text-secondary);">
                     All ${data.total_captures} database records match files on disk. Everything is in sync.
                 </p>
-                <button class="btn btn-primary" style="margin-top: 1.5rem;" onclick="closeMaintenance()">Close</button>
+                <button class="btn btn-primary mt-xl" onclick="closeMaintenance()">Close</button>
             </div>
         `;
     } else {
@@ -4796,14 +5013,14 @@ function displayMaintenanceResults(jobId, jobName) {
                 ` : ''}
                 
                 ${data.missing_count > 0 || data.orphaned_count > 0 ? `
-                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                <div class="modal-actions">
                     <button class="btn btn-secondary" onclick="closeMaintenance()">Cancel</button>
                     <button class="btn btn-primary" onclick="confirmMaintenanceSubmit(${jobId}, '${escapeHtml(jobName)}')">
                         Submit
                     </button>
                 </div>
                 ` : `
-                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                <div class="modal-actions">
                     <button class="btn btn-primary" onclick="closeMaintenance()">Close</button>
                 </div>
                 `}
@@ -4910,7 +5127,7 @@ async function performMaintenanceActions(jobId, jobName) {
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
                 </p>
-                <button class="btn btn-secondary" style="margin-top: 1rem;" onclick="closeMaintenance()">Close</button>
+                <button class="btn btn-secondary mt-lg" onclick="closeMaintenance()">Close</button>
             </div>
         `;
         showNotification('Maintenance failed', 'error');
@@ -4981,7 +5198,7 @@ async function performMaintenanceImport(jobId, jobName) {
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
                 </p>
-                <button class="btn btn-secondary" style="margin-top: 1rem;" onclick="closeMaintenance()">Close</button>
+                <button class="btn btn-secondary mt-lg" onclick="closeMaintenance()">Close</button>
             </div>
         `;
         showNotification('Maintenance import failed', 'error');
@@ -5040,7 +5257,7 @@ async function performMaintenanceCleanup(jobId, jobName) {
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
                 </p>
-                <button class="btn btn-secondary" style="margin-top: 1rem;" onclick="closeMaintenance()">Close</button>
+                <button class="btn btn-secondary mt-lg" onclick="closeMaintenance()">Close</button>
             </div>
         `;
     }
@@ -5238,7 +5455,7 @@ function getChartColors() {
     const style = getComputedStyle(document.documentElement);
     const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
     return {
-        purple: style.getPropertyValue('--accent-purple').trim() || '#8b5cf6',
+        purple: style.getPropertyValue('--purple-mid').trim() || '#8b5cf6',
         blue: '#3b82f6',
         green: '#22c55e',
         amber: '#f59e0b',
@@ -5340,7 +5557,7 @@ function renderDonutChart(data, colors) {
             maintainAspectRatio: true,
             cutout: '60%',
             plugins: {
-                legend: { position: 'bottom', labels: { color: colors.textSecondary, padding: 16, usePointStyle: true, pointStyleWidth: 12 } },
+                legend: { position: 'bottom', labels: { color: colors.textSecondary, padding: 16, usePointStyle: true, pointStyle: 'circle' } },
                 tooltip: {
                     callbacks: {
                         label: (ctx) => {
@@ -5386,7 +5603,7 @@ function renderDiskChart(data, colors) {
         type: 'doughnut',
         data: {
             labels: [
-                `Timelapse Manager (${formatBytes(appUsed)})`,
+                `ChronoSnap (${formatBytes(appUsed)})`,
                 `Other (${formatBytes(otherUsed)})`,
                 `Free (${formatBytes(free)})`
             ],
@@ -5403,7 +5620,7 @@ function renderDiskChart(data, colors) {
             maintainAspectRatio: true,
             cutout: '60%',
             plugins: {
-                legend: { position: 'bottom', labels: { color: colors.textSecondary, padding: 16, usePointStyle: true, pointStyleWidth: 12 } },
+                legend: { position: 'bottom', labels: { color: colors.textSecondary, padding: 16, usePointStyle: true, pointStyle: 'circle' } },
                 tooltip: {
                     callbacks: {
                         label: (ctx) => {
@@ -5466,7 +5683,7 @@ function renderJobChart(data, colors) {
             plugins: {
                 legend: {
                     position: 'top',
-                    labels: { color: colors.textSecondary, usePointStyle: true, pointStyleWidth: 12, padding: 16 }
+                    labels: { color: colors.textSecondary, usePointStyle: true, pointStyle: 'circle', padding: 16 }
                 },
                 tooltip: {
                     callbacks: {
@@ -5520,18 +5737,20 @@ async function loadSettings() {
     // Sync time format toggle state
     updateTimeFormatButtons();
 
+    // Load theme presets
+    renderThemePresets();
+
     // Load webhook settings
     loadWebhookSettings();
     loadTagManager();
     loadSharedVideosList();
-    loadServerPaths();
     loadNamingPattern();
     
     // Load version and check for updates
     try {
         const ver = await apiRequest('/settings/version');
         const el = document.getElementById('app-version');
-        if (el) el.textContent = `Timelapse Manager v${ver.version}`;
+        if (el) el.textContent = `ChronoSnap v${ver.version}`;
         if (ver.update_available && ver.latest) {
             const badge = document.getElementById('update-badge');
             if (badge) {
@@ -5842,7 +6061,7 @@ function editTagInline(tagId) {
     item.innerHTML = `
         <input type="text" class="form-control" value="${escapeHtml(tag.name)}" id="tag-edit-name-${tagId}" style="flex:1;max-width:150px;font-size:0.85rem;padding:0.25rem 0.5rem;">
         ${colorSwatchHTML(`tag-edit-swatches-${tagId}`, tag.color)}
-        <button class="btn btn-sm btn-purple" onclick="saveTagEdit(${tagId})">Save</button>
+        <button class="btn btn-sm btn-accent" onclick="saveTagEdit(${tagId})">Save</button>
         <button class="btn btn-sm btn-secondary" onclick="renderTagList()">Cancel</button>
     `;
     document.getElementById(`tag-edit-name-${tagId}`).focus();
@@ -5920,7 +6139,7 @@ function renderTagPicker(containerId, selectedTagIds = [], onToggle = null) {
         <div class="tag-inline-form" style="visibility:hidden;">
             <input type="text" class="form-control" placeholder="New tag name..." maxlength="50" tabindex="-1">
             <div class="color-swatch-row">${swatchesHTML}</div>
-            <button type="button" class="btn btn-purple btn-sm" tabindex="-1">Add Tag</button>
+            <button type="button" class="btn btn-accent btn-sm" tabindex="-1">Add Tag</button>
             <button type="button" class="btn btn-secondary btn-sm" tabindex="-1">Cancel</button>
         </div>
     `;
@@ -6272,7 +6491,7 @@ const captureSelection = new SelectionManager({
     name: 'captures',
     cardSelector: '.capture-card',
     dataAttr: 'data-capture-id',
-    controlsId: 'captures-selection-controls',
+    controlsId: 'selection-controls',
     countId: 'captures-selected-count',
     toggleBtnId: 'toggle-selection-btn',
     deleteEndpoint: '/captures/delete-multiple',
@@ -6338,7 +6557,7 @@ async function scanOrphanedCaptures() {
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
                 </p>
-                <button class="btn btn-secondary" style="margin-top: 1rem;" onclick="closeMaintenance()">Close</button>
+                <button class="btn btn-secondary mt-lg" onclick="closeMaintenance()">Close</button>
             </div>
         `;
     }
@@ -6354,7 +6573,7 @@ function displayOrphanedResults(data) {
                 <p style="color: var(--text-secondary);">
                     No orphaned captures found. All files and records belong to active jobs.
                 </p>
-                <button class="btn btn-primary" style="margin-top: 1.5rem;" onclick="closeMaintenance()">Close</button>
+                <button class="btn btn-primary mt-xl" onclick="closeMaintenance()">Close</button>
             </div>
         `;
         return;
@@ -6364,9 +6583,9 @@ function displayOrphanedResults(data) {
         const typeLabel = group.type === 'both' ? 'Files + DB Records' 
             : group.type === 'database' ? 'DB Records Only' 
             : 'Files Only';
-        const typeBadgeColor = group.type === 'both' ? '#e74c3c' 
-            : group.type === 'database' ? '#3498db' 
-            : '#e67e22';
+        const typeBadgeColor = group.type === 'both' ? 'var(--danger-color)' 
+            : group.type === 'database' ? 'var(--primary-color)' 
+            : 'var(--accent-color)';
         
         let details = '';
         if (group.type === 'filesystem') {
@@ -6385,17 +6604,17 @@ function displayOrphanedResults(data) {
             : `'both', '${escapeHtml(group.folder_path)}', ${group.original_job_id}`;
         
         return `
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: var(--bg-color); border-radius: 0.375rem; margin-bottom: 0.5rem;">
+            <div class="flex-between" style="padding: 0.75rem; background: var(--bg-color); border-radius: var(--radius-sm); margin-bottom: 0.5rem;">
                 <div style="flex: 1; min-width: 0;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                    <div class="form-row-wrap">
                         <strong>${escapeHtml(group.original_job_name)}</strong>
-                        <span style="font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 0.25rem; background: ${typeBadgeColor}; color: white;">${typeLabel}</span>
+                        <span class="text-xs" style="padding: 0.1rem 0.4rem; border-radius: 0.25rem; background: ${typeBadgeColor}; color: var(--primary-text-on);">${typeLabel}</span>
                     </div>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                    <div class="text-sm text-secondary mt-sm">
                         ${details}
                     </div>
                 </div>
-                <button class="btn btn-danger" style="padding: 0.3rem 0.75rem; font-size: 0.85rem; white-space: nowrap; margin-left: 0.5rem;" 
+                <button class="btn btn-danger btn-sm" style="white-space: nowrap; margin-left: 0.5rem;" 
                     onclick="deleteOrphanedGroup(${cleanupArg}, '${escapeHtml(group.original_job_name)}')">
                     Delete
                 </button>
@@ -6410,16 +6629,16 @@ function displayOrphanedResults(data) {
     
     content.innerHTML = `
         <div>
-            <div style="margin-bottom: 1rem;">
-                <strong style="color: #e67e22;">⚠ Orphaned Captures Found</strong>
-                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+            <div class="mb-lg">
+                <strong class="text-warning">⚠ Orphaned Captures Found</strong>
+                <div class="text-sm text-secondary mt-sm">
                     ${data.orphaned_groups.length} group${data.orphaned_groups.length > 1 ? 's' : ''} · ${summaryParts.join(' · ')}
                 </div>
             </div>
             <div style="max-height: 400px; overflow-y: auto;">
                 ${groupsHtml}
             </div>
-            <div style="display: flex; justify-content: space-between; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <div class="flex-between" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
                 <button class="btn btn-secondary" onclick="closeMaintenance()">Close</button>
                 ${data.orphaned_groups.length > 1 ? `
                     <button class="btn btn-danger" onclick="deleteAllOrphanedCaptures()">Delete All</button>
@@ -6661,7 +6880,7 @@ async function showCapturePreview(captureId) {
         
         // Populate modal
         document.getElementById('capture-preview-image').src = `${API_BASE}/captures/${captureId}/image`;
-        document.getElementById('capture-detail-job').innerHTML = `<a href="#" onclick="showJobDetails(${capture.job_id}); closeModal('capture-preview-modal'); return false;" style="color: var(--primary-color); text-decoration: underline;">${escapeHtml(capture.job_name || 'Unknown Job')}</a>`;
+        document.getElementById('capture-detail-job').innerHTML = `<a href="/jobs/${capture.job_id}" onclick="event.preventDefault(); closeModal('capture-preview-modal'); navigateTo('/jobs/${capture.job_id}');" style="color: var(--primary-color); text-decoration: underline;">${escapeHtml(capture.job_name || 'Unknown Job')}</a>`;
         document.getElementById('capture-detail-time').textContent = formatDateTime(capture.captured_at);
         document.getElementById('capture-detail-size').textContent = formatBytes(capture.file_size);
         document.getElementById('capture-detail-path').textContent = capture.file_path;
@@ -6756,12 +6975,6 @@ function toggleVideoSharedFilter() {
 }
 
 async function viewJobCaptures(jobId) {
-    // Close job details modal if open
-    const modal = document.getElementById('job-details-modal');
-    if (modal) {
-        modal.classList.remove('active');
-    }
-    
     // Set the job filter in state AND dropdown BEFORE switching view
     capturesState.jobFilter = jobId;
     capturesState.currentPage = 1;
@@ -6769,7 +6982,6 @@ async function viewJobCaptures(jobId) {
     // Ensure dropdown is populated and set to the correct value
     const jobSelect = document.getElementById('captures-job-filter');
     if (jobSelect && jobSelect.options.length === 1) {
-        // Need to populate dropdown first
         const jobs = await apiRequest('/jobs/');
         jobs.forEach(job => {
             const option = document.createElement('option');
@@ -6783,7 +6995,7 @@ async function viewJobCaptures(jobId) {
     setValue('captures-job-filter', jobId);
     
     // Switch to captures view (this calls loadCaptures which will use the filter we just set)
-    switchView('captures', true);
+    navigateTo('/captures');
 }
 
 

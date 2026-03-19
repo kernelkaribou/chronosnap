@@ -1,4 +1,8 @@
-# TimeLapse-Manager
+<p align="center">
+  <img src="frontend/static/img/chronosnap.png" alt="ChronoSnap" width="120">
+</p>
+<h1 align="center">ChronoSnap</h1>
+<p align="center"><em>Timelapse Manager</em></p>
 
 A self-hosted web application for creating automated timelapse captures from HTTP and RTSP video streams. Define a schedule, point it at a camera, and let it collect images over days, weeks, or months, then process them into timelapse videos.
 
@@ -12,13 +16,16 @@ A self-hosted web application for creating automated timelapse captures from HTT
 - Capture timing uses grid-based arithmetic aligned to the job start time, so intervals remain consistent regardless of when the scheduler checks
 - All scheduling is DST-aware through UTC intermediate calculations
 
-### Stream Support
+### Capture Sources
 
-- RTSP and RTSPS streams captured via FFmpeg with TCP transport
-- HTTP/HTTPS snapshot URLs captured via FFmpeg
-- URL validation with a preview capture before committing to a job
-- Preview button on existing jobs to verify camera connectivity and angle at any time
-- Manual snapshot trigger for on-demand captures outside the schedule
+ChronoSnap supports four types of capture sources. Each source type captures a single image per interval using FFmpeg or rpicam-apps.
+
+- **HTTP/HTTPS** -- Snapshot URLs that return a JPEG or image frame. Common with IP cameras that expose a `/snap.jpeg` or similar endpoint. Captured via FFmpeg.
+- **RTSP/RTSPS** -- Real-time streaming protocol feeds. Used by most IP cameras and NVR systems (including UniFi Protect). Captured via FFmpeg with TCP transport for reliability.
+- **USB Webcam** -- Local USB cameras accessed through the V4L2 (Video4Linux2) interface. Supported out of the box in the Docker image. Captured via FFmpeg with `-f v4l2`.
+- **Raspberry Pi CSI Camera (Experimental)** -- Pi Camera Modules connected via the CSI ribbon cable. Requires rpicam-apps from the host. Captured via `rpicam-still`.
+
+All source types support preview before creating a job, per-job capture quality and resolution settings, and manual snapshot triggers.
 
 ### Video Processing
 
@@ -38,13 +45,43 @@ A self-hosted web application for creating automated timelapse captures from HTT
 
 The import feature allows bringing in existing images and videos from outside the normal capture workflow. This is useful for consolidating footage from other sources, importing archives from previous setups, or managing standalone timelapse videos.
 
-**Server Path Import**: Place files in the `/imports` directory (or any configured import path) on the host, then browse and select them from within the web interface. The default import path is configurable in Settings.
+#### Browser Upload
 
-**Browser Upload**: Drag and drop files or folders directly into the import modal, or use the Browse button to select a folder. Uploads support recursive folder traversal for nested directory structures.
+Drag and drop files or folders directly into the import modal, or use the Browse button to select files. Uploads support recursive folder traversal for nested directory structures. Files are streamed to disk in 1 MB chunks so large uploads do not consume application memory. When uploading many files at once, they are sent in batches of 50 and grouped into the same import session automatically.
 
-**How it works**: Each import operation goes through a staging pipeline. Files are scanned, analyzed (classified as images or videos, checked for duplicates), and previewed before confirming. Once confirmed, images are moved into the standard capture directory structure and a new job is created for them. Videos are imported as standalone timelapses in the gallery.
+**Limits:**
+- 25 GB maximum per upload session
+- 100 GB maximum per individual file (server path only)
+- 100,000 files per import
+- Archives are capped at a 20x extraction ratio to prevent zip bombs
 
-**Important**: Each import creates a single job. If you need to import images into separate jobs, perform separate imports. Videos are imported individually and do not require a job. They appear directly in the timelapse gallery with an "Imported" badge.
+Browser uploads work well for typical imports up to a few gigabytes. For very large transfers, the server path method below is more reliable since it avoids browser session timeouts.
+
+#### Server Path Import (Optional)
+
+For bulk imports or large file sets, place files in the `/imports` directory on the host, then browse and select them from within the web interface. This avoids browser upload limits and network interruptions since the files are already on disk.
+
+To enable server path imports, add the volume mount to your `docker-compose.yml`:
+
+```yaml
+volumes:
+  - ./imports:/imports
+```
+
+This volume is optional. If you only use browser uploads, you can omit it entirely.
+
+#### Import Pipeline
+
+Each import goes through a staging pipeline:
+
+1. **Stage** -- files are uploaded or copied into a temporary staging area
+2. **Analyze** -- files are classified (images, videos, archives), archives are extracted, and duplicates are detected
+3. **Preview** -- you review the staged files and select which to import
+4. **Execute** -- selected images are moved into the capture directory structure and a new job is created. Videos are imported as standalone entries in the timelapse gallery with an "Imported" badge.
+
+Each import creates a single job. To import images into separate jobs, perform separate imports. Videos do not require a job and appear directly in the gallery.
+
+After a successful server path import, source files are removed from the import directory to prevent accidental re-imports. Browser uploads are cleaned up from staging automatically.
 
 **Supported formats**:
 - **Images**: JPEG, PNG, BMP, TIFF, WebP
@@ -52,8 +89,6 @@ The import feature allows bringing in existing images and videos from outside th
 - **Archives**: ZIP, TAR, GZ, TGZ, BZ2, RAR, 7Z (automatically extracted during analysis)
 
 **Duplicate detection**: Videos are checked against existing imports using SHA-256 content hashing and file size with duration matching. Duplicates are identified during the preview stage and blocked from being imported again, even if the filename has changed.
-
-After a successful import, source files are removed from the import directory to prevent accidental re-imports.
 
 ### Exporting
 
@@ -78,7 +113,6 @@ The export button appears in the job details modal (the download arrow icon next
 - Job duplication to quickly create similar configurations
 - API key authentication (32-character keys) for all endpoints
 - Health check endpoint for container orchestration
-- **Server paths**: all four paths (Captures, Timelapses, Import, Export) are configurable in Settings, each with a default matching its Docker volume mount. Paths use an edit/confirm/cancel toggle pattern consistent with job path editing.
 
 ### Storage Dashboard
 
@@ -136,7 +170,6 @@ Five volumes are required for persistent data:
 | `TZ` | `Etc/UTC` | Timezone for scheduling and display. Must be a valid IANA timezone (for example, `America/Chicago`). This controls when time windows activate and how timestamps are displayed. |
 | `PORT` | `8080` | Port the application listens on inside the container. |
 | `LOG_LEVEL` | `INFO` | Logging verbosity. Options: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
-| `MAX_UPLOAD_SIZE` | `10737418240` | Maximum upload size in bytes (default 10 GB). |
 | `FFMPEG_TIMEOUT` | `30` | FFmpeg capture timeout in seconds. Increase for slow networks. |
 | `APP_VERSION` | Read from `VERSION` file | Override the application version string. Optional. If not set, the version is read from the `VERSION` file at the repository root. |
 
@@ -168,6 +201,151 @@ services:
       timeout: 10s
       retries: 3
 ```
+
+### Local Camera Support
+
+Local cameras can be used as capture sources instead of network streams. This requires passing hardware devices from the host into the Docker container.
+
+#### USB Webcams (V4L2)
+
+USB webcams are supported out of the box. The container includes `v4l-utils` and uses FFmpeg's V4L2 input for capture. Most USB webcams that work on Linux will work here, and the application automatically detects the camera's maximum resolution.
+
+**1. Identify your camera on the host:**
+
+```bash
+ls -la /dev/video*
+# Or if v4l-utils is installed on the host:
+v4l2-ctl --list-devices
+```
+
+USB cameras typically create two `/dev/video` entries (for example, `video0` and `video1`). The lower-numbered device is usually the capture interface.
+
+**2. Map devices in docker-compose.yml:**
+
+```yaml
+services:
+  timelapse-manager:
+    # ... existing configuration ...
+    devices:
+      - /dev/video0:/dev/video0
+```
+
+To map all video devices without listing each one individually, use a device cgroup rule instead:
+
+```yaml
+services:
+  timelapse-manager:
+    # ... existing configuration ...
+    device_cgroup_rules:
+      - 'c 81:* rmw'
+    volumes:
+      - /dev:/dev
+```
+
+The major number `81` corresponds to V4L2 video devices. This grants access to all video devices without full privileged mode.
+
+**3. Create a job** using the camera icon toggle in the Create Job modal. Your devices will appear in the dropdown.
+
+#### Raspberry Pi CSI Cameras (rpicam-apps) -- Experimental
+
+> **Experimental:** CSI camera support depends on the host OS, kernel version, and rpicam-apps packaging. The libcamera/rpicam ecosystem on Raspberry Pi is under active development and behavior may vary across OS versions. USB webcams via V4L2 are the recommended and fully tested path for local cameras.
+
+Pi Camera Modules (v1, v2, v3, HQ Camera) connected via the CSI ribbon cable use the libcamera stack instead of standard V4L2. These cameras expose raw Bayer sensor data that FFmpeg cannot capture from directly, so the application uses `rpicam-still` from the [rpicam-apps](https://github.com/raspberrypi/rpicam-apps) project for image capture.
+
+> **This is an advanced setup.** It requires installing rpicam-apps on the host, mounting the binaries into the container, and is intended for users comfortable with Raspberry Pi hardware and Docker device passthrough.
+
+**Prerequisites:**
+
+- Raspberry Pi running Raspberry Pi OS (Bookworm or later)
+- Pi Camera Module connected and enabled in `/boot/firmware/config.txt` (`camera_auto_detect=1`)
+- Docker installed on the Pi
+
+**1. Install rpicam-apps on the host:**
+
+```bash
+sudo apt update
+sudo apt install rpicam-apps
+```
+
+If the package is not found, you may need to add the Raspberry Pi apt repository:
+
+```bash
+echo "deb http://archive.raspberrypi.com/debian $(lsb_release -cs) main" | \
+  sudo tee /etc/apt/sources.list.d/raspi.list
+curl -fsSL https://archive.raspberrypi.com/debian/pool/main/r/raspberrypi-archive-keyring/raspberrypi-archive-keyring_2021.1.1+rpt1_all.deb -o /tmp/raspi-keyring.deb
+sudo dpkg -i /tmp/raspi-keyring.deb
+sudo apt update
+sudo apt install rpicam-apps
+```
+
+**2. Verify the camera works on the host:**
+
+```bash
+rpicam-hello --list-cameras
+# Should show your camera, e.g.:
+# 0 : imx219 [3280x2464 10-bit RGGB] (/base/soc/i2c0mux/i2c@1/imx219@10)
+
+# Test a capture:
+rpicam-still --immediate -o /tmp/test.jpg
+```
+
+If `rpicam-hello` fails, check that the camera module is properly seated and that `/boot/firmware/config.txt` contains `camera_auto_detect=1`. A reboot may be required after enabling the camera.
+
+**3. Find the binary and library paths:**
+
+```bash
+which rpicam-still rpicam-hello
+
+# Find shared libraries needed by the binaries
+ldd $(which rpicam-still) | grep -E "libcamera|libpisp|librpicam"
+# Note the paths, typically under /usr/lib/aarch64-linux-gnu/
+```
+
+**4. Configure docker-compose.yml:**
+
+Map the camera device, rpicam binaries, and their shared libraries into the container:
+
+```yaml
+services:
+  timelapse-manager:
+    # ... existing configuration ...
+    devices:
+      - /dev/video0:/dev/video0
+    device_cgroup_rules:
+      - 'c 81:* rmw'
+    volumes:
+      # Standard volumes
+      - ./captures:/captures
+      - ./timelapses:/timelapses
+      - ./data:/app/data
+      - ./imports:/imports
+      - ./exports:/exports
+      # Rpicam binaries (read-only)
+      - /usr/bin/rpicam-still:/usr/bin/rpicam-still:ro
+      - /usr/bin/rpicam-hello:/usr/bin/rpicam-hello:ro
+      # Shared libraries (read-only) - adjust paths based on ldd output
+      - /usr/lib/aarch64-linux-gnu/libcamera:/usr/lib/aarch64-linux-gnu/libcamera:ro
+      - /usr/lib/aarch64-linux-gnu/libpisp:/usr/lib/aarch64-linux-gnu/libpisp:ro
+      - /usr/lib/aarch64-linux-gnu/librpicam-app.so.1:/usr/lib/aarch64-linux-gnu/librpicam-app.so.1:ro
+```
+
+If the binaries fail inside the container with a "shared library not found" error, run `ldd` on the binary and add any missing library paths as volume mounts.
+
+**5. Verify inside the container:**
+
+```bash
+docker exec timelapse-manager rpicam-hello --list-cameras
+docker exec timelapse-manager curl -s http://localhost:8080/api/devices/ | python3 -m json.tool
+```
+
+The camera should appear in the API response with `"driver": "libcamera"`. In the Create Job modal, click the camera icon and select the device from the dropdown.
+
+**How it works:**
+
+- At startup, the application checks for `rpicam-still`. If not found, Pi CSI camera support is silently disabled and only V4L2 (USB) cameras are available.
+- When both a USB webcam and a Pi CSI camera are connected, the application routes each to the correct backend automatically. The Pi CSI camera uses rpicam-apps while USB cameras use V4L2/FFmpeg.
+- Captures use `rpicam-still --immediate` which takes a single still image without a preview window.
+- Resolution is detected from `rpicam-hello --list-cameras` output and the maximum supported resolution is used by default.
 
 ## Job Configuration
 
@@ -252,7 +430,7 @@ Interactive API documentation is available at `/docs` (Swagger UI) when the appl
 | `/api/captures` | List, filter, download, and delete captures. Detect and clean up orphaned files. |
 | `/api/videos` | Create timelapse videos, track processing progress, download and delete videos. |
 | `/api/import` | Import images and videos from server paths or browser uploads. Browse directories, analyze staged files, execute imports. |
-| `/api/settings` | View and regenerate the API key. Configure webhook notifications (URL, template, event filtering), server paths (captures, timelapses, import, export), export retention, and check for version updates. |
+| `/api/settings` | View and regenerate the API key. Configure webhook notifications (URL, template, event filtering), export retention, and check for version updates. |
 | `/api/storage` | Storage statistics and disk usage. |
 
 ### API Configuration
@@ -262,10 +440,6 @@ For automated or scripted deployments, application settings can be configured vi
 ```bash
 API_KEY="your-api-key"
 BASE="http://localhost:8080/api"
-
-# Configure storage paths
-curl -X PUT "$BASE/import/settings/path/captures" -H "X-API-Key: $API_KEY" \
-  -H "Content-Type: application/json" -d '{"path": "/captures"}'
 
 # Set export retention (days, 0 = indefinite)
 curl -X PUT "$BASE/settings/export-retention" -H "X-API-Key: $API_KEY" \
@@ -328,6 +502,7 @@ RTSP captures use TCP transport for reliability over UDP. Ensure the container c
 - Python 3.11 with FastAPI and Uvicorn
 - SQLite for data storage
 - FFmpeg for image capture and video encoding
+- V4L2 for USB webcam support, libcamera for Raspberry Pi CSI cameras
 - Pillow for thumbnail generation
 - Vanilla HTML, CSS, and JavaScript frontend with Alpine.js
 - Chart.js for storage dashboard visualizations
