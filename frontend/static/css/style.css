@@ -2090,16 +2090,12 @@ body.detail-view-active {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--accent-purple) 12%, transparent);
-    margin: 0 auto 0.75rem;
+    margin-bottom: 0.75rem;
 }
 
 .storage-card-icon svg {
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
     color: var(--accent-purple);
 }
 

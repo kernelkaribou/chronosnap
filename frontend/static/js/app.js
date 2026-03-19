@@ -5549,7 +5549,7 @@ function renderDonutChart(data, colors) {
             maintainAspectRatio: true,
             cutout: '60%',
             plugins: {
-                legend: { position: 'bottom', labels: { color: colors.textSecondary, padding: 16, usePointStyle: true, pointStyleWidth: 12 } },
+                legend: { position: 'bottom', labels: { color: colors.textSecondary, padding: 16, usePointStyle: true, pointStyle: 'circle' } },
                 tooltip: {
                     callbacks: {
                         label: (ctx) => {
@@ -5612,7 +5612,7 @@ function renderDiskChart(data, colors) {
             maintainAspectRatio: true,
             cutout: '60%',
             plugins: {
-                legend: { position: 'bottom', labels: { color: colors.textSecondary, padding: 16, usePointStyle: true, pointStyleWidth: 12 } },
+                legend: { position: 'bottom', labels: { color: colors.textSecondary, padding: 16, usePointStyle: true, pointStyle: 'circle' } },
                 tooltip: {
                     callbacks: {
                         label: (ctx) => {
@@ -5675,7 +5675,7 @@ function renderJobChart(data, colors) {
             plugins: {
                 legend: {
                     position: 'top',
-                    labels: { color: colors.textSecondary, usePointStyle: true, pointStyleWidth: 12, padding: 16 }
+                    labels: { color: colors.textSecondary, usePointStyle: true, pointStyle: 'circle', padding: 16 }
                 },
                 tooltip: {
                     callbacks: {
