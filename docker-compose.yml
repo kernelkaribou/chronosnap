@@ -1,7 +1,6 @@
 services:
   chronosnap:
-    build: .
-    image: chronosnap
+    image: ghcr.io/kernelkaribou/chronosnap:latest
     container_name: chronosnap
     environment:
       # Recommended environment variables:

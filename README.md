@@ -244,7 +244,20 @@ v4l2-ctl --list-devices
 
 Cameras often register multiple `/dev/video` entries. You want the one associated with "Video Capture" -- typically the lowest-numbered device for that camera.
 
-**Step 2: Pass the device into Docker**
+**Step 2: Ensure the host user has video group access**
+
+The host user running Docker needs access to the video device. On most Linux systems:
+
+```bash
+# Add your user to the video group
+sudo usermod -aG video $USER
+
+# Log out and back in for the change to take effect
+```
+
+ChronoSnap's entrypoint automatically adds the container user to the `video` group, but the **host user** must also have permission to access the device for Docker to pass it through.
+
+**Step 4: Pass the device into Docker**
 
 Add the device to your `docker-compose.yml`:
 
@@ -289,7 +302,7 @@ rpicam-still -o test.jpg
 ldd $(which rpicam-still)
 ```
 
-**Step 3: Create the job**
+**Step 4: Create the job**
 
 In the web interface, select "Local Device" as the source type. Available devices will be listed automatically. Select the device and test the capture before saving.
 
