@@ -9,6 +9,17 @@ let videoRefreshInterval = null;
 let confirmCallback = null;
 
 // =============================================================================
+// Template Variable Definitions (single source of truth for UI hints)
+// =============================================================================
+
+const NAMING_PATTERN_VARS = ['job_name', 'count', 'timestamp', 'month', 'day', 'hour'];
+const TEXT_OVERLAY_VARS   = ['job_name', 'date', 'time', 'datetime', 'month', 'day', 'hour', 'frame', 'total_frames'];
+
+function renderVarHints(vars) {
+    return vars.map(v => `<code>{${v}}</code>`).join(' ');
+}
+
+// =============================================================================
 // Theme Toggle & Presets
 // =============================================================================
 
@@ -587,6 +598,12 @@ function toggleTimeWindow() {
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
+
+    // Populate template variable hints from shared definitions
+    const settingsVars = document.getElementById('settings-naming-vars');
+    if (settingsVars) settingsVars.innerHTML = renderVarHints(NAMING_PATTERN_VARS);
+    const jobVars = document.getElementById('job-naming-vars');
+    if (jobVars) jobVars.innerHTML = 'Variables: ' + renderVarHints(NAMING_PATTERN_VARS);
     
     // Measure navbar height for detail view layout calculations
     const navbar = document.querySelector('.navbar');
@@ -3297,7 +3314,7 @@ function generateOverlayHTML(prefix, opts = {}) {
                             <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr} style="margin-top:10px; margin-left:6px;">
                         </div>
                     </div>
-                    <small style="color: var(--text-secondary); font-size:0.6rem;"><code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{month}</code> <code>{day}</code> <code>{hour}</code> <code>{frame}</code></small>
+                    <small style="color: var(--text-secondary); font-size:0.6rem;">${renderVarHints(TEXT_OVERLAY_VARS)}</small>
                     <div style="display:flex; gap:0.3rem; align-items:center;">
                         <span style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">Text:</span>
                         <input type="color" id="${prefix}-overlay-color" value="#FFFFFF" style="border:none;padding:0;height:18px;width:18px;border-radius:50%;cursor:pointer;background:none;"${inputEvent}>
