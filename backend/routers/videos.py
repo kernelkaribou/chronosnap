@@ -131,12 +131,16 @@ class TextOverlayPreviewRequest(BaseModel):
 async def text_overlay_preview(request: TextOverlayPreviewRequest):
     """Generate a preview image with text overlay applied"""
     from ..services.text_overlay import render_preview_bytes
+    from ..helpers.file_helpers import resolve_capture_path
 
     if not request.image_path and not request.image_data:
         raise HTTPException(status_code=400, detail="Either image_path or image_data required")
 
-    if request.image_path and not os.path.isfile(request.image_path):
-        raise HTTPException(status_code=404, detail="Image not found")
+    resolved_path = None
+    if request.image_path:
+        resolved_path = resolve_capture_path(request.image_path)
+        if not os.path.isfile(resolved_path):
+            raise HTTPException(status_code=404, detail="Image not found")
 
     # Build sample variables for preview
     from ..utils import get_now
@@ -152,7 +156,7 @@ async def text_overlay_preview(request: TextOverlayPreviewRequest):
 
     try:
         preview_bytes = render_preview_bytes(
-            image_path=request.image_path,
+            image_path=resolved_path,
             image_data=request.image_data,
             config=request.config,
             variables=variables,
