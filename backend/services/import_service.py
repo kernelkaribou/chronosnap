@@ -3,6 +3,7 @@ Import service — staging management, file classification, path security, archi
 """
 import os
 import re
+import json
 import uuid
 import time
 import shutil
@@ -13,7 +14,7 @@ import tarfile
 import subprocess
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Tuple, Set
+from typing import Dict, List, Any, Optional
 
 from .. import config
 from ..utils import get_now, to_iso
@@ -35,7 +36,7 @@ JUNK_NAMES = {'__MACOSX', '.DS_Store', 'Thumbs.db', 'desktop.ini', '.Spotlight-V
 MAX_EXTRACTION_RATIO = 20       # max extracted_size / archive_size
 MAX_FILE_COUNT = 100_000
 MAX_NESTING_DEPTH = 2
-MAX_SINGLE_FILE_SIZE = 50 * 1024 * 1024 * 1024  # 50GB
+MAX_SINGLE_FILE_SIZE = 100 * 1024 * 1024 * 1024  # 100GB
 EXTRACTION_TIMEOUT = 600        # 10 minutes
 MAX_FILENAME_LENGTH = 255
 MAX_CONCURRENT_SESSIONS = 5
@@ -46,39 +47,34 @@ STALE_STAGING_HOURS = 2
 # Path security
 # ===========================================================================
 
-def _get_setting_path(key: str, default: str) -> str:
-    """Get a configured path from settings or return default."""
-    try:
-        from ..database import get_db
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
-            row = cursor.fetchone()
-            if row and row[0]:
-                return row[0]
-    except Exception as e:
-        logger.warning(f"Failed to read setting '{key}': {e}")
-    return default
-
-
 def get_import_path() -> str:
-    """Get the configured import path from settings or default."""
-    return _get_setting_path('import_path', config.DEFAULT_IMPORT_PATH)
+    """Return the fixed import path."""
+    return config.DEFAULT_IMPORT_PATH
 
 
 def get_captures_path() -> str:
-    """Get the configured captures path from settings or default."""
-    return _get_setting_path('captures_path', config.DEFAULT_CAPTURES_PATH)
+    """Return the fixed captures path."""
+    return config.DEFAULT_CAPTURES_PATH
 
 
 def get_timelapses_path() -> str:
-    """Get the configured timelapses path from settings or default."""
-    return _get_setting_path('timelapses_path', config.DEFAULT_VIDEOS_PATH)
+    """Return the fixed timelapses path."""
+    return config.DEFAULT_VIDEOS_PATH
 
 
 def get_default_naming_pattern() -> str:
     """Get the configured default naming pattern from settings or default."""
-    return _get_setting_path('default_naming_pattern', config.DEFAULT_CAPTURE_PATTERN)
+    try:
+        from ..database import get_db
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM settings WHERE key = ?", ('default_naming_pattern',))
+            row = cursor.fetchone()
+            if row and row[0]:
+                return row[0]
+    except Exception as e:
+        logger.warning(f"Failed to read naming pattern setting: {e}")
+    return config.DEFAULT_CAPTURE_PATTERN
 
 
 def validate_path_within(path: str, allowed_prefix: str) -> str:
@@ -760,6 +756,7 @@ def analyze_staging(session_id: str) -> Dict[str, Any]:
     """Analyze all files in a staging session.
     
     Returns structured analysis with images, videos, errors, and summary stats.
+    Detects job.json from ChronoSnap exports and returns metadata for pre-filling.
     """
     from .maintenance import extract_timestamp_from_file
     
@@ -770,6 +767,7 @@ def analyze_staging(session_id: str) -> Dict[str, Any]:
     images = []
     videos = []
     errors = []
+    export_metadata = None
     
     # Walk both raw and extracted directories
     # First pass: collect all filenames per directory for thumbnail detection
@@ -789,6 +787,18 @@ def analyze_staging(session_id: str) -> Dict[str, Any]:
             dir_files = all_files_by_dir.get(root, set())
             for filename in files:
                 file_path = os.path.join(root, filename)
+                
+                # Detect export metadata file
+                if filename == 'job.json' and export_metadata is None:
+                    try:
+                        with open(file_path, 'r') as f:
+                            export_metadata = json.loads(f.read())
+                        logger.info(f"Found export metadata: {export_metadata.get('name', 'unknown')}")
+                        continue
+                    except Exception as e:
+                        logger.warning(f"Failed to parse job.json: {e}")
+                        continue
+                
                 file_type = detect_file_type(file_path)
                 
                 if file_type == 'image':
@@ -871,6 +881,7 @@ def analyze_staging(session_id: str) -> Dict[str, Any]:
         'video_count': len(videos),
         'video_total_size': total_video_size,
         'video_duplicates': video_duplicates,
+        'export_metadata': export_metadata,
         'errors': errors,
         'error_count': len(errors),
     }
@@ -943,12 +954,14 @@ def execute_image_import(
     stream_url: str = '',
     stream_type: str = 'rtsp',
     interval_seconds: int = 60,
+    tags: Optional[List[Dict]] = None,
 ) -> Dict[str, Any]:
     """Import images into a new job with proper folder structure.
     
     Returns dict with job_id, job_name, imported_count, total_size.
+    Tags are [{name, color}] dicts - matched by name or created if new.
     """
-    from ..database import get_db, dict_from_row
+    from ..database import get_db
     
     if not images:
         raise ValueError("No images to import")
@@ -1040,6 +1053,31 @@ def execute_image_import(
             (moved_count, total_size, job_id)
         )
         
+        # Apply tags from export metadata (find by name or create)
+        if tags:
+            tag_ids = []
+            for tag in tags:
+                tag_name = tag.get('name', '').strip()
+                if not tag_name:
+                    continue
+                cursor.execute("SELECT id FROM tags WHERE name = ?", (tag_name,))
+                row = cursor.fetchone()
+                if row:
+                    tag_ids.append(row[0])
+                else:
+                    tag_color = tag.get('color', '#6366f1')
+                    cursor.execute(
+                        "INSERT INTO tags (name, color, created_at) VALUES (?, ?, ?)",
+                        (tag_name, tag_color, now)
+                    )
+                    tag_ids.append(cursor.lastrowid)
+            if tag_ids:
+                for tid in tag_ids:
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO job_tags (job_id, tag_id) VALUES (?, ?)",
+                        (job_id, tid)
+                    )
+        
         logger.info(f"Imported {moved_count} images as job '{job_name}' (ID: {job_id})")
         add_event(f"Imported {moved_count} images as '{job_name}'", "import", {"job_id": job_id})
         
@@ -1061,7 +1099,7 @@ def execute_video_import(
     
     Returns dict with video_id, name, file_path.
     """
-    from ..database import get_db, dict_from_row
+    from ..database import get_db
     
     src_path = video['file_path']
     if not os.path.exists(src_path):

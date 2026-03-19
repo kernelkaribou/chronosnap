@@ -9,23 +9,21 @@ import re
 import json
 import logging
 import time
-from datetime import datetime
 from urllib.parse import urlparse, urlunparse
 
-from ..models import JobCreate, JobUpdate, JobResponse, TestUrlResponse, DurationEstimate, DurationCalculation, MaintenanceResult, MaintenanceCleanup, MaintenanceImport, DirectoryScanRequest, DirectoryImportRequest
+from ..models import JobCreate, JobUpdate, JobResponse, TestUrlResponse, DurationEstimate, MaintenanceResult, MaintenanceCleanup, MaintenanceImport
 from ..database import get_db, dict_from_row
 from ..services.url_tester import test_stream_url
 from ..services.duration_calculator import calculate_duration
 from ..services.image_capture import capture_image
 from ..services.event_service import add_event
 from ..services.capture_scheduler import get_scheduler
-from ..services.maintenance import scan_job_files, cleanup_missing_captures, import_orphaned_files, scan_directory
+from ..services.maintenance import scan_job_files, cleanup_missing_captures, import_orphaned_files
 from ..services.job_state import calculate_job_state
 from ..services.auto_builder import get_next_auto_build_at
 from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware
 from ..helpers.db_helpers import get_or_404, fetch_tags_for_jobs, set_job_tags
-from ..helpers.file_helpers import validate_writable_directory, make_relative, resolve_capture_path
-from .. import config
+from ..helpers.file_helpers import validate_writable_directory, resolve_capture_path
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -196,11 +194,24 @@ async def list_jobs(
         # Batch-fetch tags per job
         tags_by_job = fetch_tags_for_jobs(cursor, job_ids) if job_ids else {}
         
+        # Batch-fetch video counts per job
+        video_counts = {}
+        if job_ids:
+            placeholders = ','.join('?' for _ in job_ids)
+            cursor.execute(f"""
+                SELECT job_id, COUNT(*) as cnt FROM processed_videos
+                WHERE job_id IN ({placeholders}) AND status = 'completed'
+                GROUP BY job_id
+            """, job_ids)
+            for row2 in cursor.fetchall():
+                video_counts[row2['job_id']] = row2['cnt']
+        
         jobs = []
         for row in rows:
             job = dict_from_row(row)
             job['latest_capture'] = latest_captures.get(job['id'])
             job['tags'] = tags_by_job.get(job['id'], [])
+            job['video_count'] = video_counts.get(job['id'], 0)
             jobs.append(enrich_job_with_next_capture(job))
         
         return jobs
@@ -221,6 +232,12 @@ async def get_job(job_id: int):
         latest_capture_row = cursor.fetchone()
         job['latest_capture'] = dict_from_row(latest_capture_row) if latest_capture_row else None
         job['tags'] = fetch_tags_for_jobs(cursor, [job_id]).get(job_id, [])
+        
+        cursor.execute(
+            "SELECT COUNT(*) as cnt FROM processed_videos WHERE job_id = ? AND status = 'completed'",
+            (job_id,)
+        )
+        job['video_count'] = cursor.fetchone()['cnt']
         
         return enrich_job_with_next_capture(job)
 
@@ -434,6 +451,12 @@ async def update_job(job_id: int, job_update: JobUpdate):
             set_job_tags(cursor, job_id, job_update.tag_ids)
         updated_job['tags'] = fetch_tags_for_jobs(cursor, [job_id]).get(job_id, [])
         
+        cursor.execute(
+            "SELECT COUNT(*) as cnt FROM processed_videos WHERE job_id = ? AND status = 'completed'",
+            (job_id,)
+        )
+        updated_job['video_count'] = cursor.fetchone()['cnt']
+        
         # Log changes
         changes = [f"{field}" for field in job_update.model_fields_set]
         if changes:
@@ -476,10 +499,15 @@ async def delete_job(job_id: int):
 
 
 @router.post("/test-url", response_model=TestUrlResponse)
-async def test_url(url: str, stream_type: str = None,
+async def test_url(url: str, stream_type: str = Query(None, pattern=r"^(http|rtsp|device)$"),
                    quality: str = Query('maximum', pattern=r"^(maximum|high|medium|low)$"),
                    resolution: str = Query('native', pattern=r"^(native|\d+x\d+)$")):
-    """Test a URL and capture a sample image with optional quality/resolution settings"""
+    """Test a URL or device path and capture a sample image with optional quality/resolution settings"""
+    # Validate device paths
+    if url.startswith('/dev/'):
+        import re
+        if not re.match(r'^/dev/video\d+$', url):
+            raise HTTPException(status_code=400, detail="Invalid device path. Must be /dev/videoN")
     result = await test_stream_url(url, stream_type, quality, resolution)
     return result
 
@@ -715,6 +743,7 @@ async def export_job(job_id: int):
     with get_db() as conn:
         cursor = conn.cursor()
         job = get_or_404(cursor, "SELECT id, name FROM jobs WHERE id = ?", (job_id,), "Job not found")
+        job_tags = fetch_tags_for_jobs(cursor, [job_id]).get(job_id, [])
     
     job_name = job['name']
     files, total_size, job_dict = _get_export_files(job_id, job_name)
@@ -753,6 +782,7 @@ async def export_job(job_id: int):
         'video_count': len([f for f in files if '/videos/' in f[0] and not f[0].endswith('_thumb.jpg')]),
         'total_size': total_size,
         'exported_at': to_iso(get_now()),
+        'tags': [{'name': t['name'], 'color': t['color']} for t in job_tags],
     }
     metadata_json = json.dumps(metadata, indent=2)
     
@@ -770,25 +800,5 @@ async def export_job(job_id: int):
         headers={
             'Content-Disposition': f'attachment; filename="{zip_name}"',
         }
-    )
-
-
-# ── Directory Import ─────────────────────────────────────────────────────
-
-@router.post("/import/scan")
-async def scan_import_directory(request: DirectoryScanRequest):
-    """Deprecated: Use POST /api/import/scan instead."""
-    raise HTTPException(
-        status_code=410,
-        detail="This endpoint has been replaced by POST /api/import/scan"
-    )
-
-
-@router.post("/import", response_model=JobResponse)
-async def import_directory(request: DirectoryImportRequest):
-    """Deprecated: Use POST /api/import/{session_id}/execute instead."""
-    raise HTTPException(
-        status_code=410,
-        detail="This endpoint has been replaced by the /api/import/ pipeline (scan → analyze → execute)"
     )
 

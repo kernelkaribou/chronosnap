@@ -3,14 +3,13 @@ Settings API endpoints
 """
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import List
 from urllib.parse import urlparse
 import logging
 
 from ..database import get_db, generate_api_key
 from ..utils import get_now, to_iso
 from ..services.webhook import send_test_webhook, DEFAULT_PAYLOAD_TEMPLATE
-from .. import config
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -73,8 +72,8 @@ async def get_version(request: Request):
         import json
 
         req = urllib.request.Request(
-            "https://api.github.com/repos/kernelkaribou/timelapse-manager/releases/latest",
-            headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "timelapse-manager"}
+            "https://api.github.com/repos/kernelkaribou/chronosnap/releases/latest",
+            headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "chronosnap"}
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read())
@@ -152,7 +151,6 @@ async def update_naming_pattern(body: dict):
                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
                 ('default_naming_pattern', pattern, now)
             )
-            conn.commit()
         logger.info(f"Default naming pattern updated to: {pattern}")
         return {'naming_pattern': pattern}
     except Exception as e:

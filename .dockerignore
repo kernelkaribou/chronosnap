@@ -1,0 +1,44 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*.egg-info
+.venv
+venv
+env
+.eggs
+
+# Development
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.copilot
+
+# Application data (mounted as volumes)
+captures/
+timelapses/
+imports/
+exports/
+data/
+temp/
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment and secrets
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation and CI (not needed in image)
+README.md
+LICENSE
+.github

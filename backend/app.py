@@ -1,10 +1,11 @@
 """
-Main FastAPI application for Timelapse Manager
+Main FastAPI application for ChronoSnap
 """
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 from contextlib import asynccontextmanager
 import uvicorn
 import logging
@@ -12,7 +13,7 @@ import sys
 import os
 
 from .database import init_db
-from .routers import jobs, captures, videos, settings, storage, tags, shared
+from .routers import jobs, captures, videos, settings, storage, tags, shared, devices
 from .services.capture_scheduler import CaptureScheduler
 from .auth import verify_api_key
 from . import config
@@ -110,7 +111,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Timelapse Manager",
+    title="ChronoSnap",
     description="Configuration and management tool for timelapse videos",
     version=get_app_version(),
     lifespan=lifespan,
@@ -118,14 +119,32 @@ app = FastAPI(
     redoc_url=None  # Disable ReDoc, use Swagger UI only
 )
 
-# CORS middleware
+# CORS middleware - same-origin only (web UI uses Referer auth, external clients use API keys)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+
+        # Cache static assets with versioned URLs (cache buster ?v= handles invalidation)
+        if request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "public, max-age=86400"
+
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Import router (separate for upload size limit)
 from .routers import import_router
@@ -143,6 +162,7 @@ app.include_router(videos.router, prefix="/api/videos", tags=["videos"], depende
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"], dependencies=[Depends(verify_api_key)])
 app.include_router(storage.router, prefix="/api/storage", tags=["storage"], dependencies=[Depends(verify_api_key)])
 app.include_router(tags.router, prefix="/api/tags", tags=["tags"], dependencies=[Depends(verify_api_key)])
+app.include_router(devices.router, prefix="/api/devices", tags=["devices"], dependencies=[Depends(verify_api_key)])
 app.include_router(shared.router, prefix="/api/shared", tags=["shared"], dependencies=[Depends(verify_api_key)])
 from .routers import event_router
 app.include_router(event_router.router, prefix="/api", tags=["events"], dependencies=[Depends(verify_api_key)])
@@ -167,6 +187,15 @@ async def read_root():
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "scheduler": scheduler.is_running() if scheduler else False}
+
+
+@app.get("/{path:path}")
+async def frontend_catchall(path: str):
+    """Catch-all route for frontend SPA paths (e.g., /jobs/42, /timelapses/5)."""
+    from fastapi.responses import HTMLResponse
+    with open("frontend/index.html") as f:
+        html = f.read().replace("__APP_VERSION__", app.version)
+    return HTMLResponse(html)
 
 
 if __name__ == "__main__":

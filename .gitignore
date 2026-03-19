@@ -56,7 +56,6 @@ Thumbs.db
 *.log
 
 # Docker
-.dockerignore
 
 # Test images
 /backend/test_images/

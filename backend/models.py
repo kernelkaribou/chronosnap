@@ -1,7 +1,7 @@
 """
 Pydantic models for request/response validation
 """
-from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from enum import Enum
@@ -10,6 +10,7 @@ from enum import Enum
 class StreamType(str, Enum):
     HTTP = "http"
     RTSP = "rtsp"
+    DEVICE = "device"
 
 
 class JobStatus(str, Enum):
@@ -27,14 +28,13 @@ class VideoStatus(str, Enum):
 
 
 class JobCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255)
-    url: str = Field(..., max_length=2048, description="HTTP or RTSP stream URL")
+    name: str = Field(..., min_length=1, max_length=100)
+    url: str = Field(..., max_length=2048, description="HTTP/RTSP stream URL or /dev/video* device path")
     stream_type: StreamType
     start_datetime: datetime
     end_datetime: Optional[datetime] = None
     interval_seconds: int = Field(..., ge=10, description="Capture interval in seconds")
     framerate: int = Field(default=30, gt=0)
-    capture_path: Optional[str] = Field(None, deprecated=True, description="Ignored. Uses global captures path from settings.")
     naming_pattern: Optional[str] = None
     time_window_enabled: bool = Field(default=False, description="Enable daily time window for captures")
     time_window_start: Optional[str] = Field(None, description="Start time in HH:MM format (e.g., '08:00')")
@@ -42,7 +42,7 @@ class JobCreate(BaseModel):
     warning_threshold: int = Field(default=3, ge=1, le=50, description="Consecutive failures before warning state")
     auto_build_enabled: bool = Field(default=False, description="Enable automatic timelapse builds")
     auto_build_interval_hours: int = Field(default=168, ge=1, le=8760, description="Hours between auto-builds")
-    auto_build_fps: int = Field(default=30, gt=0, le=120, description="FPS for auto-built videos")
+    auto_build_fps: int = Field(default=30, gt=0, description="FPS for auto-built videos")
     auto_build_quality: str = Field(default="medium", pattern=r"^(low|medium|high|maximum)$")
     auto_build_resolution: str = Field(default="1920x1080", pattern=r"^\d+x\d+$")
     auto_build_text_overlay: Optional[str] = None  # JSON string of TextOverlayConfig
@@ -55,9 +55,22 @@ class JobCreate(BaseModel):
     @field_validator('url')
     @classmethod
     def validate_url(cls, v):
-        if not v.startswith(('http://', 'https://', 'rtsp://', 'rtsps://')):
-            raise ValueError("URL must start with http://, https://', rtsp://', or rtsps://")
+        if not v.startswith(('http://', 'https://', 'rtsp://', 'rtsps://', '/dev/video')):
+            raise ValueError("URL must start with http://, https://, rtsp://, rtsps://, or /dev/video")
         return v
+    
+    @model_validator(mode='after')
+    def validate_device_url(self):
+        """Ensure /dev/video paths are only used with device stream type."""
+        import re
+        if self.url.startswith('/dev/video'):
+            if self.stream_type != StreamType.DEVICE:
+                raise ValueError("Device paths require stream_type 'device'")
+            if not re.match(r'^/dev/video\d+$', self.url):
+                raise ValueError("Device path must be /dev/videoN (e.g., /dev/video0)")
+        elif self.stream_type == StreamType.DEVICE:
+            raise ValueError("Device stream type requires a /dev/video* path")
+        return self
     
     @model_validator(mode='after')
     def validate_dates(self):
@@ -94,7 +107,7 @@ class JobCreate(BaseModel):
 
 
 class JobUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
     url: Optional[str] = Field(None, max_length=2048)
     stream_type: Optional[StreamType] = None
     start_datetime: Optional[datetime] = None
@@ -108,7 +121,7 @@ class JobUpdate(BaseModel):
     warning_threshold: Optional[int] = Field(None, ge=1, le=50)
     auto_build_enabled: Optional[bool] = None
     auto_build_interval_hours: Optional[int] = Field(None, ge=1, le=8760)
-    auto_build_fps: Optional[int] = Field(None, gt=0, le=120)
+    auto_build_fps: Optional[int] = Field(None, gt=0)
     auto_build_quality: Optional[str] = Field(None, pattern=r"^(low|medium|high|maximum)$")
     auto_build_resolution: Optional[str] = Field(None, pattern=r"^\d+x\d+$")
     auto_build_text_overlay: Optional[str] = None  # JSON string of TextOverlayConfig
@@ -119,9 +132,23 @@ class JobUpdate(BaseModel):
     @field_validator('url')
     @classmethod
     def validate_url(cls, v):
-        if v is not None and not v.startswith(('http://', 'https://', 'rtsp://', 'rtsps://')):
-            raise ValueError("URL must start with http://, https://', rtsp://, or rtsps://")
+        if v is not None and not v.startswith(('http://', 'https://', 'rtsp://', 'rtsps://', '/dev/video')):
+            raise ValueError("URL must start with http://, https://, rtsp://, rtsps://, or /dev/video")
         return v
+
+    @model_validator(mode='after')
+    def validate_device_url(self):
+        """Ensure /dev/video paths are only used with device stream type on partial updates."""
+        import re
+        if self.url is not None and self.url.startswith('/dev/video'):
+            if self.stream_type is not None and self.stream_type != StreamType.DEVICE:
+                raise ValueError("Device paths require stream_type 'device'")
+            if not re.match(r'^/dev/video\d+$', self.url):
+                raise ValueError("Device path must be /dev/videoN (e.g., /dev/video0)")
+        elif self.stream_type == StreamType.DEVICE and self.url is not None:
+            if not self.url.startswith('/dev/video'):
+                raise ValueError("Device stream type requires a /dev/video* path")
+        return self
 
 
 class TagBrief(BaseModel):
@@ -143,6 +170,7 @@ class JobResponse(BaseModel):
     capture_path: str
     naming_pattern: str
     capture_count: int
+    video_count: int = 0
     warning_message: Optional[str] = None
     storage_size: int
     time_window_enabled: int = 0  # SQLite returns as int
@@ -215,7 +243,6 @@ class VideoCreate(BaseModel):
     resolution: str = Field(default="1920x1080", pattern=r"^\d+x\d+$")
     framerate: int = Field(default=30, gt=0)
     quality: str = Field(default="high", pattern=r"^(low|medium|high|maximum)$")
-    output_path: Optional[str] = Field(None, deprecated=True, description="Ignored. Uses global timelapses path from settings.")
     start_capture_id: Optional[int] = None
     end_capture_id: Optional[int] = None
     start_time: Optional[str] = None  # ISO datetime string
@@ -261,6 +288,12 @@ class TestUrlResponse(BaseModel):
     source_height: Optional[int] = None
 
 
+class DeviceInfo(BaseModel):
+    path: str
+    name: str
+    driver: str = "v4l2"
+
+
 class DurationCalculation(BaseModel):
     fps: int
     duration_seconds: float
@@ -292,13 +325,3 @@ class MaintenanceImport(BaseModel):
     orphaned_files: List[Dict[str, Any]]
 
 
-class DirectoryScanRequest(BaseModel):
-    directory: str
-
-
-class DirectoryImportRequest(BaseModel):
-    name: str
-    directory: str
-    url: Optional[str] = None
-    stream_type: str = "rtsp"
-    interval_seconds: int = Field(default=60, gt=0)

@@ -2,7 +2,7 @@
 Import API endpoints — upload, browse, scan, analyze, execute, cleanup.
 """
 from fastapi import APIRouter, HTTPException, UploadFile, File, Query, Form
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import os
@@ -14,13 +14,11 @@ from ..services.import_service import (
     count_active_sessions, MAX_CONCURRENT_SESSIONS,
     validate_path_within, sanitize_filename, detect_file_type,
     extract_archive, analyze_staging, browse_directory,
-    execute_image_import, execute_video_import, probe_video,
-    get_import_path, get_captures_path, get_timelapses_path,
-    check_disk_space,
+    execute_image_import, execute_video_import,
+    get_import_path, check_disk_space,
     set_staging_source, cleanup_import_source,
 )
 from .. import config
-from ..utils import get_now, to_iso
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -38,15 +36,10 @@ class ExecuteRequest(BaseModel):
     image_stream_url: Optional[str] = ''
     image_stream_type: Optional[str] = 'rtsp'
     image_interval_seconds: Optional[int] = 60
+    image_tags: Optional[List[Dict[str, str]]] = None  # [{name, color}] from export metadata
     videos: Optional[List[Dict[str, Any]]] = None  # [{file_name, name, job_id?}]
     selected_images: Optional[List[str]] = None     # file_paths to include (None = all)
     selected_videos: Optional[List[str]] = None     # file_names to include (None = all)
-
-class ImportPathSettings(BaseModel):
-    import_path: str
-
-class ServerPathSettings(BaseModel):
-    path: str
 
 
 # ---------------------------------------------------------------------------
@@ -377,6 +370,7 @@ async def execute_import(session_id: str, request: ExecuteRequest):
                     stream_url=request.image_stream_url or '',
                     stream_type=request.image_stream_type or 'rtsp',
                     interval_seconds=request.image_interval_seconds or 60,
+                    tags=request.image_tags,
                 )
                 results['images'] = img_result
             except Exception as e:
@@ -510,54 +504,3 @@ async def cancel_import(session_id: str):
         raise HTTPException(status_code=500, detail="Cleanup failed")
 
 
-# ---------------------------------------------------------------------------
-# Import path settings
-# ---------------------------------------------------------------------------
-
-@router.get("/settings/path")
-async def get_path_settings():
-    """Get all configured server paths."""
-    return {
-        'captures_path': get_captures_path(),
-        'timelapses_path': get_timelapses_path(),
-        'import_path': get_import_path(),
-    }
-
-
-_PATH_KEYS = {
-    'captures': ('captures_path', 'Captures'),
-    'timelapses': ('timelapses_path', 'Timelapses'),
-    'import': ('import_path', 'Import'),
-}
-
-
-@router.put("/settings/path/{path_type}")
-async def update_path_setting(path_type: str, settings: ServerPathSettings):
-    """Update a server path setting (captures, timelapses, import)."""
-    from ..database import get_db
-
-    if path_type not in _PATH_KEYS:
-        raise HTTPException(status_code=400, detail=f"Invalid path type: {path_type}")
-
-    db_key, label = _PATH_KEYS[path_type]
-    path = settings.path.strip()
-    if not path:
-        raise HTTPException(status_code=400, detail=f"{label} path cannot be empty")
-
-    if not os.path.isdir(path):
-        raise HTTPException(status_code=400, detail=f"Directory not found: {path}")
-
-    now = to_iso(get_now())
-    try:
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) "
-                "ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?",
-                (db_key, path, now, path, now)
-            )
-        logger.info(f"{label} path updated to: {path}")
-        return {'path': path}
-    except Exception as e:
-        logger.error(f"Error updating {label} path: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update {label.lower()} path")

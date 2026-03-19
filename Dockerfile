@@ -4,13 +4,13 @@ FROM python:3.11-slim
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ffmpeg \
+    v4l-utils \
     tzdata \
     gosu \
     curl \
     ca-certificates \
     fonts-dejavu-core \
     fonts-liberation \
-    p7zip-full \
     unrar-free && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -33,14 +33,14 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Create necessary directories
-RUN mkdir -p /app/data /captures /timelapses /imports
+RUN mkdir -p /app/data /captures /timelapses /imports /app/import-staging
 
 # Add build metadata
-LABEL org.opencontainers.image.title="Timelapse Manager" \
+LABEL org.opencontainers.image.title="ChronoSnap" \
       org.opencontainers.image.description="Configuration and management tool for timelapse videos" \
       org.opencontainers.image.vendor="kernelkaribou" \
-      org.opencontainers.image.source="https://github.com/kernelkaribou/timelapse-manager" \
-      org.opencontainers.image.version="2.0.0"
+      org.opencontainers.image.source="https://github.com/kernelkaribou/chronosnap" \
+      org.opencontainers.image.version="3.0.0"
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -49,7 +49,6 @@ ENV TZ=Etc/UTC
 ENV PORT=8080
 ENV LOG_LEVEL=INFO
 ENV FFMPEG_TIMEOUT=10
-ENV MAX_UPLOAD_SIZE=10737418240
 
 # Expose port (can be overridden)
 EXPOSE ${PORT}

@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 import logging
 
-from ..database import get_db, dict_from_row
+from ..database import get_db
 from ..utils import get_now, to_iso
 
 router = APIRouter()

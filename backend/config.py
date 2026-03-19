@@ -10,7 +10,7 @@ DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 # Database
-DATABASE_PATH = str(DATA_DIR / "timelapse-manager.db")
+DATABASE_PATH = str(DATA_DIR / "chronosnap.db")
 
 # Default paths (hardcoded, customizable per job/video)
 DEFAULT_CAPTURES_PATH = "/captures"
@@ -18,8 +18,8 @@ DEFAULT_VIDEOS_PATH = "/timelapses"
 DEFAULT_IMPORT_PATH = "/imports"
 
 # Import settings
-IMPORT_STAGING_DIR = str(DATA_DIR / "import-staging")
-MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 10 * 1024 * 1024 * 1024))  # 10GB
+IMPORT_STAGING_DIR = str(BASE_DIR / "import-staging")
+MAX_UPLOAD_SIZE = 25 * 1024 * 1024 * 1024  # 25GB
 
 # Default naming patterns
 DEFAULT_CAPTURE_PATTERN = "{job_name}_{count}_{timestamp}"

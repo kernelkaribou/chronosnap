@@ -27,11 +27,21 @@ def _get_image_dimensions(path: str) -> tuple[int, int] | tuple[None, None]:
 def _probe_source_dimensions(url: str, stream_type: str = 'http') -> tuple[int, int] | tuple[None, None]:
     """Probe native source resolution using ffprobe without capturing."""
     try:
-        cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0',
-               '-show_entries', 'stream=width,height', '-of', 'csv=p=0']
-        if stream_type == 'rtsp':
-            cmd.extend(['-rtsp_transport', 'tcp'])
-        cmd.append(url)
+        if stream_type == 'device':
+            from .capture_backends import build_probe_cmd, get_max_resolution
+            probe_cmd = build_probe_cmd(url)
+            if probe_cmd is None:
+                # Backend doesn't use ffprobe (e.g., libcamera)
+                max_w, max_h = get_max_resolution(url)
+                return (max_w, max_h) if max_w else (None, None)
+            cmd = probe_cmd
+        else:
+            cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+                   '-show_entries', 'stream=width,height', '-of', 'csv=p=0']
+            if stream_type == 'rtsp':
+                cmd.extend(['-rtsp_transport', 'tcp'])
+            cmd.append(url)
+        
         result = subprocess.run(cmd, capture_output=True, timeout=config.FFMPEG_TIMEOUT, check=False)
         if result.returncode == 0:
             parts = result.stdout.decode().strip().split(',')
@@ -59,14 +69,36 @@ async def test_stream_url(url: str, stream_type: str = None,
     try:
         # Auto-detect stream type if not provided
         if stream_type is None:
-            stream_type = 'rtsp' if url.lower().startswith('rtsp://') else 'http'
+            if url.startswith('/dev/video'):
+                stream_type = 'device'
+            elif url.lower().startswith('rtsp://') or url.lower().startswith('rtsps://'):
+                stream_type = 'rtsp'
+            else:
+                stream_type = 'http'
+        
+        # Check device availability for device streams
+        if stream_type == 'device':
+            import os as _os
+            if not _os.path.exists(url):
+                return TestUrlResponse(
+                    success=False,
+                    message=f"Error: Device {url} not found. Ensure it is mapped in your Docker configuration."
+                )
         
         # Create temp file for test capture
         with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
             output_path = tmp.name
         
         # Build ffmpeg command with quality/resolution settings
-        if stream_type == 'rtsp':
+        if stream_type == 'device':
+            from .capture_backends import build_capture_cmd
+            cmd = build_capture_cmd(url, output_path, list(_build_ffmpeg_filters(quality, resolution)))
+            if cmd is None:
+                return TestUrlResponse(
+                    success=False,
+                    message=f"Error: No capture backend available for {url}"
+                )
+        elif stream_type == 'rtsp':
             cmd = [
                 'ffmpeg',
                 '-loglevel', 'error',

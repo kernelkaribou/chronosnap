@@ -4,7 +4,6 @@ Webhook notification service for event-driven alerts
 import json
 import logging
 import threading
-from typing import Optional
 
 import urllib.request
 import urllib.error
@@ -91,7 +90,7 @@ def _send_webhook_event_sync(event: str, job_name: str, job_id: int,
         title = f"Auto-Build Complete: {job_name}"
         message = f"{job_name} has finished building an automatic timelapse video."
     else:
-        title = f"TimeLapse-Manager: {job_name}"
+        title = f"ChronoSnap: {job_name}"
         message = f"Event '{event}' for {job_name}."
 
     template = settings['webhook_payload_template'] or DEFAULT_PAYLOAD_TEMPLATE
@@ -128,8 +127,8 @@ def _send_webhook_event_sync(event: str, job_name: str, job_id: int,
 
 def send_test_webhook(url: str, template: str) -> tuple[bool, str]:
     """Send a test webhook notification. Returns (success, message)."""
-    title = "Test Alert: TimeLapse-Manager"
-    message = "This is a test notification from TimeLapse-Manager webhook configuration."
+    title = "Test Alert: ChronoSnap"
+    message = "This is a test notification from ChronoSnap webhook configuration."
 
     payload_str = template.replace('{job_name}', 'Test Job')
     payload_str = payload_str.replace('{job_id}', '0')

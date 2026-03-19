@@ -1,24 +1,23 @@
 services:
-  timelapse-manager:
-    build: .
-    image: timelapse-manager
-    container_name: timelapse-manager
+  chronosnap:
+    image: ghcr.io/kernelkaribou/chronosnap:latest
+    container_name: chronosnap
     environment:
       # Recommended environment variables:
       - PUID=1000 
       - PGID=1000
-      - TZ=America/Chicago
+      - TZ=Etc/UTC
       # Optional environment variables:
-      - LOG_LEVEL=DEBUG # Logging level: DEBUG, INFO, WARNING, ERROR. Default: INFO
+      # - LOG_LEVEL=INFO # Logging level: DEBUG, INFO, WARNING, ERROR. Default: INFO
       # - PORT=8080 # Set custom port
       # - FFMPEG_TIMEOUT=10 # Set custom ffmpeg timeout in seconds
     ports:
       - "8080:8080"
     volumes:
+      - ${PWD}/data:/app/data
       - ${PWD}/captures:/captures
       - ${PWD}/timelapses:/timelapses
-      - ${PWD}/imports:/imports
-      - ${PWD}/data:/app/data
+      # - ${PWD}/imports:/imports  # Optional: enable server path imports
     # Security: Resource limits
     deploy:
       resources:

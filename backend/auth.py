@@ -4,6 +4,7 @@ API authentication middleware
 from fastapi import Request, HTTPException, status, Depends
 from fastapi.security import APIKeyHeader, APIKeyQuery
 from typing import Optional
+from urllib.parse import urlparse
 import logging
 
 from .database import get_db
@@ -33,21 +34,31 @@ def is_internal_request(request: Request) -> bool:
     Check if the request is from the internal web UI (same-origin).
     Internal requests are exempt from API key validation.
     """
-    # Check if request has Referer header pointing to our own host
     referer = request.headers.get("referer", "")
     host = request.headers.get("host", "")
     
-    # If referer contains our host, it's an internal request
-    if referer and host and host in referer:
-        return True
+    if referer and host:
+        parsed = urlparse(referer)
+        # Extract host:port from the Referer and compare to the Host header exactly
+        referer_host = parsed.hostname or ""
+        referer_port = parsed.port
+        referer_authority = f"{referer_host}:{referer_port}" if referer_port else referer_host
+        if referer_authority == host or referer_host == host:
+            return True
     
     # Check for localhost/127.0.0.1 connections (development)
     client_host = request.client.host if request.client else None
     if client_host in ["127.0.0.1", "localhost", "::1"]:
-        # Additional check: if no referer and it's localhost, consider it internal
-        # This handles direct browser access to the UI
-        if not referer or host in referer:
+        if not referer:
             return True
+        # If there's a referer from localhost, validate it matches host
+        if host:
+            parsed = urlparse(referer)
+            referer_host = parsed.hostname or ""
+            referer_port = parsed.port
+            referer_authority = f"{referer_host}:{referer_port}" if referer_port else referer_host
+            if referer_authority == host or referer_host == host:
+                return True
     
     return False
 
