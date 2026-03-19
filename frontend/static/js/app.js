@@ -7224,7 +7224,6 @@ function prependHomepageVideos(newVideos, recentVideos) {
 
     container.scrollTo({ left: 0, behavior: 'smooth' });
 }
-}
 
 function renderHomepageStats(stats, captures, videos, jobs) {
     const container = document.getElementById('homepage-stats');
