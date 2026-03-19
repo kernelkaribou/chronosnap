@@ -940,7 +940,7 @@ function renderJobs(jobs) {
             <div class="job-info">
                 <div><strong>${job.stream_type === 'device' ? 'Device:' : 'Stream URL:'}</strong> <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; max-width: 250px; vertical-align: bottom;">${escapeHtml(job.stream_type === 'device' ? job.url : getStreamHost(job.url))}</span></div>
                 <div><strong>Interval:</strong> ${job.interval_seconds}s</div>
-                <div><strong>Capture:</strong> ${(job.capture_quality || 'maximum').charAt(0).toUpperCase() + (job.capture_quality || 'maximum').slice(1)}${job.capture_resolution && job.capture_resolution !== 'native' ? ` @ ${job.capture_resolution}` : ''}</div>
+                <div><strong>Quality:</strong> ${(job.capture_quality || 'maximum').charAt(0).toUpperCase() + (job.capture_quality || 'maximum').slice(1)} · ${job.capture_resolution && job.capture_resolution !== 'native' ? job.capture_resolution : 'Native'}</div>
                 ${timeWindowInfo}
                 ${job.start_datetime ? `<div><strong>Start:</strong> ${formatDateTimeNoSeconds(job.start_datetime)}</div>` : ''}
                 ${job.end_datetime ? `<div><strong>End:</strong> ${formatDateTimeNoSeconds(job.end_datetime)}</div>` : '<div><strong>Ongoing capture</strong></div>'}

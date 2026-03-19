@@ -570,7 +570,7 @@
             <form id="create-job-form" onsubmit="createJob(event)">
                 <div class="form-group" style="margin-bottom: 1.25rem;">
                     <label>Job Name *</label>
-                    <input type="text" id="job_name" class="form-control" required oninput="updateNamingPreview()">
+                    <input type="text" id="job_name" class="form-control" required maxlength="100" oninput="updateNamingPreview()">
                 </div>
 
                 <div class="form-section">
@@ -651,7 +651,7 @@
                         <div class="form-group flex-1">
                             <label>End Date & Time</label>
                             <input type="datetime-local" id="end_datetime" class="form-control">
-                            <small style="color: var(--text-secondary);">Leave empty for ongoing capture</small>
+                            <small style="color: var(--text-secondary);">Job completes at this date. Leave empty for ongoing capture.</small>
                         </div>
                     </div>
 

@@ -28,7 +28,7 @@ class VideoStatus(str, Enum):
 
 
 class JobCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255)
+    name: str = Field(..., min_length=1, max_length=100)
     url: str = Field(..., max_length=2048, description="HTTP/RTSP stream URL or /dev/video* device path")
     stream_type: StreamType
     start_datetime: datetime
@@ -42,7 +42,7 @@ class JobCreate(BaseModel):
     warning_threshold: int = Field(default=3, ge=1, le=50, description="Consecutive failures before warning state")
     auto_build_enabled: bool = Field(default=False, description="Enable automatic timelapse builds")
     auto_build_interval_hours: int = Field(default=168, ge=1, le=8760, description="Hours between auto-builds")
-    auto_build_fps: int = Field(default=30, gt=0, le=120, description="FPS for auto-built videos")
+    auto_build_fps: int = Field(default=30, gt=0, description="FPS for auto-built videos")
     auto_build_quality: str = Field(default="medium", pattern=r"^(low|medium|high|maximum)$")
     auto_build_resolution: str = Field(default="1920x1080", pattern=r"^\d+x\d+$")
     auto_build_text_overlay: Optional[str] = None  # JSON string of TextOverlayConfig
@@ -107,7 +107,7 @@ class JobCreate(BaseModel):
 
 
 class JobUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
     url: Optional[str] = Field(None, max_length=2048)
     stream_type: Optional[StreamType] = None
     start_datetime: Optional[datetime] = None
@@ -121,7 +121,7 @@ class JobUpdate(BaseModel):
     warning_threshold: Optional[int] = Field(None, ge=1, le=50)
     auto_build_enabled: Optional[bool] = None
     auto_build_interval_hours: Optional[int] = Field(None, ge=1, le=8760)
-    auto_build_fps: Optional[int] = Field(None, gt=0, le=120)
+    auto_build_fps: Optional[int] = Field(None, gt=0)
     auto_build_quality: Optional[str] = Field(None, pattern=r"^(low|medium|high|maximum)$")
     auto_build_resolution: Optional[str] = Field(None, pattern=r"^\d+x\d+$")
     auto_build_text_overlay: Optional[str] = None  # JSON string of TextOverlayConfig

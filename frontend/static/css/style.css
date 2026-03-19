@@ -599,7 +599,7 @@ body {
 .event-bell.has-unseen::before {
     content: '';
     position: absolute;
-    inset: -4px;
+    inset: -3px;
     border-radius: 50%;
     background: conic-gradient(from var(--spin-angle, 0deg), var(--purple-mid), var(--accent-color), var(--purple-mid));
     animation: event-spin 2.5s linear infinite;
@@ -1031,7 +1031,7 @@ body.detail-view-active {
 .btn-accent,
 .btn-purple {
     background: var(--accent-color);
-    color: white;
+    color: var(--primary-text-on);
 }
 
 .btn-accent:hover,
@@ -1365,13 +1365,14 @@ body.detail-view-active {
 }
 
 .auto-build-badge {
-    padding: 0.25rem 0.75rem;
-    border-radius: 0.5rem;
-    font-size: 0.75rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 0.3rem;
+    font-size: 0.65rem;
     font-weight: 600;
     letter-spacing: 0.02em;
     background: rgba(77, 208, 225, 0.15);
     color: var(--primary-color);
+    vertical-align: middle;
 }
 
 .auto-build-badge.imported {
@@ -3812,7 +3813,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     border-radius: 999px;
     font-size: 0.85rem; font-weight: 500;
     cursor: pointer;
-    background: var(--accent-color);
+    background: var(--gradient-accent);
     color: var(--primary-text-on);
     border: none;
     transition: opacity 0.15s;
@@ -3991,7 +3992,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     background: rgba(255,255,255,0.15);
 }
 .compare-btn {
-    color: var(--text-secondary);
+    color: var(--text-primary);
     background: transparent;
     border: none;
     display: inline-flex;

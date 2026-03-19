@@ -62,7 +62,7 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 ### Video Building
 
 - Build timelapse videos from any range of captures within a job
-- Adjustable resolution, framerate (1--120 FPS), and quality levels
+- Adjustable resolution, framerate, and quality levels
 - Text overlay support with customizable font, size, color, position, and opacity
 - Dynamic overlay variables including job name, date, time, frame count, and more
 - Live preview of text overlay before building
