@@ -3252,7 +3252,7 @@ function generateOverlayHTML(prefix, opts = {}) {
             <div class="overlay-preview-panel" id="${prefix}-overlay-preview-panel">
                 <img id="${prefix}-overlay-preview-img" alt="Overlay preview" style="border-radius: var(--radius-lg); border: 1px solid var(--border-color); display: none;">
                 <div id="${prefix}-overlay-preview-placeholder" style="width:100%; aspect-ratio:16/9; background:var(--surface-color); border:1px dashed var(--border-color); border-radius:var(--radius-lg); display:flex; align-items:center; justify-content:center; color:var(--text-secondary); font-size:0.8rem;">
-                    Loading preview…
+                    No preview
                 </div>
             </div>` : '';
 
@@ -3525,6 +3525,8 @@ async function loadOverlayPreviewImage(prefix, job) {
     const placeholder = document.getElementById(`${prefix}-overlay-preview-placeholder`);
     if (!img) { console.warn(`loadOverlayPreviewImage: #${prefix}-overlay-preview-img not found`); return; }
 
+    if (placeholder) placeholder.innerHTML = '<div style="font-size:0.8rem; color:var(--text-secondary);">Loading preview…</div>';
+
     try {
         // Use the job's latest capture for the preview
         const capsData = await apiRequest('/captures/', { query: { job_id: job.id, page_size: 1, sort_order: 'desc' } });
@@ -3587,7 +3589,7 @@ async function fetchOverlayPreviewFromUrl(prefix) {
         return;
     }
 
-    if (placeholder) placeholder.innerHTML = '<div style="font-size:0.8rem; color:var(--text-secondary);">Fetching…</div>';
+    if (placeholder) placeholder.innerHTML = '<div style="font-size:0.8rem; color:var(--text-secondary);">Loading preview…</div>';
 
     try {
         const result = await apiRequest('/jobs/test-url', { method: 'POST', query: { url } });
@@ -3798,6 +3800,13 @@ function closeModal(modalId) {
         window.currentJobId = null;
         window.firstCaptureTime = null;
         window.lastCaptureTime = null;
+
+        // Clean up overlay state
+        resetOverlayPreview();
+        const buildOverlayContainer = document.getElementById('build-overlay-container');
+        if (buildOverlayContainer) buildOverlayContainer.innerHTML = '';
+        window._overlayPreviewCaptureId = null;
+        window._overlayJobName = null;
     }
 }
 
