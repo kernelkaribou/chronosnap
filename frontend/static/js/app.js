@@ -4061,12 +4061,15 @@ function showImportPreview() {
         if (m.time_window_start && m.time_window_end && m.time_window_start !== m.time_window_end)
             details.push(`Window: ${m.time_window_start} - ${m.time_window_end}`);
         if (m.exported_at) details.push(`Exported: ${formatDateTimeNoSeconds(m.exported_at)}`);
+        const tagHtml = m.tags && m.tags.length
+            ? '<br>' + m.tags.map(t => `<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:0.75rem;background:${escapeHtml(t.color)}22;color:${escapeHtml(t.color)};border:1px solid ${escapeHtml(t.color)}44;margin:2px 2px 0 0;">${escapeHtml(t.name)}</span>`).join('')
+            : '';
         metaBanner.innerHTML = `
             <div class="info-box" style="margin-bottom:0.75rem;border-left:3px solid var(--primary);">
                 <strong>ChronoSnap Export Detected</strong><br>
                 <small style="color:var(--text-secondary);">
                     Original job: "${escapeHtml(m.name || 'Unknown')}"${details.length ? '<br>' + details.join(' · ') : ''}
-                </small>
+                </small>${tagHtml}
             </div>
         `;
         metaBanner.style.display = 'block';
@@ -4210,6 +4213,10 @@ async function executeImport() {
         const jobName = document.getElementById('import-job-name').value.trim();
         if (!jobName) { showNotification('Enter a job name for images', 'error'); return; }
         body.image_job_name = jobName;
+        // Include tags from export metadata if present
+        if (_importAnalysis.export_metadata && _importAnalysis.export_metadata.tags) {
+            body.image_tags = _importAnalysis.export_metadata.tags;
+        }
     }
 
     // Video configs — only include remaining (non-removed) cards

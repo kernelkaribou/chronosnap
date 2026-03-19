@@ -954,10 +954,12 @@ def execute_image_import(
     stream_url: str = '',
     stream_type: str = 'rtsp',
     interval_seconds: int = 60,
+    tags: Optional[List[Dict]] = None,
 ) -> Dict[str, Any]:
     """Import images into a new job with proper folder structure.
     
     Returns dict with job_id, job_name, imported_count, total_size.
+    Tags are [{name, color}] dicts - matched by name or created if new.
     """
     from ..database import get_db
     
@@ -1050,6 +1052,31 @@ def execute_image_import(
             "UPDATE jobs SET capture_count = ?, storage_size = ? WHERE id = ?",
             (moved_count, total_size, job_id)
         )
+        
+        # Apply tags from export metadata (find by name or create)
+        if tags:
+            tag_ids = []
+            for tag in tags:
+                tag_name = tag.get('name', '').strip()
+                if not tag_name:
+                    continue
+                cursor.execute("SELECT id FROM tags WHERE name = ?", (tag_name,))
+                row = cursor.fetchone()
+                if row:
+                    tag_ids.append(row[0])
+                else:
+                    tag_color = tag.get('color', '#6366f1')
+                    cursor.execute(
+                        "INSERT INTO tags (name, color, created_at) VALUES (?, ?, ?)",
+                        (tag_name, tag_color, now)
+                    )
+                    tag_ids.append(cursor.lastrowid)
+            if tag_ids:
+                for tid in tag_ids:
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO job_tags (job_id, tag_id) VALUES (?, ?)",
+                        (job_id, tid)
+                    )
         
         logger.info(f"Imported {moved_count} images as job '{job_name}' (ID: {job_id})")
         add_event(f"Imported {moved_count} images as '{job_name}'", "import", {"job_id": job_id})
