@@ -1227,9 +1227,8 @@ async function loadJobDetail(jobId) {
                 <div class="form-section">
                     <div class="form-section-title">Schedule</div>
                     <div class="form-group" style="margin-bottom: 1rem;">
-                        <label>End Date & Time</label>
+                        <label style="display:flex;align-items:baseline;gap:0.5rem;">End Date & Time <small style="color:var(--text-secondary);font-weight:normal;font-size:0.75rem;">Leave empty for ongoing</small></label>
                         <input type="datetime-local" id="edit_end_datetime" class="form-control" style="max-width: 280px;">
-                        <small style="color: var(--text-secondary);">Leave empty for ongoing capture</small>
                     </div>
                     
                     <div class="form-group mb-lg">
