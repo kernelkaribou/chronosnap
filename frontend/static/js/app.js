@@ -7096,6 +7096,7 @@ async function loadHomepage() {
     ]);
 
     renderHomepageStats(stats, captures, allVideos, jobs);
+    renderHomepageSpotlight(captures, allVideos);
     renderHomepageCaptures(captures);
     renderHomepageVideos(videos);
     renderHomepageRandomVideos(allVideos);
@@ -7128,6 +7129,80 @@ function renderHomepageStats(stats, captures, videos, jobs) {
             <div class="homepage-stat-sub">${formatBytes(stats.disk_free)} free</div>
         </div>
     `;
+}
+
+function renderHomepageSpotlight(captureData, allVideos) {
+    const container = document.getElementById('homepage-spotlight');
+    const captures = captureData.captures || [];
+    const completedVideos = allVideos.filter(v => v.status === 'completed');
+    const hasCaptures = captures.length > 0;
+    const hasVideos = completedVideos.length > 0;
+
+    if (!hasCaptures && !hasVideos) {
+        container.innerHTML = `
+            <div class="homepage-spotlight-empty">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.4">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
+                </svg>
+                <p>Nothing here yet!</p>
+                <span>Set up your first capture job to start building your timelapse library.</span>
+                <button class="btn btn-accent btn-sm" onclick="showCreateJobModal()">+ Create Job</button>
+            </div>`;
+        return;
+    }
+
+    let captureCard = '';
+    if (hasCaptures) {
+        const c = captures[Math.floor(Math.random() * captures.length)];
+        captureCard = `
+            <div class="homepage-spotlight-card" onclick="navigateTo('/captures'); setTimeout(() => showCapturePreview(${c.id}), 300)" title="${escapeHtml(c.job_name || 'Capture')} · ${formatDateTime(c.captured_at)}">
+                <div class="homepage-spotlight-badge">📸 Random Capture</div>
+                <img src="${API_BASE}/captures/${c.id}/thumbnail" alt="" loading="lazy"
+                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22250%22%3E%3Crect width=%22400%22 height=%22250%22 fill=%22%231e293b%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23cbd5e1%22 font-family=%22sans-serif%22%3ENo Preview%3C/text%3E%3C/svg%3E'">
+                <div class="homepage-card-overlay">
+                    <div class="homepage-card-title">${escapeHtml(c.job_name || 'Unknown')}</div>
+                    <div class="homepage-card-sub">${formatDateTime(c.captured_at)}</div>
+                </div>
+            </div>`;
+    } else {
+        captureCard = `
+            <div class="homepage-spotlight-card homepage-spotlight-placeholder">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
+                </svg>
+                <p>No captures yet</p>
+                <button class="btn btn-accent btn-sm" onclick="showCreateJobModal()">+ Create Job</button>
+            </div>`;
+    }
+
+    let videoCard = '';
+    if (hasVideos) {
+        const v = completedVideos[Math.floor(Math.random() * completedVideos.length)];
+        const thumbSrc = v.thumbnail_path ? `${API_BASE}/videos/${v.id}/thumbnail` : '';
+        videoCard = `
+            <div class="homepage-spotlight-card" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeHtml(v.name)}">
+                <div class="homepage-spotlight-badge">🎬 Random Timelapse</div>
+                ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy">` :
+                    `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-muted);position:absolute;inset:0;">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                    </div>`}
+                <div class="homepage-card-overlay">
+                    <div class="homepage-card-title">${escapeHtml(v.name)}</div>
+                    <div class="homepage-card-sub">${v.duration_seconds ? formatDuration(v.duration_seconds) : ''} ${v.job_name ? '· ' + escapeHtml(v.job_name) : ''}</div>
+                </div>
+            </div>`;
+    } else {
+        videoCard = `
+            <div class="homepage-spotlight-card homepage-spotlight-placeholder">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4">
+                    <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+                </svg>
+                <p>No timelapses yet</p>
+                <button class="btn btn-accent btn-sm" onclick="navigateTo('/timelapses'); setTimeout(() => showProcessVideoModal(), 300)">+ Build Timelapse</button>
+            </div>`;
+    }
+
+    container.innerHTML = captureCard + videoCard;
 }
 
 function renderHomepageCaptures(data) {

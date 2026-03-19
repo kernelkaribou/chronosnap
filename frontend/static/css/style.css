@@ -2905,6 +2905,100 @@ body.detail-view-active {
     margin: 0;
 }
 
+.homepage-spotlight {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.homepage-spotlight-card {
+    position: relative;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    cursor: pointer;
+    height: 220px;
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    transition: all var(--transition-fast);
+}
+
+.homepage-spotlight-card:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px var(--primary-glow);
+}
+
+.homepage-spotlight-card img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.homepage-spotlight-badge {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-sm);
+    z-index: 1;
+    backdrop-filter: blur(4px);
+}
+
+.homepage-spotlight-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    cursor: default;
+}
+
+.homepage-spotlight-placeholder:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.homepage-spotlight-placeholder p {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.homepage-spotlight-empty {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 2.5rem 1rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.homepage-spotlight-empty p {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.homepage-spotlight-empty span {
+    font-size: 0.8rem;
+    max-width: 300px;
+}
+
+.homepage-spotlight-empty .btn {
+    margin-top: 0.5rem;
+}
+
 .homepage-view-all {
     font-size: 0.8rem;
     color: var(--primary-color);
@@ -3031,6 +3125,12 @@ body.detail-view-active {
 @media (max-width: 768px) {
     .homepage-stats {
         grid-template-columns: repeat(2, 1fr);
+    }
+    .homepage-spotlight {
+        grid-template-columns: 1fr;
+    }
+    .homepage-spotlight-card {
+        height: 180px;
     }
     .homepage-capture-card,
     .homepage-video-card {
