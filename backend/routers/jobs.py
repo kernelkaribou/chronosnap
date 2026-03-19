@@ -194,11 +194,24 @@ async def list_jobs(
         # Batch-fetch tags per job
         tags_by_job = fetch_tags_for_jobs(cursor, job_ids) if job_ids else {}
         
+        # Batch-fetch video counts per job
+        video_counts = {}
+        if job_ids:
+            placeholders = ','.join('?' for _ in job_ids)
+            cursor.execute(f"""
+                SELECT job_id, COUNT(*) as cnt FROM processed_videos
+                WHERE job_id IN ({placeholders}) AND status = 'completed'
+                GROUP BY job_id
+            """, job_ids)
+            for row2 in cursor.fetchall():
+                video_counts[row2['job_id']] = row2['cnt']
+        
         jobs = []
         for row in rows:
             job = dict_from_row(row)
             job['latest_capture'] = latest_captures.get(job['id'])
             job['tags'] = tags_by_job.get(job['id'], [])
+            job['video_count'] = video_counts.get(job['id'], 0)
             jobs.append(enrich_job_with_next_capture(job))
         
         return jobs
@@ -219,6 +232,12 @@ async def get_job(job_id: int):
         latest_capture_row = cursor.fetchone()
         job['latest_capture'] = dict_from_row(latest_capture_row) if latest_capture_row else None
         job['tags'] = fetch_tags_for_jobs(cursor, [job_id]).get(job_id, [])
+        
+        cursor.execute(
+            "SELECT COUNT(*) as cnt FROM processed_videos WHERE job_id = ? AND status = 'completed'",
+            (job_id,)
+        )
+        job['video_count'] = cursor.fetchone()['cnt']
         
         return enrich_job_with_next_capture(job)
 
@@ -431,6 +450,12 @@ async def update_job(job_id: int, job_update: JobUpdate):
         if job_update.tag_ids is not None:
             set_job_tags(cursor, job_id, job_update.tag_ids)
         updated_job['tags'] = fetch_tags_for_jobs(cursor, [job_id]).get(job_id, [])
+        
+        cursor.execute(
+            "SELECT COUNT(*) as cnt FROM processed_videos WHERE job_id = ? AND status = 'completed'",
+            (job_id,)
+        )
+        updated_job['video_count'] = cursor.fetchone()['cnt']
         
         # Log changes
         changes = [f"{field}" for field in job_update.model_fields_set]

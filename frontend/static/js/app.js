@@ -950,6 +950,11 @@ function renderJobs(jobs) {
                        title="View captures">
                         ${job.capture_count} captures
                     </a> · 
+                    ${job.video_count > 0 ? `<a href="#" onclick="event.stopPropagation(); viewJobTimelapses(${job.id}); return false;"
+                       style="color: var(--primary-color); text-decoration: underline; font-weight: 500;"
+                       title="View timelapses">
+                        ${job.video_count} timelapse${job.video_count !== 1 ? 's' : ''}
+                    </a> · ` : ''}
                     <span class="stat-inline">${formatBytes(job.storage_size)}</span>
                 </div>
             </div>
@@ -1075,6 +1080,13 @@ async function loadJobDetail(jobId) {
                                         <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
                                     </svg>
                                 </button>
+                            </div>
+                            <div class="detail-meta-actions">
+                                <strong>Timelapses:</strong>
+                                ${job.video_count > 0 ? `<a href="#" onclick="event.stopPropagation(); viewJobTimelapses(${job.id}); return false;"
+                                   style="color: var(--primary-color); text-decoration: none;" title="View timelapses">
+                                    ${job.video_count}
+                                </a>` : '0'}
                             </div>
                         </div>
                         <div class="detail-sidebar-actions">
@@ -2059,6 +2071,16 @@ function populateVideoFilters(videos) {
         years.map(y => `<option value="${y}">${y}</option>`).join('');
     yearSelect.value = currentYear;
     
+    // Populate job filter from unique jobs in videos
+    const jobSelect = document.getElementById('video-job-filter');
+    const currentJob = jobSelect.value;
+    const jobMap = new Map();
+    videos.forEach(v => { if (v.job_id && v.job_name) jobMap.set(v.job_id, v.job_name); });
+    const sortedJobs = [...jobMap.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+    jobSelect.innerHTML = '<option value="">All Jobs</option>' +
+        sortedJobs.map(([id, name]) => `<option value="${id}">${escapeHtml(name)}</option>`).join('');
+    jobSelect.value = currentJob;
+    
     // Initialize tag filter (once)
     const tagWrap = document.getElementById('video-tag-filter-wrap');
     if (tagWrap && !tagWrap._tagFilterSelected) {
@@ -2100,6 +2122,7 @@ function resetVideoFilters() {
     document.getElementById('video-month-filter').value = '';
     document.getElementById('video-month-filter').disabled = true;
     document.getElementById('video-source-filter').value = '';
+    document.getElementById('video-job-filter').value = '';
     clearTagFilter('video-tag-filter-wrap');
     videoFavoritesOnly = false;
     const favBtn = document.getElementById('video-fav-filter');
@@ -2115,6 +2138,7 @@ function filterVideos(opts = {}) {
     const yearFilter = document.getElementById('video-year-filter').value;
     const monthFilter = document.getElementById('video-month-filter').value;
     const sourceFilter = document.getElementById('video-source-filter').value;
+    const jobFilter = document.getElementById('video-job-filter').value;
     const selectedTags = getTagFilterIds('video-tag-filter-wrap');
     
     let filtered = allVideos;
@@ -2142,6 +2166,11 @@ function filterVideos(opts = {}) {
         filtered = filtered.filter(v => v.build_source !== 'imported');
     }
     
+    if (jobFilter) {
+        const jid = parseInt(jobFilter);
+        filtered = filtered.filter(v => v.job_id === jid);
+    }
+    
     if (videoFavoritesOnly) {
         filtered = filtered.filter(v => v.is_favorite);
     }
@@ -2167,7 +2196,7 @@ function filterVideos(opts = {}) {
     }
     
     // Show/hide reset button
-    const hasFilters = search || yearFilter || monthFilter !== '' || sourceFilter || videoFavoritesOnly || videoSharedOnly || selectedTags.length > 0;
+    const hasFilters = search || yearFilter || monthFilter !== '' || sourceFilter || jobFilter || videoFavoritesOnly || videoSharedOnly || selectedTags.length > 0;
     document.getElementById('video-filter-reset').style.display = hasFilters ? '' : 'none';
     
     const countEl = document.getElementById('video-count');
@@ -7016,6 +7045,22 @@ async function viewJobCaptures(jobId) {
     
     // Switch to captures view (this calls loadCaptures which will use the filter we just set)
     navigateTo('/captures');
+}
+
+async function viewJobTimelapses(jobId) {
+    // Navigate to timelapses view, then set the job filter once videos are loaded
+    navigateTo('/timelapses');
+    // Wait briefly for the view to render and videos to load
+    await new Promise(r => setTimeout(r, 100));
+    const jobSelect = document.getElementById('video-job-filter');
+    if (jobSelect) {
+        // Ensure dropdown is populated (loadVideos may still be running)
+        if (jobSelect.options.length <= 1) {
+            await loadVideos();
+        }
+        jobSelect.value = String(jobId);
+        filterVideos();
+    }
 }
 
 

@@ -170,6 +170,7 @@ class JobResponse(BaseModel):
     capture_path: str
     naming_pattern: str
     capture_count: int
+    video_count: int = 0
     warning_message: Optional[str] = None
     storage_size: int
     time_window_enabled: int = 0  # SQLite returns as int
