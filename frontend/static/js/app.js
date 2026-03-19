@@ -7178,15 +7178,14 @@ function renderHomepageVideos(videos) {
     container.innerHTML = completed.map(v => {
         const thumbSrc = v.thumbnail_path ? `${API_BASE}/videos/${v.id}/thumbnail` : '';
         return `
-        <div class="homepage-video-card" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeHtml(v.name)}">
-            <div class="homepage-video-thumb">
-                ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy">` :
-                    `<div class="thumb-placeholder"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></div>`}
-                ${v.duration_seconds ? `<div class="video-gallery-duration">${formatDuration(v.duration_seconds)}</div>` : ''}
-            </div>
-            <div class="homepage-card-info">
+        <div class="homepage-capture-card" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeHtml(v.name)}">
+            ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy">` :
+                `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-muted);">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                </div>`}
+            <div class="homepage-card-overlay">
                 <div class="homepage-card-title">${escapeHtml(v.name)}</div>
-                <div class="homepage-card-sub">${v.job_name ? escapeHtml(v.job_name) : 'No job'}</div>
+                <div class="homepage-card-sub">${v.duration_seconds ? formatDuration(v.duration_seconds) : ''} ${v.job_name ? '· ' + escapeHtml(v.job_name) : ''}</div>
             </div>
         </div>`;
     }).join('');
