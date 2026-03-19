@@ -2266,7 +2266,7 @@ function renderVideos(videos, isEmpty) {
             ` : ''}
             <div class="video-gallery-info">
                 <div class="video-gallery-name">${escapeHtml(video.name)}</div>
-                <div class="video-gallery-job">${video.build_source === 'imported' ? '<span class="auto-build-badge imported">Imported</span>' : (video.job_name ? escapeHtml(video.job_name) : 'No job')}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}</div>
+                <div class="video-gallery-job">${video.build_source === 'imported' && !video.job_name ? '<span class="auto-build-badge imported">Imported</span>' : (video.job_name ? escapeHtml(video.job_name) : 'No job')}${video.build_source === 'imported' && video.job_name ? ' <span class="auto-build-badge imported">Imported</span>' : ''}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}</div>
                 ${video.tags && video.tags.length ? `<div class="card-tags">${video.tags.map(t => tagChipHTML(t, true)).join('')}</div>` : ''}
             </div>
         </div>`;
@@ -2343,13 +2343,15 @@ async function loadVideoDetail(videoId) {
         let metaHtml = '';
         
         // Row 1: Job, Duration, Size, Status
-        const jobVal = video.build_source === 'imported'
-            ? '<span class="auto-build-badge imported">Imported</span>'
-            : (video.job_name
-                ? (video.job_id
-                    ? `<a href="/jobs/${video.job_id}" class="job-link" onclick="event.preventDefault(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a>`
-                    : escapeHtml(video.job_name))
-                : 'None');
+        const jobDisplay = video.job_name
+            ? (video.job_id
+                ? `<a href="/jobs/${video.job_id}" class="job-link" onclick="event.preventDefault(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a>`
+                : escapeHtml(video.job_name))
+            : '<span class="auto-build-badge imported">Imported</span>';
+        const jobEditBtn = `<button class="btn-icon" onclick="showVideoJobPicker(${video.id}, ${video.job_id || 'null'})" title="Change job" style="padding:0 0.25rem;margin-left:0.25rem;vertical-align:middle;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>`;
+        const jobVal = `${jobDisplay}${jobEditBtn}`;
         const sizeVal = (video.status === 'completed' && video.file_size) ? formatBytes(video.file_size) : 'N/A';
         metaHtml += `<dt>Job</dt><dd>${jobVal}</dd><dt>Duration</dt><dd>${formatDuration(video.duration_seconds)}</dd>`;
         metaHtml += `<dt>Size</dt><dd>${sizeVal}</dd><dt>Status</dt><dd><span class="job-status ${video.status}">${video.status}</span></dd>`;
@@ -2492,6 +2494,62 @@ async function saveVideoRename() {
         showNotification(`Video renamed to "${updated.name}"`);
     } catch (error) {
         showNotification(error.message || 'Failed to rename video', 'error');
+    }
+}
+
+async function showVideoJobPicker(videoId, currentJobId) {
+    // Fetch jobs list
+    let jobs;
+    try {
+        const resp = await apiRequest('/jobs/');
+        jobs = resp.jobs || resp;
+    } catch (e) {
+        showNotification('Failed to load jobs', 'error');
+        return;
+    }
+
+    // Find the dd element for Job in the detail meta grid
+    const metaDl = document.querySelector('#video-detail-meta');
+    const dtElements = metaDl ? metaDl.querySelectorAll('dt') : [];
+    let jobDd = null;
+    for (const dt of dtElements) {
+        if (dt.textContent.trim() === 'Job') {
+            jobDd = dt.nextElementSibling;
+            break;
+        }
+    }
+    if (!jobDd) return;
+
+    // Build inline dropdown
+    const options = [`<option value="">None (Imported)</option>`]
+        .concat(jobs.map(j => `<option value="${j.id}" ${j.id === currentJobId ? 'selected' : ''}>${escapeHtml(j.name)}</option>`));
+
+    jobDd.innerHTML = `
+        <select id="video-job-select" class="form-control" style="font-size:0.8rem;padding:0.15rem 0.3rem;display:inline-block;width:auto;max-width:160px;">
+            ${options.join('')}
+        </select>
+        <button class="btn-icon" onclick="saveVideoJob(${videoId})" title="Save" style="padding:0 0.25rem;color:var(--success);vertical-align:middle;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        </button>
+        <button class="btn-icon" onclick="loadVideoDetail(${videoId})" title="Cancel" style="padding:0 0.25rem;color:var(--text-secondary);vertical-align:middle;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+    `;
+}
+
+async function saveVideoJob(videoId) {
+    const select = document.getElementById('video-job-select');
+    if (!select) return;
+    const jobId = select.value ? parseInt(select.value) : null;
+    try {
+        await apiRequest(`/videos/${videoId}/job`, {
+            method: 'PUT', body: { job_id: jobId }
+        });
+        loadVideoDetail(videoId);
+        loadVideos();
+        showNotification('Job updated');
+    } catch (error) {
+        showNotification(error.message || 'Failed to update job', 'error');
     }
 }
 
@@ -4043,9 +4101,16 @@ async function analyzeAndShowPreview() {
     }
 }
 
-function showImportPreview() {
+async function showImportPreview() {
     const a = _importAnalysis;
     if (!a) return;
+
+    // Fetch jobs list for video linking dropdown
+    let _importJobs = [];
+    try {
+        const resp = await apiRequest('/jobs/');
+        _importJobs = resp.jobs || resp;
+    } catch (e) { /* non-critical */ }
 
     // Hide source panels, show preview
     document.getElementById('import-source-panels').style.display = 'none';
@@ -4143,6 +4208,10 @@ function showImportPreview() {
                         : '<span style="font-size:1.5rem;flex-shrink:0;">🎬</span>'}
                     <div class="video-meta" style="flex:1;min-width:0;">
                         <input type="text" class="form-control" value="${escapeHtml(baseName)}" data-file="${escapeHtml(v.file_name)}" style="font-size:0.85rem;padding:0.25rem 0.5rem;margin-bottom:0.25rem;">
+                        <select class="form-control import-video-job" data-file="${escapeHtml(v.file_name)}" style="font-size:0.75rem;padding:0.15rem 0.3rem;margin-bottom:0.25rem;">
+                            <option value="">No job (Imported)</option>
+                            ${_importJobs.map(j => `<option value="${j.id}">${escapeHtml(j.name)}</option>`).join('')}
+                        </select>
                         <small>${[res, dur, formatBytes(v.file_size), v.codec].filter(Boolean).join(' · ')}</small>
                     </div>
                     <button class="btn-icon" onclick="removeImportVideo(this)" title="Remove" style="flex-shrink:0;color:var(--danger);padding:0.25rem;">
@@ -4220,12 +4289,20 @@ async function executeImport() {
     }
 
     // Video configs — only include remaining (non-removed) cards
-    const videoCards = document.querySelectorAll('.import-video-card input[data-file]');
+    const videoCards = document.querySelectorAll('.import-video-card:not([data-duplicate]) input[data-file]');
     if (videoCards.length > 0) {
-        body.videos = Array.from(videoCards).map(input => ({
-            file_name: input.dataset.file,
-            name: input.value.trim() || input.dataset.file.replace(/\.[^.]+$/, ''),
-        }));
+        body.videos = Array.from(videoCards).map(input => {
+            const card = input.closest('.import-video-card');
+            const jobSelect = card ? card.querySelector('select.import-video-job') : null;
+            const config = {
+                file_name: input.dataset.file,
+                name: input.value.trim() || input.dataset.file.replace(/\.[^.]+$/, ''),
+            };
+            if (jobSelect && jobSelect.value) {
+                config.job_id = parseInt(jobSelect.value);
+            }
+            return config;
+        });
     }
 
     try {
