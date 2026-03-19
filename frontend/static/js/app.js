@@ -7102,15 +7102,10 @@ async function loadHomepage() {
 
 function renderHomepageStats(stats, captures, videos, jobs) {
     const container = document.getElementById('homepage-stats');
-    const activeJobs = jobs.filter(j => j.status === 'running').length;
+    const activeJobs = jobs.filter(j => j.status === 'active').length;
     const totalJobs = jobs.length;
 
     container.innerHTML = `
-        <div class="homepage-stat-card" onclick="navigateTo('/jobs')" title="View jobs">
-            <div class="homepage-stat-value">${totalJobs}</div>
-            <div class="homepage-stat-label">Jobs</div>
-            <div class="homepage-stat-sub">${activeJobs} active</div>
-        </div>
         <div class="homepage-stat-card" onclick="navigateTo('/captures')" title="View captures">
             <div class="homepage-stat-value">${stats.captures_total_count.toLocaleString()}</div>
             <div class="homepage-stat-label">Captures</div>
@@ -7120,6 +7115,11 @@ function renderHomepageStats(stats, captures, videos, jobs) {
             <div class="homepage-stat-value">${stats.videos_total_count}</div>
             <div class="homepage-stat-label">Timelapses</div>
             <div class="homepage-stat-sub">${formatBytes(stats.videos_total_size)}</div>
+        </div>
+        <div class="homepage-stat-card" onclick="navigateTo('/jobs')" title="View jobs">
+            <div class="homepage-stat-value">${totalJobs}</div>
+            <div class="homepage-stat-label">Jobs</div>
+            <div class="homepage-stat-sub">${activeJobs} active</div>
         </div>
         <div class="homepage-stat-card" onclick="navigateTo('/storage')" title="View storage">
             <div class="homepage-stat-value">${formatBytes(stats.disk_used)}</div>
@@ -7147,7 +7147,7 @@ function renderHomepageCaptures(data) {
     }
 
     container.innerHTML = captures.map(c => `
-        <div class="homepage-capture-card" onclick="navigateTo('/captures')" title="${escapeHtml(c.job_name || 'Capture')} · ${formatDateTime(c.captured_at)}">
+        <div class="homepage-capture-card" onclick="navigateTo('/captures'); setTimeout(() => showCapturePreview(${c.id}), 300)" title="${escapeHtml(c.job_name || 'Capture')} · ${formatDateTime(c.captured_at)}">
             <img src="${API_BASE}/captures/${c.id}/thumbnail" alt="" loading="lazy"
                  onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22112%22%3E%3Crect width=%22200%22 height=%22112%22 fill=%22%231e293b%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23cbd5e1%22 font-family=%22sans-serif%22%3ENo Preview%3C/text%3E%3C/svg%3E'">
             <div class="homepage-card-overlay">
@@ -7194,7 +7194,7 @@ function renderHomepageVideos(videos) {
 
 function renderHomepageJobs(jobs) {
     const container = document.getElementById('homepage-jobs');
-    const active = jobs.filter(j => j.status === 'running').slice(0, 5);
+    const active = jobs.filter(j => j.status === 'active').slice(0, 5);
 
     if (!active.length) {
         container.innerHTML = `
@@ -7215,7 +7215,7 @@ function renderHomepageJobs(jobs) {
         <div class="homepage-job-card" onclick="navigateTo('/jobs/${j.id}')">
             <div class="homepage-job-header">
                 <span class="homepage-job-name">${escapeHtml(j.name)}</span>
-                <span class="job-status running">Running</span>
+                <span class="job-status running">Active</span>
             </div>
             <div class="homepage-job-details">
                 <span>Every ${j.interval_seconds >= 3600 ? Math.round(j.interval_seconds / 3600) + 'h' : j.interval_seconds >= 60 ? Math.round(j.interval_seconds / 60) + 'm' : j.interval_seconds + 's'}</span>
