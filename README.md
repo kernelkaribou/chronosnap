@@ -38,6 +38,9 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
   - [Short-Term Capture](#short-term-capture-hours-to-days)
   - [Long-Term Capture](#long-term-capture-weeks-to-months)
   - [Daily Snapshot Over Time](#daily-snapshot-over-time-months-to-years)
+- [Template Variables](#template-variables)
+  - [Naming Pattern Variables](#naming-pattern-variables)
+  - [Text Overlay Variables](#text-overlay-variables)
 - [Technical Overview](#technical-overview)
   - [Architecture](#architecture)
   - [Data Storage](#data-storage)
@@ -383,6 +386,48 @@ Ideal for yearly comparisons, landscape changes, or long-duration monitoring.
 - Lower intervals generate more data. A 5-second interval at 1080p can produce several GB per day.
 - Auto-build is useful for long-running jobs so you can review progress without manually building videos.
 - Set the `TZ` environment variable to match your local timezone so scheduling and timestamps are intuitive.
+
+---
+
+## Template Variables
+
+ChronoSnap uses template variables in two places: **capture naming patterns** (file names for saved images) and **text overlays** (burned-in text on timelapse frames). Variables are wrapped in curly braces and replaced with real values at capture or build time.
+
+### Naming Pattern Variables
+
+Used when saving each captured image. Configure the default pattern in **Settings → Default Naming Pattern**, or override per-job when creating a capture job.
+
+| Variable | Description | Example |
+|---|---|---|
+| `{job_name}` | Name of the capture job | `MyJob` |
+| `{count}` | Zero-padded capture count | `000001` |
+| `{timestamp}` | Compact date and time (filename-safe) | `20260319_231400` |
+| `{month}` | Month, zero-padded | `03` |
+| `{day}` | Day of month, zero-padded | `19` |
+| `{hour}` | Hour, 24-hour format | `23` |
+
+**Default pattern:** `{job_name}_{count}_{timestamp}`
+**Example result:** `MyJob_000001_20260319_231400.jpg`
+
+> **Tip:** `{timestamp}` includes the full date and time in a filename-safe format. Use `{month}`, `{day}`, or `{hour}` when you only need part of the date — for example, `{job_name}_{month}-{day}_{count}` produces `MyJob_03-19_000001.jpg`.
+
+### Text Overlay Variables
+
+Used when building a timelapse video with text overlay enabled. Each variable is resolved per-frame using that frame's capture timestamp.
+
+| Variable | Description | Example |
+|---|---|---|
+| `{job_name}` | Name of the capture job | `MyJob` |
+| `{date}` | Capture date | `2026-03-19` |
+| `{time}` | Capture time | `23:14:00` |
+| `{datetime}` | Full date and time | `2026-03-19 23:14:00` |
+| `{month}` | Month, zero-padded | `03` |
+| `{day}` | Day of month, zero-padded | `19` |
+| `{hour}` | Hour, 24-hour format | `23` |
+| `{frame}` | Current frame number | `1` |
+| `{total_frames}` | Total number of frames | `500` |
+
+**Example:** An overlay text of `{job_name} — {date} {time}` renders as `MyJob — 2026-03-19 23:14:00` on each frame.
 
 ---
 
