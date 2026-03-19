@@ -14,6 +14,10 @@
       <stop offset="0%" stop-color="#e8e4f0"/>
       <stop offset="100%" stop-color="#c4bdd8"/>
     </linearGradient>
+    <!-- Clip to outer ring area only -->
+    <clipPath id="ring-clip">
+      <path d="M64 2 A62 62 0 1 1 63.99 2 Z M64 28 A36 36 0 1 0 64.01 28 Z" clip-rule="evenodd"/>
+    </clipPath>
   </defs>
 
   <!-- Outer ring -->
@@ -25,7 +29,19 @@
   <path d="M64 122 A58 58 0 0 0 122 64 L100 64 A36 36 0 0 1 64 100 Z" fill="url(#grad-fill)"/>
   <path d="M122 64 A58 58 0 0 0 64 6 L64 28 A36 36 0 0 1 100 64 Z" fill="url(#grad-fill)"/>
 
-  <!-- Crosshair lines dividing quadrants -->
+  <!-- Aperture grid lines in outer ring (clipped to ring area) -->
+  <g clip-path="url(#ring-clip)" opacity="0.3" stroke="url(#grad-ring)" fill="none">
+    <!-- Concentric arcs -->
+    <circle cx="64" cy="64" r="43" stroke-width="0.8"/>
+    <circle cx="64" cy="64" r="51" stroke-width="0.8"/>
+    <!-- Diagonal radial lines -->
+    <line x1="44.6" y1="44.6" x2="20.6" y2="20.6" stroke-width="0.8"/>
+    <line x1="83.4" y1="44.6" x2="107.4" y2="20.6" stroke-width="0.8"/>
+    <line x1="83.4" y1="83.4" x2="107.4" y2="107.4" stroke-width="0.8"/>
+    <line x1="44.6" y1="83.4" x2="20.6" y2="107.4" stroke-width="0.8"/>
+  </g>
+
+  <!-- Main crosshair lines dividing quadrants -->
   <g stroke="url(#grad-ring)" stroke-width="3.5" stroke-linecap="round">
     <line x1="64" y1="6" x2="64" y2="28"/>
     <line x1="64" y1="100" x2="64" y2="122"/>
@@ -37,24 +53,35 @@
   <circle cx="64" cy="64" r="36" fill="#0c0918"/>
   <circle cx="64" cy="64" r="36" fill="none" stroke="url(#grad-ring)" stroke-width="3"/>
 
-  <!-- Clock tick marks -->
-  <g stroke="url(#grad-ring)" stroke-width="2.5" stroke-linecap="round">
-    <line x1="64" y1="32" x2="64" y2="39"/>
-    <line x1="78.5" y1="35.5" x2="75" y2="41"/>
-    <line x1="89" y1="46" x2="84" y2="50"/>
-    <line x1="96" y1="64" x2="89" y2="64"/>
-    <line x1="89" y1="82" x2="84" y2="78"/>
-    <line x1="78.5" y1="92.5" x2="75" y2="87"/>
-    <line x1="64" y1="96" x2="64" y2="89"/>
-    <line x1="49.5" y1="92.5" x2="53" y2="87"/>
-    <line x1="39" y1="82" x2="44" y2="78"/>
-    <line x1="32" y1="64" x2="39" y2="64"/>
-    <line x1="39" y1="46" x2="44" y2="50"/>
-    <line x1="49.5" y1="35.5" x2="53" y2="41"/>
+  <!-- Clock tick marks: BOLD at 12, 3, 6, 9 -->
+  <g stroke="url(#grad-ring)" stroke-width="3" stroke-linecap="round">
+    <line x1="64" y1="30" x2="64" y2="37"/>       <!-- 12 -->
+    <line x1="98" y1="64" x2="91" y2="64"/>        <!-- 3 -->
+    <line x1="64" y1="98" x2="64" y2="91"/>        <!-- 6 -->
+    <line x1="30" y1="64" x2="37" y2="64"/>        <!-- 9 -->
   </g>
 
-  <!-- Countdown arc (bottom portion of inner ring) -->
-  <path d="M50 92.5 A33 33 0 0 0 78 92.5" fill="none" stroke="url(#grad-ring)" stroke-width="4.5" stroke-linecap="round" opacity="0.8"/>
+  <!-- Clock tick marks: normal at 1,2,4,5,7,8,10,11 -->
+  <g stroke="url(#grad-ring)" stroke-width="2" stroke-linecap="round">
+    <line x1="81" y1="34.6" x2="79" y2="38"/>      <!-- 1 -->
+    <line x1="93.4" y1="47" x2="90" y2="49"/>       <!-- 2 -->
+    <line x1="93.4" y1="81" x2="90" y2="79"/>       <!-- 4 -->
+    <line x1="81" y1="93.4" x2="79" y2="90"/>       <!-- 5 -->
+    <line x1="47" y1="93.4" x2="49" y2="90"/>       <!-- 7 -->
+    <line x1="34.6" y1="81" x2="38" y2="79"/>       <!-- 8 -->
+    <line x1="34.6" y1="47" x2="38" y2="49"/>       <!-- 10 -->
+    <line x1="47" y1="34.6" x2="49" y2="38"/>       <!-- 11 -->
+  </g>
+
+  <!-- Countdown segments between 6 and 9 (bottom-left arc) -->
+  <g fill="none" stroke="url(#grad-ring)" stroke-width="5" stroke-linecap="round" opacity="0.85">
+    <!-- Segment between 6 and 7 -->
+    <path d="M60.1 95.8 A32 32 0 0 1 46.2 90.4"/>
+    <!-- Segment between 7 and 8 -->
+    <path d="M42.9 87 A32 32 0 0 1 34.5 76.3"/>
+    <!-- Segment between 8 and 9 -->
+    <path d="M33.3 72.6 A32 32 0 0 1 32.1 60"/>
+  </g>
 
   <!-- Play triangle -->
   <polygon points="55,47 55,81 84,64" fill="url(#grad-play)"/>
