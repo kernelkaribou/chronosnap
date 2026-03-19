@@ -39,7 +39,7 @@ RUN mkdir -p /app/data /captures /timelapses /imports /app/import-staging
 LABEL org.opencontainers.image.title="ChronoSnap" \
       org.opencontainers.image.description="Configuration and management tool for timelapse videos" \
       org.opencontainers.image.vendor="kernelkaribou" \
-      org.opencontainers.image.source="https://github.com/kernelkaribou/timelapse-manager" \
+      org.opencontainers.image.source="https://github.com/kernelkaribou/chronosnap" \
       org.opencontainers.image.version="3.0.0"
 
 # Set environment variables

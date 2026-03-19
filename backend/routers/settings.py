@@ -72,8 +72,8 @@ async def get_version(request: Request):
         import json
 
         req = urllib.request.Request(
-            "https://api.github.com/repos/kernelkaribou/timelapse-manager/releases/latest",
-            headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "timelapse-manager"}
+            "https://api.github.com/repos/kernelkaribou/chronosnap/releases/latest",
+            headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "chronosnap"}
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read())

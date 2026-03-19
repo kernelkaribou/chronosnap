@@ -126,7 +126,7 @@ ChronoSnap runs as a Docker container. The only requirement is a host with Docke
 
 1. Download the `docker-compose.yml` from this repository:
 
-   [docker-compose.yml](https://raw.githubusercontent.com/kernelkaribou/timelapse-manager/main/docker-compose.yml)
+   [docker-compose.yml](https://raw.githubusercontent.com/kernelkaribou/chronosnap/main/docker-compose.yml)
 
 2. Create the data directories:
 
@@ -148,9 +148,9 @@ That is all you need to get started. The application will initialize its databas
 
 ```yaml
 services:
-  timelapse-manager:
-    image: ghcr.io/kernelkaribou/timelapse-manager:latest
-    container_name: timelapse-manager
+  chronosnap:
+    image: ghcr.io/kernelkaribou/chronosnap:latest
+    container_name: chronosnap
     environment:
       - PUID=1000
       - PGID=1000
@@ -250,7 +250,7 @@ Add the device to your `docker-compose.yml`:
 
 ```yaml
 services:
-  timelapse-manager:
+  chronosnap:
     # ... existing config ...
     devices:
       - /dev/video0:/dev/video0
@@ -262,7 +262,7 @@ For Raspberry Pi CSI cameras, ChronoSnap uses `rpicam-apps` (the current Raspber
 
 ```yaml
 services:
-  timelapse-manager:
+  chronosnap:
     devices:
       - /dev/video0:/dev/video0
       - /dev/vchiq:/dev/vchiq         # VideoCore interface

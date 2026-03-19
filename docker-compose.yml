@@ -1,8 +1,8 @@
 services:
-  timelapse-manager:
+  chronosnap:
     build: .
-    image: timelapse-manager
-    container_name: timelapse-manager
+    image: chronosnap
+    container_name: chronosnap
     environment:
       # Recommended environment variables:
       - PUID=1000 

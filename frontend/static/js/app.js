@@ -5795,7 +5795,7 @@ async function loadSettings() {
             const badge = document.getElementById('update-badge');
             if (badge) {
                 badge.textContent = `v${ver.latest} available`;
-                badge.href = ver.release_url || 'https://github.com/kernelkaribou/timelapse-manager/releases';
+                badge.href = ver.release_url || 'https://github.com/kernelkaribou/chronosnap/releases';
                 badge.style.display = '';
             }
         }
