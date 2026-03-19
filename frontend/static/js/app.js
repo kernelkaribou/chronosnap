@@ -3832,6 +3832,9 @@ function resetImportModal() {
     document.getElementById('import-upload-progress').style.display = 'none';
     document.getElementById('import-folder-input').value = '';
     document.getElementById('import-job-name').value = '';
+    const metaBanner = document.getElementById('import-export-metadata');
+    metaBanner.style.display = 'none';
+    metaBanner.innerHTML = '';
     const execBtn = document.getElementById('import-execute-btn');
     execBtn.disabled = false;
     execBtn.textContent = 'Import';
@@ -4046,6 +4049,30 @@ function showImportPreview() {
     document.getElementById('import-source-panels').style.display = 'none';
     document.getElementById('import-staging-preview').style.display = 'block';
 
+    // Export metadata banner
+    const metaBanner = document.getElementById('import-export-metadata');
+    if (a.export_metadata) {
+        const m = a.export_metadata;
+        const details = [];
+        if (m.stream_type) details.push(`Type: ${m.stream_type}`);
+        if (m.interval_seconds) details.push(`Interval: ${m.interval_seconds}s`);
+        if (m.time_window_start && m.time_window_end && m.time_window_start !== m.time_window_end)
+            details.push(`Window: ${m.time_window_start} - ${m.time_window_end}`);
+        if (m.exported_at) details.push(`Exported: ${formatDateTimeNoSeconds(m.exported_at)}`);
+        metaBanner.innerHTML = `
+            <div class="info-box" style="margin-bottom:0.75rem;border-left:3px solid var(--primary);">
+                <strong>ChronoSnap Export Detected</strong><br>
+                <small style="color:var(--text-secondary);">
+                    Original job: "${escapeHtml(m.name || 'Unknown')}"${details.length ? '<br>' + details.join(' · ') : ''}
+                </small>
+            </div>
+        `;
+        metaBanner.style.display = 'block';
+    } else {
+        metaBanner.style.display = 'none';
+        metaBanner.innerHTML = '';
+    }
+
     // Images
     const imgSection = document.getElementById('import-preview-images');
     if (a.image_count > 0) {
@@ -4056,14 +4083,17 @@ function showImportPreview() {
                 Range: ${formatDateTimeNoSeconds(a.image_first)} → ${formatDateTimeNoSeconds(a.image_last)}
             </small>
         `;
-        // Auto-suggest job name from source folder name (not the import root)
+        // Pre-fill from export metadata, otherwise from folder name
         const nameInput = document.getElementById('import-job-name');
         if (!nameInput.value) {
-            const srcPath = _importSourcePath || _importBrowsePath || '';
-            const parts = srcPath.split('/').filter(Boolean);
-            // If we're deeper than just the root import dir, use the last folder name
-            const folderName = parts.length > 1 ? parts[parts.length - 1] : '';
-            nameInput.value = folderName || 'Imported';
+            if (a.export_metadata && a.export_metadata.name) {
+                nameInput.value = a.export_metadata.name;
+            } else {
+                const srcPath = _importSourcePath || _importBrowsePath || '';
+                const parts = srcPath.split('/').filter(Boolean);
+                const folderName = parts.length > 1 ? parts[parts.length - 1] : '';
+                nameInput.value = folderName || 'Imported';
+            }
         }
     } else {
         imgSection.style.display = 'none';
