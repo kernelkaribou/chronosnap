@@ -905,13 +905,13 @@ function renderJobs(jobs) {
         // Determine status display
         let statusLabel, statusClass;
         if (job.status === 'warning') {
-            statusLabel = '⚠ Warning';
+            statusLabel = 'Warning';
             statusClass = 'warning';
         } else if (job.status === 'sleeping') {
             statusLabel = 'Sleeping';
             statusClass = 'sleeping';
         } else if (job.status === 'disabled') {
-            statusLabel = '⏸ Disabled';
+            statusLabel = 'Disabled';
             statusClass = 'disabled';
         } else {
             statusLabel = job.status.charAt(0).toUpperCase() + job.status.slice(1);
@@ -1155,9 +1155,8 @@ function renderJobWarning(job) {
     return `
         <div class="info-box" style="margin-bottom: 1rem; border-left-color: var(--warning-color);">
             <div class="info-box">
-                <span style="font-size: 1.25rem;">⚠</span>
                 <div>
-                    <strong>Capture Warning</strong>
+                    <strong style="color: var(--warning-color);">Capture Warning</strong>
                     <p class="mt-sm text-base">${escapeHtml(job.warning_message)}</p>
                     <p class="mt-sm text-xs" style="opacity: 0.8;">Verify settings for the job. The job will continue attempting captures in case this is a temporary issue.</p>
                 </div>
@@ -1174,7 +1173,7 @@ function renderJobTimeWindow(job) {
                 <div>
                     <strong>Time Window Enabled</strong>
                     <p class="mt-sm text-base">Captures only happen between <strong>${job.time_window_start}</strong> and <strong>${job.time_window_end}</strong> each day.</p>
-                    ${job.time_window_start > job.time_window_end ? '<p class="mt-sm text-xs" style="opacity: 0.8;">⏰ This window spans midnight (e.g., captures from evening to early morning)</p>' : ''}
+                    ${job.time_window_start > job.time_window_end ? '<p class="mt-sm text-xs" style="opacity: 0.8;">This window spans midnight (e.g., captures from evening to early morning)</p>' : ''}
                 </div>
             </div>
         </div>
@@ -4208,7 +4207,7 @@ async function showImportPreview() {
         document.getElementById('import-videos-list').innerHTML = `
             <div class="info-box" style="margin-bottom:0.75rem;">
                 <strong>${importableCount} video(s)</strong> · ${formatBytes(a.video_total_size)}
-                ${dupeCount ? `<br><small style="color:var(--warning);">⚠ ${dupeCount} duplicate(s) will be skipped</small>` : ''}
+                ${dupeCount ? `<br><small style="color:var(--warning-color);">${dupeCount} duplicate(s) will be skipped</small>` : ''}
             </div>
             ${a.videos.map(v => {
                 const baseName = v.file_name.replace(/\.[^.]+$/, '');
@@ -4228,7 +4227,7 @@ async function showImportPreview() {
                             <div style="font-size:0.85rem;padding:0.25rem 0;font-weight:500;">${escapeHtml(baseName)}</div>
                             <small>${[res, dur, formatBytes(v.file_size), v.codec].filter(Boolean).join(' · ')}</small>
                         </div>
-                        <span class="duplicate-badge" title="${matchLabel}: '${escapeHtml(dupe.existing_name)}'">⚠ Duplicate</span>
+                        <span class="duplicate-badge" title="${matchLabel}: '${escapeHtml(dupe.existing_name)}'">Duplicate</span>
                     </div>`;
                 }
                 return `<div class="import-video-card" data-filename="${escapeHtml(v.file_name)}">
@@ -4993,7 +4992,9 @@ async function performMaintenanceScan(jobId, jobName) {
         console.error('Maintenance scan failed:', error);
         content.innerHTML = `
             <div style="text-align: center; padding: 2rem;">
-                <div style="font-size: 2rem; margin-bottom: 1rem;">❌</div>
+                <div style="font-size: 2rem; margin-bottom: 1rem; color: var(--danger);">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                </div>
                 <p style="color: var(--danger);">Failed to scan captures</p>
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
@@ -5071,7 +5072,7 @@ function displayMaintenanceResults(jobId, jobName) {
                 </div>
                 
                 <div style="background: var(--surface-hover); border: 1px solid var(--warning-color); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                    <strong style="color: var(--warning-color);">⚠ Caution</strong>
+                    <strong style="color: var(--warning-color);">Caution</strong>
                     <p style="color: var(--text-secondary); margin-top: 0.5rem; margin-bottom: 0; font-size: 0.875rem;">
                         Submitting will <strong>permanently remove</strong> these database records. Before proceeding, verify that the files are truly 
                         gone and not simply inaccessible due to a changed volume mount, unmounted drive, or moved directory. 
@@ -6599,7 +6600,9 @@ async function scanOrphanedCaptures() {
         console.error('Orphaned scan failed:', error);
         content.innerHTML = `
             <div style="text-align: center; padding: 2rem;">
-                <div style="font-size: 2rem; margin-bottom: 1rem;">❌</div>
+                <div style="font-size: 2rem; margin-bottom: 1rem; color: var(--danger);">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                </div>
                 <p style="color: var(--danger);">Failed to scan for orphaned captures</p>
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
@@ -6677,7 +6680,7 @@ function displayOrphanedResults(data) {
     content.innerHTML = `
         <div>
             <div class="mb-lg">
-                <strong class="text-warning">⚠ Orphaned Captures Found</strong>
+                <strong class="text-warning">Orphaned Captures Found</strong>
                 <div class="text-sm text-secondary mt-sm">
                     ${data.orphaned_groups.length} group${data.orphaned_groups.length > 1 ? 's' : ''} · ${summaryParts.join(' · ')}
                 </div>
