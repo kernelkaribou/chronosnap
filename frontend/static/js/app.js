@@ -694,13 +694,6 @@ function parseRoute(pathname) {
 }
 
 function handleRoute(pushState = false) {
-    // Legacy hash redirect
-    const hash = window.location.hash.slice(1);
-    if (hash && !window.location.pathname.match(/^\/(jobs|timelapses|captures|storage|settings)/)) {
-        const hashMap = { 'jobs': '/jobs', 'videos': '/timelapses', 'captures': '/captures', 'storage': '/storage', 'settings': '/settings' };
-        if (hashMap[hash]) { history.replaceState(null, '', hashMap[hash]); }
-    }
-
     const route = parseRoute();
     if (route.view === 'job-detail' && route.id) {
         switchView('job-detail', pushState);
@@ -3434,7 +3427,7 @@ function debouncedOverlayPreview() {
 async function updateOverlayPreview() {
     const config = readOverlayConfig('build');
     const captureId = window._overlayPreviewCaptureId;
-    if (!config || !captureId) { console.warn('Build overlay preview: missing config or captureId', { hasConfig: !!config, captureId }); resetOverlayPreview(); return; }
+    if (!config || !captureId) { resetOverlayPreview(); return; }
 
     try {
         const resp = await fetch(`${API_BASE}/videos/text-overlay-preview`, {
@@ -3525,7 +3518,7 @@ function initEditJobOverlay(job) {
 async function loadOverlayPreviewImage(prefix, job) {
     const img = document.getElementById(`${prefix}-overlay-preview-img`);
     const placeholder = document.getElementById(`${prefix}-overlay-preview-placeholder`);
-    if (!img) { console.warn(`loadOverlayPreviewImage: #${prefix}-overlay-preview-img not found`); return; }
+    if (!img) return;
 
     if (placeholder) placeholder.innerHTML = '<div style="font-size:0.8rem; color:var(--text-secondary);">Loading preview…</div>';
 
@@ -3654,12 +3647,12 @@ async function updateOverlayFromUrl(prefix) {
 async function updateGenericOverlayPreview(prefix, job) {
     const config = readOverlayConfig(prefix);
     const img = document.getElementById(`${prefix}-overlay-preview-img`);
-    if (!img) { console.warn(`Overlay preview: img element #${prefix}-overlay-preview-img not found`); return; }
+    if (!img) return;
     // Delegate to URL-based previewer if we have base64 but no capture
     if (!img._captureId && img._base64) {
         return updateOverlayFromUrl(prefix);
     }
-    if (!img._captureId) { console.warn('Overlay preview: no _captureId on image'); return; }
+    if (!img._captureId) return;
     if (!config) {
         // Restore original
         if (img._originalSrc) img.src = img._originalSrc;
@@ -4466,9 +4459,7 @@ async function duplicateJob(jobId) {
                     // Mount widget first, then populate
                     initCreateJobOverlay();
                     writeOverlayConfig('create-ab', overlayConfig);
-                } catch (e) {
-                    console.warn('Failed to parse auto_build_text_overlay for duplicate:', e);
-                }
+                } catch (e) { /* ignore invalid overlay config */ }
             }
         } else {
             abEnabled.checked = false;

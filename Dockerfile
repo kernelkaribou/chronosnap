@@ -37,11 +37,11 @@ RUN chmod +x /entrypoint.sh
 RUN mkdir -p /app/data /captures /timelapses /imports
 
 # Add build metadata
-LABEL org.opencontainers.image.title="Timelapse Manager" \
+LABEL org.opencontainers.image.title="ChronoSnap" \
       org.opencontainers.image.description="Configuration and management tool for timelapse videos" \
       org.opencontainers.image.vendor="kernelkaribou" \
       org.opencontainers.image.source="https://github.com/kernelkaribou/timelapse-manager" \
-      org.opencontainers.image.version="2.0.0"
+      org.opencontainers.image.version="2.1.0"
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

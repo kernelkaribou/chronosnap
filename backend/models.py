@@ -35,7 +35,6 @@ class JobCreate(BaseModel):
     end_datetime: Optional[datetime] = None
     interval_seconds: int = Field(..., ge=10, description="Capture interval in seconds")
     framerate: int = Field(default=30, gt=0)
-    capture_path: Optional[str] = Field(None, deprecated=True, description="Ignored. Uses global captures path from settings.")
     naming_pattern: Optional[str] = None
     time_window_enabled: bool = Field(default=False, description="Enable daily time window for captures")
     time_window_start: Optional[str] = Field(None, description="Start time in HH:MM format (e.g., '08:00')")
@@ -243,7 +242,6 @@ class VideoCreate(BaseModel):
     resolution: str = Field(default="1920x1080", pattern=r"^\d+x\d+$")
     framerate: int = Field(default=30, gt=0)
     quality: str = Field(default="high", pattern=r"^(low|medium|high|maximum)$")
-    output_path: Optional[str] = Field(None, deprecated=True, description="Ignored. Uses global timelapses path from settings.")
     start_capture_id: Optional[int] = None
     end_capture_id: Optional[int] = None
     start_time: Optional[str] = None  # ISO datetime string

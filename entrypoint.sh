@@ -5,11 +5,8 @@ set -e
 PUID=${PUID:-0}
 PGID=${PGID:-0}
 
-echo "Starting with PUID=$PUID and PGID=$PGID"
-
 # If running as root, skip user creation
 if [ "$PUID" = "0" ] && [ "$PGID" = "0" ]; then
-    echo "Running as root"
     exec "$@"
 fi
 
@@ -24,7 +21,6 @@ CURRENT_UID=$(id -u appuser 2>/dev/null || echo 0)
 CURRENT_GID=$(id -g appuser 2>/dev/null || echo 0)
 
 if [ "$CURRENT_UID" != "$PUID" ] || [ "$CURRENT_GID" != "$PGID" ]; then
-    echo "Updating appuser UID to $PUID and GID to $PGID"
     groupmod -g "$PGID" appgroup 2>/dev/null || true
     usermod -u "$PUID" -g "$PGID" appuser 2>/dev/null || true
 fi
