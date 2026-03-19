@@ -316,11 +316,13 @@ The `/imports` volume is optional. If you only plan to import via browser upload
 
 Once files are staged (either by upload or server path scan), ChronoSnap analyzes them automatically. Images are classified with timestamps extracted from EXIF data, and videos are probed for resolution, duration, and codec information. You can review the results, name the job, and execute the import.
 
-All images in a single import are treated as one job. If you have images from multiple sources or projects, import them separately so each gets its own job with the correct name and metadata. Videos are imported individually as standalone timelapses.
+All images in a single import are treated as one job. If you have images from multiple sources or projects, import them separately so each gets its own job with the correct name and metadata. Videos are imported individually as standalone timelapses and can be linked to an existing job during the import process or afterward from the video detail view.
 
 Imported images are organized into the standard folder hierarchy and tracked in the database like any other captures.
 
 If the staged files came from a ChronoSnap export archive, the job metadata (name, interval, time window, tags) is detected and pre-filled automatically. The stream URL is intentionally excluded from exports for privacy.
+
+A fresh install includes a set of default tags (Daily, Weekly, Seasonal, Construction, Project, Nature, Weather, Security, Event, Archival) ready to use for organizing your jobs and videos.
 
 ### Exporting
 
