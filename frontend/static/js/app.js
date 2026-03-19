@@ -1168,8 +1168,8 @@ async function loadJobDetail(jobId) {
                         <div id="edit-preview-result" class="test-result"></div>
                     </div>
 
-                    <div id="edit-capture-settings-row" class="form-row" style="margin-top: 0.75rem;">
-                        <div class="form-group flex-1">
+                    <div class="form-row-wrap" style="gap: 1rem; margin-top: 0.75rem;">
+                        <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0;">
                             <label>Capture Quality</label>
                             <select id="edit_capture_quality" class="form-control">
                                 <option value="maximum" ${(!job.capture_quality || job.capture_quality === 'maximum') ? 'selected' : ''}>Maximum</option>
@@ -1178,14 +1178,14 @@ async function loadJobDetail(jobId) {
                                 <option value="low" ${job.capture_quality === 'low' ? 'selected' : ''}>Low</option>
                             </select>
                         </div>
-                        <div class="form-group flex-1">
+                        <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0;">
                             <label>Capture Resolution</label>
                             <select id="edit_capture_resolution" class="form-control">
                                 <option value="native" selected>Native</option>
                                 ${job.capture_resolution && job.capture_resolution !== 'native' ? `<option value="${escapeHtml(job.capture_resolution)}" selected>${escapeHtml(job.capture_resolution)}</option>` : ''}
                             </select>
                         </div>
-                        <div class="form-group" id="edit-source-info" style="flex: 0 0 auto; display: none; align-self: flex-end; padding-bottom: 0.35rem;">
+                        <div class="form-group" id="edit-source-info" style="flex: 0 0 auto; display: none; align-self: flex-end; padding-bottom: 0.35rem; margin-bottom: 0;">
                             <small id="edit-source-dimensions" style="color: var(--text-secondary);"></small>
                         </div>
                     </div>
@@ -1195,7 +1195,7 @@ async function loadJobDetail(jobId) {
                     <div class="form-section-title">Schedule</div>
                     <div class="form-group" style="margin-bottom: 1rem;">
                         <label>End Date & Time</label>
-                        <input type="datetime-local" id="edit_end_datetime" class="form-control">
+                        <input type="datetime-local" id="edit_end_datetime" class="form-control" style="max-width: 280px;">
                         <small style="color: var(--text-secondary);">Leave empty for ongoing capture</small>
                     </div>
                     
@@ -1220,18 +1220,16 @@ async function loadJobDetail(jobId) {
                         </div>
                     </div>
 
-                    <div class="form-section">
-                        <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 0.5rem;">
-                            <div class="form-group" style="margin-bottom: 0;">
-                                <label>Capture Interval (s) *</label>
-                                <input type="number" id="edit_interval_seconds" class="form-control" value="${job.interval_seconds}" min="10" required style="width: 120px;">
-                            </div>
-                            <div class="form-group" style="margin-bottom: 0;">
-                                <label>Timelapse FPS</label>
-                                <input type="number" id="edit_framerate" class="form-control" value="30" min="1" max="120" required style="width: 120px;">
-                            </div>
+                    <div class="form-row-wrap" style="gap: 1rem; align-items: flex-start;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Capture Interval (s) *</label>
+                            <input type="number" id="edit_interval_seconds" class="form-control" value="${job.interval_seconds}" min="10" required style="width: 140px;">
                         </div>
-                        <div class="duration-estimate" id="edit-duration-estimate" style="flex: 1; margin: 0;"></div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Timelapse FPS</label>
+                            <input type="number" id="edit_framerate" class="form-control" value="30" min="1" max="120" required style="width: 140px;">
+                        </div>
+                        <div class="duration-estimate" id="edit-duration-estimate" style="flex: 1; min-width: 200px; margin: 0;"></div>
                     </div>
                 </div>
 

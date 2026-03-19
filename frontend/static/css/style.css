@@ -850,7 +850,7 @@ body {
     flex-wrap: wrap;
 }
 
-.form-section {
+.form-section-row {
     display: flex;
     gap: var(--space-md);
     align-items: stretch;
@@ -916,7 +916,7 @@ body {
     .detail-actions-group {
         justify-content: center;
     }
-    .form-section {
+    .form-section-row {
         flex-direction: column;
     }
 }
