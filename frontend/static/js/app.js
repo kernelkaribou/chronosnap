@@ -2121,7 +2121,6 @@ function resetVideoFilters() {
     document.getElementById('video-year-filter').value = '';
     document.getElementById('video-month-filter').value = '';
     document.getElementById('video-month-filter').disabled = true;
-    document.getElementById('video-source-filter').value = '';
     document.getElementById('video-job-filter').value = '';
     clearTagFilter('video-tag-filter-wrap');
     videoFavoritesOnly = false;
@@ -2130,6 +2129,12 @@ function resetVideoFilters() {
     videoSharedOnly = false;
     const shareBtn = document.getElementById('video-share-filter');
     if (shareBtn) shareBtn.classList.remove('active');
+    videoImportedOnly = false;
+    const importBtn = document.getElementById('video-imported-filter');
+    if (importBtn) importBtn.classList.remove('active');
+    videoAutoOnly = false;
+    const autoBtn = document.getElementById('video-auto-filter');
+    if (autoBtn) autoBtn.classList.remove('active');
     filterVideos();
 }
 
@@ -2137,7 +2142,6 @@ function filterVideos(opts = {}) {
     const search = (document.getElementById('video-search').value || '').toLowerCase();
     const yearFilter = document.getElementById('video-year-filter').value;
     const monthFilter = document.getElementById('video-month-filter').value;
-    const sourceFilter = document.getElementById('video-source-filter').value;
     const jobFilter = document.getElementById('video-job-filter').value;
     const selectedTags = getTagFilterIds('video-tag-filter-wrap');
     
@@ -2160,10 +2164,12 @@ function filterVideos(opts = {}) {
         }
     }
     
-    if (sourceFilter === 'imported') {
+    if (videoImportedOnly) {
         filtered = filtered.filter(v => v.build_source === 'imported');
-    } else if (sourceFilter === 'built') {
-        filtered = filtered.filter(v => v.build_source !== 'imported');
+    }
+    
+    if (videoAutoOnly) {
+        filtered = filtered.filter(v => v.build_source === 'auto');
     }
     
     if (jobFilter) {
@@ -2196,7 +2202,7 @@ function filterVideos(opts = {}) {
     }
     
     // Show/hide reset button
-    const hasFilters = search || yearFilter || monthFilter !== '' || sourceFilter || jobFilter || videoFavoritesOnly || videoSharedOnly || selectedTags.length > 0;
+    const hasFilters = search || yearFilter || monthFilter !== '' || jobFilter || videoImportedOnly || videoAutoOnly || videoFavoritesOnly || videoSharedOnly || selectedTags.length > 0;
     document.getElementById('video-filter-reset').style.display = hasFilters ? '' : 'none';
     
     const countEl = document.getElementById('video-count');
@@ -7004,6 +7010,8 @@ function toggleCaptureFavoritesFilter() {
 
 let videoFavoritesOnly = false;
 let videoSharedOnly = false;
+let videoImportedOnly = false;
+let videoAutoOnly = false;
 
 function toggleVideoFavoritesFilter() {
     videoFavoritesOnly = !videoFavoritesOnly;
@@ -7021,6 +7029,24 @@ function toggleVideoSharedFilter() {
         document.getElementById('video-filter-reset').style.display = '';
     }
     loadVideos();
+}
+
+function toggleVideoImportedFilter() {
+    videoImportedOnly = !videoImportedOnly;
+    document.getElementById('video-imported-filter').classList.toggle('active', videoImportedOnly);
+    if (videoImportedOnly) {
+        document.getElementById('video-filter-reset').style.display = '';
+    }
+    filterVideos();
+}
+
+function toggleVideoAutoFilter() {
+    videoAutoOnly = !videoAutoOnly;
+    document.getElementById('video-auto-filter').classList.toggle('active', videoAutoOnly);
+    if (videoAutoOnly) {
+        document.getElementById('video-filter-reset').style.display = '';
+    }
+    filterVideos();
 }
 
 async function viewJobCaptures(jobId) {
