@@ -994,416 +994,419 @@ async function loadJobDetail(jobId) {
         
         const content = document.getElementById('job-detail-content');
         const title = document.getElementById('job-detail-title');
-        
-        // Update page title
         title.textContent = job.name;
-        
-        // End datetime will be set by initializeEditTimePickers if present
-        
-        // Determine status display
-        let statusLabel, statusClass;
-        if (job.status === 'warning') {
-            statusLabel = 'Warning';
-            statusClass = 'warning';
-        } else if (job.status === 'sleeping') {
-            statusLabel = 'Sleeping (Outside Time Window)';
-            statusClass = 'sleeping';
-        } else if (job.status === 'disabled') {
-            statusLabel = 'Disabled';
-            statusClass = 'disabled';
-        } else {
-            statusLabel = job.status.charAt(0).toUpperCase() + job.status.slice(1);
-            statusClass = job.status;
-        }
-        
-        // Time window info
-        let timeWindowHtml = '';
-        if (job.time_window_enabled) {
-            timeWindowHtml = `
-                <div class="info-box" style="margin: 1rem 0;">
-                    <div class="info-box">
-                        <div>
-                            <strong>Time Window Enabled</strong>
-                            <p class="mt-sm text-base">Captures only happen between <strong>${job.time_window_start}</strong> and <strong>${job.time_window_end}</strong> each day.</p>
-                            ${job.time_window_start > job.time_window_end ? '<p class="mt-sm text-xs" style="opacity: 0.8;">⏰ This window spans midnight (e.g., captures from evening to early morning)</p>' : ''}
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        // Last capture info
-        let lastCaptureHtml = '';
-        if (capturesData.captures && capturesData.captures.length > 0) {
-            lastCaptureHtml = `<div><strong>Last Capture:</strong> ${formatDateTime(capturesData.captures[0].captured_at)}</div>`;
-        } else {
-            lastCaptureHtml = `<div><strong>Last Capture:</strong> No captures yet</div>`;
-        }
-        
-        // Next capture info
-        let nextCaptureHtml = '';
-        // Use next_scheduled_capture_at from scheduler (schedule-based) if available, fallback to next_capture_at
-        const nextCapture = job.next_scheduled_capture_at || job.next_capture_at;
-        if (nextCapture && job.status !== 'disabled' && job.status !== 'completed') {
-            nextCaptureHtml = `<div><strong>Next Capture:</strong> ${formatDateTime(nextCapture)}</div>`;
-        }
-        
-        let nextAutoBuildHtml = '';
-        if (job.next_auto_build_at && job.auto_build_enabled) {
-            nextAutoBuildHtml = `<div><strong>Next Auto-Build:</strong> ${formatDateTime(job.next_auto_build_at)}</div>`;
-        }
         
         content.innerHTML = `
                 <div class="detail-layout">
                     <div class="detail-sidebar">
-                        ${capturesData.captures && capturesData.captures.length > 0 ? `
-                            <img src="${API_BASE}/captures/${capturesData.captures[0].id}/image" alt="Latest capture" onclick="openOverlayLightbox(this)" title="Click to enlarge">
-                        ` : ''}
-                        <div class="detail-meta">
-                            <div><strong>Status:</strong> <span class="job-status ${statusClass}">${statusLabel}</span></div>
-                            <div><strong>Start:</strong> ${formatDateTimeNoSeconds(job.start_datetime)}</div>
-                            ${job.end_datetime ? `<div><strong>End:</strong> ${formatDateTimeNoSeconds(job.end_datetime)}</div>` : ''}
-                            ${nextCaptureHtml}
-                            ${nextAutoBuildHtml}
-                            ${lastCaptureHtml}
-                            <div><strong>Storage:</strong> ${formatBytes(job.storage_size)}</div>
-                            <div><strong>Pattern:</strong> <span class="text-xs" style="color: var(--text-secondary);">${escapeHtml(job.naming_pattern || '{job_name}_{count}_{timestamp}')}</span></div>
-                            <div><strong>Folder:</strong> <span class="text-xs" style="word-break: break-all;">${escapeHtml(job.capture_path)}</span></div>
-                            <div class="detail-meta-actions">
-                                <strong>Captures:</strong>
-                                <a href="#" onclick="event.stopPropagation(); viewJobCaptures(${job.id}); return false;" 
-                                   style="color: var(--primary-color); text-decoration: none;" title="View captures">
-                                    ${job.capture_count}
-                                </a>
-                                <button class="btn-icon" onclick="event.stopPropagation(); manualCapture(${job.id}, '${escapeAttr(job.name)}')" title="Take Snapshot">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                                        <circle cx="12" cy="13" r="4"></circle>
-                                    </svg>
-                                </button>
-                                <button class="btn-icon" onclick="event.stopPropagation(); openCompareModal(${job.id})" title="Compare Captures">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <rect x="2" y="2" width="20" height="20" rx="2"/>
-                                        <path d="M12 2v20"/>
-                                        <circle cx="7.5" cy="7.5" r="1.5"/>
-                                        <path d="M6 18l3-4 2 2 4-5 3 4"/>
-                                        <rect x="12" y="2" width="10" height="20" rx="2" fill="currentColor" opacity="0.15" stroke="none"/>
-                                    </svg>
-                                </button>
-                                <button class="btn-icon" onclick="event.stopPropagation(); performMaintenanceScan(${job.id}, '${escapeAttr(job.name)}')" title="Sync">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <polyline points="23 4 23 10 17 10"></polyline>
-                                        <polyline points="1 20 1 14 7 14"></polyline>
-                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                                    </svg>
-                                </button>
-                            </div>
-                            <div class="detail-meta-actions">
-                                <strong>Timelapses:</strong>
-                                ${job.video_count > 0 ? `<a href="#" onclick="event.stopPropagation(); viewJobTimelapses(${job.id}); return false;"
-                                   style="color: var(--primary-color); text-decoration: none;" title="View timelapses">
-                                    ${job.video_count}
-                                </a>` : '0'}
-                            </div>
-                        </div>
-                        <div class="detail-sidebar-actions">
-                            <button id="save-job-btn" class="btn btn-primary" onclick="saveJobChanges(${job.id})" disabled style="width: 100%;">
-                                Save Changes
-                            </button>
-                            <button class="btn btn-accent btn-sm" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeAttr(job.name)}')" style="width: 100%;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                                Build Timelapse
-                            </button>
-                            <div class="detail-sidebar-actions-row">
-                                ${job.status !== 'completed' ? 
-                                    `<button class="btn-icon" onclick="confirmCompleteJob(${job.id}, '${escapeAttr(job.name)}')" title="Complete Job">
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                                    </button>` : ''
-                                }
-                                ${job.status === 'active' || job.status === 'sleeping' ? 
-                                    `<button class="btn-icon" onclick="confirmDisableJob(${job.id}, '${escapeAttr(job.name)}')" title="Disable Job">
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></svg>
-                                    </button>` :
-                                    job.status === 'disabled' ?
-                                    `<button class="btn-icon" onclick="confirmEnableJob(${job.id}, '${escapeAttr(job.name)}')" title="Enable Job">
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
-                                    </button>` : ''
-                                }
-                                <button class="btn-icon" onclick="duplicateJob(${job.id})" title="Duplicate Job">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                    </svg>
-                                </button>
-                                <button class="btn-icon" onclick="exportJob(${job.id}, '${escapeAttr(job.name)}')" title="Export Job">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                                    </svg>
-                                </button>
-                                <button class="btn-icon" onclick="deleteJob(${job.id}, '${escapeAttr(job.name)}')" title="Delete Job">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <polyline points="3 6 5 6 21 6"></polyline>
-                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                        <line x1="10" y1="11" x2="10" y2="17"></line>
-                                        <line x1="14" y1="11" x2="14" y2="17"></line>
-                                    </svg>
-                                </button>
-                            </div>
-                        </div>
+                        ${renderJobSidebar(job, capturesData)}
                     </div>
-
                     <div class="detail-main">
-                        ${job.status === 'warning' && job.warning_message ? `
-                        <div class="info-box" style="margin-bottom: 1rem; border-left-color: var(--warning-color);">
-                            <div class="info-box">
-                                <span style="font-size: 1.25rem;">⚠</span>
-                                <div>
-                                    <strong>Capture Warning</strong>
-                                    <p class="mt-sm text-base">${escapeHtml(job.warning_message)}</p>
-                                    <p class="mt-sm text-xs" style="opacity: 0.8;">Verify settings for the job. The job will continue attempting captures in case this is a temporary issue.</p>
-                                </div>
-                            </div>
-                        </div>
-                        ` : ''}
-                        ${timeWindowHtml}
-                        <!-- Source -->
+                        ${renderJobWarning(job)}
+                        ${renderJobTimeWindow(job)}
+                        ${renderJobSourceSection(job)}
+                        ${renderJobScheduleSection(job)}
+                        ${renderJobAutoBuildSection(job)}
                         <div class="form-section">
-                            <div class="form-section-title">Source</div>
-                    <div class="form-group" style="margin-bottom: 0.75rem;">
-                        ${job.stream_type === 'device' ? `
-                        <label>Camera Device</label>
-                        <div class="source-row">
-                            <select id="edit_device_path" class="form-control" style="flex: 1; min-width: 0;">
-                                <option value="${escapeHtml(job.url)}" selected>${escapeHtml(job.url)}</option>
-                            </select>
-                            <input type="hidden" id="edit_url" value="${escapeHtml(job.url)}">
-                            <button type="button" class="compare-btn" onclick="refreshDevices('edit_device_path')" title="Refresh devices" style="padding: 0.625rem 0.5rem;">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="23 4 23 10 17 10"></polyline>
-                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                                </svg>
-                            </button>
-                            <button type="button" class="compare-btn" onclick="previewStream('edit_device_path', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                    <circle cx="12" cy="12" r="3"></circle>
-                                </svg>
-                                Preview
-                            </button>
-                            <div class="warn-after-group">
-                                <label>Warn After</label>
-                                <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50">
+                            <div class="form-section-title">Tags</div>
+                            <div class="form-group" style="margin-bottom: 1rem;">
+                                <div class="tag-picker" id="edit-job-tags"></div>
                             </div>
                         </div>
-                        ` : `
-                        <label>Stream URL *</label>
-                        <div class="source-row">
-                            <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required style="flex: 1; min-width: 0;">
-                            <button type="button" class="compare-btn" onclick="previewStream('edit_url', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                    <circle cx="12" cy="12" r="3"></circle>
-                                </svg>
-                                Preview
-                            </button>
-                            <div class="warn-after-group">
-                                <label>Warn After</label>
-                                <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50">
-                            </div>
-                        </div>
-                        `}
-                        <div id="edit-preview-result" class="test-result"></div>
-                    </div>
-
-                    <div class="form-row-wrap" style="gap: 1rem; margin-top: 0.75rem;">
-                        <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0;">
-                            <label>Capture Quality</label>
-                            <select id="edit_capture_quality" class="form-control">
-                                <option value="maximum" ${(!job.capture_quality || job.capture_quality === 'maximum') ? 'selected' : ''}>Maximum</option>
-                                <option value="high" ${job.capture_quality === 'high' ? 'selected' : ''}>High</option>
-                                <option value="medium" ${job.capture_quality === 'medium' ? 'selected' : ''}>Medium</option>
-                                <option value="low" ${job.capture_quality === 'low' ? 'selected' : ''}>Low</option>
-                            </select>
-                        </div>
-                        <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0;">
-                            <label>Capture Resolution</label>
-                            <select id="edit_capture_resolution" class="form-control">
-                                <option value="native" selected>Native</option>
-                                ${job.capture_resolution && job.capture_resolution !== 'native' ? `<option value="${escapeHtml(job.capture_resolution)}" selected>${escapeHtml(job.capture_resolution)}</option>` : ''}
-                            </select>
-                        </div>
-                        <div class="form-group" id="edit-source-info" style="flex: 0 0 auto; display: none; align-self: flex-end; padding-bottom: 0.35rem; margin-bottom: 0;">
-                            <small id="edit-source-dimensions" style="color: var(--text-secondary);"></small>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-section">
-                    <div class="form-section-title">Schedule</div>
-                    <div class="form-group" style="margin-bottom: 1rem;">
-                        <label style="display:flex;align-items:baseline;gap:0.5rem;">End Date & Time <small style="color:var(--text-secondary);font-weight:normal;font-size:0.75rem;">Leave empty for ongoing</small></label>
-                        <input type="datetime-local" id="edit_end_datetime" class="form-control" style="max-width: 280px;">
-                    </div>
-                    
-                    <div class="form-group mb-lg">
-                        <div class="form-row-wrap gap-md">
-                            <label class="form-row" style="cursor: pointer; margin: 0;">
-                                <input type="checkbox" id="edit_time_window_enabled" ${job.time_window_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditTimeWindow()">
-                                <span><strong>Daily Time Window</strong></span>
-                            </label>
-                            <div id="edit-time-window-fields" class="toggle-fields form-row ${job.time_window_enabled ? '' : 'disabled'}">
-                                <label class="text-sm" style="margin: 0;">Start</label>
-                                <div class="time-picker-container" style="margin: 0;">
-                                    <input type="time" id="edit_time_window_start_time" class="form-control" style="padding: 0.3rem 0.5rem;">
-                                </div>
-                                <input type="hidden" id="edit_time_window_start">
-                                <label class="text-sm" style="margin: 0;">End</label>
-                                <div class="time-picker-container" style="margin: 0;">
-                                    <input type="time" id="edit_time_window_end_time" class="form-control" style="padding: 0.3rem 0.5rem;">
-                                </div>
-                                <input type="hidden" id="edit_time_window_end">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-row-wrap" style="gap: 1rem; align-items: flex-start;">
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label>Capture Interval (s) *</label>
-                            <input type="number" id="edit_interval_seconds" class="form-control" value="${job.interval_seconds}" min="10" required style="width: 140px;">
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label>Timelapse FPS</label>
-                            <input type="number" id="edit_framerate" class="form-control" value="30" min="1" max="120" required style="width: 140px;">
-                        </div>
-                        <div class="duration-estimate" id="edit-duration-estimate" style="flex: 1; min-width: 200px; margin: 0;"></div>
-                    </div>
-                </div>
-
-                <div class="form-section">
-                    <div class="form-section-title">Auto Build</div>
-                    <div class="form-group" style="margin-bottom: 1rem;">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
-                            <input type="checkbox" id="edit_auto_build_enabled" ${job.auto_build_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditAutoBuildFields()">
-                            <span><strong>Enable Auto-Build</strong></span>
-                            <small style="color: var(--text-secondary); font-weight: normal; font-size: 0.75rem;">Automatically build on a recurring schedule</small>
-                        </label>
-                    </div>
-
-                    <div id="edit-auto-build-fields" class="toggle-fields ${job.auto_build_enabled ? '' : 'disabled'}" style="margin-bottom: 1rem; margin-left: 1.5rem;">
-                        <div class="form-group" style="margin-bottom: 0.75rem;">
-                            <label>Build Interval</label>
-                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                                <input type="number" id="edit_auto_build_interval_hours" class="form-control" min="1" max="8760" value="${job.auto_build_interval_hours || 168}" style="width: 100px;">
-                                <small style="color: var(--text-secondary);">hours</small>
-                                <div class="auto-build-presets" style="display: flex; gap: 0.25rem; flex-wrap: wrap; margin-left: 0.5rem;">
-                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 1)">Hourly</button>
-                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 24)">Daily</button>
-                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 168)">Weekly</button>
-                                    <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 720)">Monthly</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group flex-1">
-                                <label>FPS</label>
-                                <input type="number" id="edit_auto_build_fps" class="form-control" min="1" max="120" value="${job.auto_build_fps || 30}">
-                            </div>
-                            <div class="form-group flex-1">
-                                <label>Quality</label>
-                                <select id="edit_auto_build_quality" class="form-control">
-                                    <option value="low" ${job.auto_build_quality === 'low' ? 'selected' : ''}>Low</option>
-                                    <option value="medium" ${(!job.auto_build_quality || job.auto_build_quality === 'medium') ? 'selected' : ''}>Medium</option>
-                                    <option value="high" ${job.auto_build_quality === 'high' ? 'selected' : ''}>High</option>
-                                    <option value="maximum" ${job.auto_build_quality === 'maximum' ? 'selected' : ''}>Maximum</option>
-                                </select>
-                            </div>
-                            <div class="form-group flex-1">
-                                <label>Resolution</label>
-                                <select id="edit_auto_build_resolution" class="form-control">
-                                    <option value="3840x2160" ${job.auto_build_resolution === '3840x2160' ? 'selected' : ''}>4K (3840x2160)</option>
-                                    <option value="1920x1080" ${(!job.auto_build_resolution || job.auto_build_resolution === '1920x1080') ? 'selected' : ''}>Full HD (1920x1080)</option>
-                                    <option value="1280x720" ${job.auto_build_resolution === '1280x720' ? 'selected' : ''}>HD (1280x720)</option>
-                                    <option value="640x480" ${job.auto_build_resolution === '640x480' ? 'selected' : ''}>SD (640x480)</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div id="edit-ab-overlay-container"></div>
-                        ${job.last_auto_build_at ? `<small style="color: var(--text-secondary);">Last auto-build: ${formatDateTime(job.last_auto_build_at)}</small>` : ''}
-                    </div>
-                </div>
-
-                <div class="form-section">
-                    <div class="form-section-title">Tags</div>
-                    <div class="form-group" style="margin-bottom: 1rem;">
-                        <div class="tag-picker" id="edit-job-tags"></div>
-                    </div>
-                </div>
-
                     </div><!-- /detail-main -->
                 </div><!-- /detail-layout -->
-
                 <input type="hidden" id="edit_start_datetime" value="${job.start_datetime}">
         `;
         
-        // Scroll to top of detail page
-        content.scrollTop = 0;
-        
-        // Size the detail panels to fill viewport (sidebar static, main scrolls)
-        sizeDetailPanels();
-        
-        // Initialize custom time pickers for edit modal
-        initializeEditTimePickers(job);
-        
-        // Initialize edit overlay section
-        initEditJobOverlay(job);
-        
-        // Populate capture resolution dropdown from persisted source dimensions
-        if (job.source_width && job.source_height) {
-            const options = _generateResolutionOptions(job.source_width, job.source_height, job.capture_resolution || 'native');
-            _populateResolutionDropdown('edit_capture_resolution', options, job.capture_resolution || 'native');
-            _nativeDimensions['edit_capture_resolution'] = { w: job.source_width, h: job.source_height };
-            document.getElementById('edit-source-info').style.display = 'block';
-            document.getElementById('edit-source-dimensions').textContent = `Source: ${job.source_width}x${job.source_height}`;
-        }
-        
-        // Load device list for device-type jobs
-        if (job.stream_type === 'device') {
-            refreshDevices('edit_device_path').then(() => {
-                const sel = document.getElementById('edit_device_path');
-                if (sel) sel.value = job.url;
-            });
-        }
-        
-        // Add native resolution option to auto-build dropdown
-        if (job.capture_count > 0) {
-            fetch(`${API_BASE}/captures/job/${job.id}/time-range`).then(r => r.json()).then(tr => {
-                if (tr.native_resolution) {
-                    const sel = document.getElementById('edit_auto_build_resolution');
-                    if (sel && !sel.querySelector(`option[value="${tr.native_resolution}"]`)) {
-                        const opt = document.createElement('option');
-                        opt.value = tr.native_resolution;
-                        opt.textContent = `Native (${tr.native_resolution})`;
-                        sel.insertBefore(opt, sel.firstChild);
-                        if (job.auto_build_resolution === tr.native_resolution) sel.value = tr.native_resolution;
-                    }
-                }
-            }).catch(() => {});
-        }
-        
-        // Render tag picker with auto-save on toggle
-        renderTagPicker('edit-job-tags', (job.tags || []).map(t => t.id), (tagIds) => {
-            apiRequest(`/jobs/${job.id}`, { method: 'PATCH', body: { tag_ids: tagIds } })
-                .then(() => loadJobs())
-                .catch(err => showNotification(err.message || 'Failed to update tags', 'error'));
-        });
-        
-        // Track changes to enable/disable save button
-        setupJobEditChangeTracking(job);
+        initJobDetailPostRender(job, capturesData);
     } catch (error) {
         console.error('Failed to load job details:', error);
         showNotification('Failed to load job details', 'error');
         navigateTo('/jobs');
     }
+}
+
+function renderJobSidebar(job, capturesData) {
+    const { statusLabel, statusClass } = getJobStatusDisplay(job);
+    const lastCaptureHtml = capturesData.captures?.length > 0
+        ? `<div><strong>Last Capture:</strong> ${formatDateTime(capturesData.captures[0].captured_at)}</div>`
+        : `<div><strong>Last Capture:</strong> No captures yet</div>`;
+
+    const nextCapture = job.next_scheduled_capture_at || job.next_capture_at;
+    const nextCaptureHtml = nextCapture && job.status !== 'disabled' && job.status !== 'completed'
+        ? `<div><strong>Next Capture:</strong> ${formatDateTime(nextCapture)}</div>` : '';
+
+    const nextAutoBuildHtml = job.next_auto_build_at && job.auto_build_enabled
+        ? `<div><strong>Next Auto-Build:</strong> ${formatDateTime(job.next_auto_build_at)}</div>` : '';
+
+    return `
+        ${capturesData.captures?.length > 0 ? `
+            <img src="${API_BASE}/captures/${capturesData.captures[0].id}/image" alt="Latest capture" onclick="openOverlayLightbox(this)" title="Click to enlarge">
+        ` : ''}
+        <div class="detail-meta">
+            <div><strong>Status:</strong> <span class="job-status ${statusClass}">${statusLabel}</span></div>
+            <div><strong>Start:</strong> ${formatDateTimeNoSeconds(job.start_datetime)}</div>
+            ${job.end_datetime ? `<div><strong>End:</strong> ${formatDateTimeNoSeconds(job.end_datetime)}</div>` : ''}
+            ${nextCaptureHtml}
+            ${nextAutoBuildHtml}
+            ${lastCaptureHtml}
+            <div><strong>Storage:</strong> ${formatBytes(job.storage_size)}</div>
+            <div><strong>Pattern:</strong> <span class="text-xs" style="color: var(--text-secondary);">${escapeHtml(job.naming_pattern || '{job_name}_{count}_{timestamp}')}</span></div>
+            <div><strong>Folder:</strong> <span class="text-xs" style="word-break: break-all;">${escapeHtml(job.capture_path)}</span></div>
+            <div class="detail-meta-actions">
+                <strong>Captures:</strong>
+                <a href="#" onclick="event.stopPropagation(); viewJobCaptures(${job.id}); return false;" 
+                   style="color: var(--primary-color); text-decoration: none;" title="View captures">
+                    ${job.capture_count}
+                </a>
+                <button class="btn-icon" onclick="event.stopPropagation(); manualCapture(${job.id}, '${escapeAttr(job.name)}')" title="Take Snapshot">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                        <circle cx="12" cy="13" r="4"></circle>
+                    </svg>
+                </button>
+                <button class="btn-icon" onclick="event.stopPropagation(); openCompareModal(${job.id})" title="Compare Captures">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="2" width="20" height="20" rx="2"/>
+                        <path d="M12 2v20"/>
+                        <circle cx="7.5" cy="7.5" r="1.5"/>
+                        <path d="M6 18l3-4 2 2 4-5 3 4"/>
+                        <rect x="12" y="2" width="10" height="20" rx="2" fill="currentColor" opacity="0.15" stroke="none"/>
+                    </svg>
+                </button>
+                <button class="btn-icon" onclick="event.stopPropagation(); performMaintenanceScan(${job.id}, '${escapeAttr(job.name)}')" title="Sync">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="detail-meta-actions">
+                <strong>Timelapses:</strong>
+                ${job.video_count > 0 ? `<a href="#" onclick="event.stopPropagation(); viewJobTimelapses(${job.id}); return false;"
+                   style="color: var(--primary-color); text-decoration: none;" title="View timelapses">
+                    ${job.video_count}
+                </a>` : '0'}
+            </div>
+        </div>
+        <div class="detail-sidebar-actions">
+            <button id="save-job-btn" class="btn btn-primary" onclick="saveJobChanges(${job.id})" disabled style="width: 100%;">
+                Save Changes
+            </button>
+            <button class="btn btn-accent btn-sm" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeAttr(job.name)}')" style="width: 100%;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                Build Timelapse
+            </button>
+            ${renderJobActionButtons(job)}
+        </div>
+    `;
+}
+
+function getJobStatusDisplay(job) {
+    if (job.status === 'warning') return { statusLabel: 'Warning', statusClass: 'warning' };
+    if (job.status === 'sleeping') return { statusLabel: 'Sleeping (Outside Time Window)', statusClass: 'sleeping' };
+    if (job.status === 'disabled') return { statusLabel: 'Disabled', statusClass: 'disabled' };
+    return { statusLabel: job.status.charAt(0).toUpperCase() + job.status.slice(1), statusClass: job.status };
+}
+
+function renderJobActionButtons(job) {
+    return `
+        <div class="detail-sidebar-actions-row">
+            ${job.status !== 'completed' ? 
+                `<button class="btn-icon" onclick="confirmCompleteJob(${job.id}, '${escapeAttr(job.name)}')" title="Complete Job">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </button>` : ''
+            }
+            ${job.status === 'active' || job.status === 'sleeping' ? 
+                `<button class="btn-icon" onclick="confirmDisableJob(${job.id}, '${escapeAttr(job.name)}')" title="Disable Job">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></svg>
+                </button>` :
+                job.status === 'disabled' ?
+                `<button class="btn-icon" onclick="confirmEnableJob(${job.id}, '${escapeAttr(job.name)}')" title="Enable Job">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+                </button>` : ''
+            }
+            <button class="btn-icon" onclick="duplicateJob(${job.id})" title="Duplicate Job">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+            </button>
+            <button class="btn-icon" onclick="exportJob(${job.id}, '${escapeAttr(job.name)}')" title="Export Job">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+            </button>
+            <button class="btn-icon" onclick="deleteJob(${job.id}, '${escapeAttr(job.name)}')" title="Delete Job">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+            </button>
+        </div>
+    `;
+}
+
+function renderJobWarning(job) {
+    if (job.status !== 'warning' || !job.warning_message) return '';
+    return `
+        <div class="info-box" style="margin-bottom: 1rem; border-left-color: var(--warning-color);">
+            <div class="info-box">
+                <span style="font-size: 1.25rem;">⚠</span>
+                <div>
+                    <strong>Capture Warning</strong>
+                    <p class="mt-sm text-base">${escapeHtml(job.warning_message)}</p>
+                    <p class="mt-sm text-xs" style="opacity: 0.8;">Verify settings for the job. The job will continue attempting captures in case this is a temporary issue.</p>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderJobTimeWindow(job) {
+    if (!job.time_window_enabled) return '';
+    return `
+        <div class="info-box" style="margin: 1rem 0;">
+            <div class="info-box">
+                <div>
+                    <strong>Time Window Enabled</strong>
+                    <p class="mt-sm text-base">Captures only happen between <strong>${job.time_window_start}</strong> and <strong>${job.time_window_end}</strong> each day.</p>
+                    ${job.time_window_start > job.time_window_end ? '<p class="mt-sm text-xs" style="opacity: 0.8;">⏰ This window spans midnight (e.g., captures from evening to early morning)</p>' : ''}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderJobSourceSection(job) {
+    const sourceInput = job.stream_type === 'device' ? `
+        <label>Camera Device</label>
+        <div class="source-row">
+            <select id="edit_device_path" class="form-control" style="flex: 1; min-width: 0;">
+                <option value="${escapeHtml(job.url)}" selected>${escapeHtml(job.url)}</option>
+            </select>
+            <input type="hidden" id="edit_url" value="${escapeHtml(job.url)}">
+            <button type="button" class="compare-btn" onclick="refreshDevices('edit_device_path')" title="Refresh devices" style="padding: 0.625rem 0.5rem;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+            </button>
+            <button type="button" class="compare-btn" onclick="previewStream('edit_device_path', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                Preview
+            </button>
+            <div class="warn-after-group">
+                <label>Warn After</label>
+                <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50">
+            </div>
+        </div>
+    ` : `
+        <label>Stream URL *</label>
+        <div class="source-row">
+            <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required style="flex: 1; min-width: 0;">
+            <button type="button" class="compare-btn" onclick="previewStream('edit_url', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                Preview
+            </button>
+            <div class="warn-after-group">
+                <label>Warn After</label>
+                <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50">
+            </div>
+        </div>
+    `;
+
+    return `
+        <div class="form-section">
+            <div class="form-section-title">Source</div>
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+                ${sourceInput}
+                <div id="edit-preview-result" class="test-result"></div>
+            </div>
+            <div class="form-row-wrap" style="gap: 1rem; margin-top: 0.75rem;">
+                <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0;">
+                    <label>Capture Quality</label>
+                    <select id="edit_capture_quality" class="form-control">
+                        <option value="maximum" ${(!job.capture_quality || job.capture_quality === 'maximum') ? 'selected' : ''}>Maximum</option>
+                        <option value="high" ${job.capture_quality === 'high' ? 'selected' : ''}>High</option>
+                        <option value="medium" ${job.capture_quality === 'medium' ? 'selected' : ''}>Medium</option>
+                        <option value="low" ${job.capture_quality === 'low' ? 'selected' : ''}>Low</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0;">
+                    <label>Capture Resolution</label>
+                    <select id="edit_capture_resolution" class="form-control">
+                        <option value="native" selected>Native</option>
+                        ${job.capture_resolution && job.capture_resolution !== 'native' ? `<option value="${escapeHtml(job.capture_resolution)}" selected>${escapeHtml(job.capture_resolution)}</option>` : ''}
+                    </select>
+                </div>
+                <div class="form-group" id="edit-source-info" style="flex: 0 0 auto; display: none; align-self: flex-end; padding-bottom: 0.35rem; margin-bottom: 0;">
+                    <small id="edit-source-dimensions" style="color: var(--text-secondary);"></small>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderJobScheduleSection(job) {
+    return `
+        <div class="form-section">
+            <div class="form-section-title">Schedule</div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label style="display:flex;align-items:baseline;gap:0.5rem;">End Date & Time <small style="color:var(--text-secondary);font-weight:normal;font-size:0.75rem;">Leave empty for ongoing</small></label>
+                <input type="datetime-local" id="edit_end_datetime" class="form-control" style="max-width: 280px;">
+            </div>
+            
+            <div class="form-group mb-lg">
+                <div class="form-row-wrap gap-md">
+                    <label class="form-row" style="cursor: pointer; margin: 0;">
+                        <input type="checkbox" id="edit_time_window_enabled" ${job.time_window_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditTimeWindow()">
+                        <span><strong>Daily Time Window</strong></span>
+                    </label>
+                    <div id="edit-time-window-fields" class="toggle-fields form-row ${job.time_window_enabled ? '' : 'disabled'}">
+                        <label class="text-sm" style="margin: 0;">Start</label>
+                        <div class="time-picker-container" style="margin: 0;">
+                            <input type="time" id="edit_time_window_start_time" class="form-control" style="padding: 0.3rem 0.5rem;">
+                        </div>
+                        <input type="hidden" id="edit_time_window_start">
+                        <label class="text-sm" style="margin: 0;">End</label>
+                        <div class="time-picker-container" style="margin: 0;">
+                            <input type="time" id="edit_time_window_end_time" class="form-control" style="padding: 0.3rem 0.5rem;">
+                        </div>
+                        <input type="hidden" id="edit_time_window_end">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-row-wrap" style="gap: 1rem; align-items: flex-start;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Capture Interval (s) *</label>
+                    <input type="number" id="edit_interval_seconds" class="form-control" value="${job.interval_seconds}" min="10" required style="width: 140px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Timelapse FPS</label>
+                    <input type="number" id="edit_framerate" class="form-control" value="30" min="1" max="120" required style="width: 140px;">
+                </div>
+                <div class="duration-estimate" id="edit-duration-estimate" style="flex: 1; min-width: 200px; margin: 0;"></div>
+            </div>
+        </div>
+    `;
+}
+
+function renderJobAutoBuildSection(job) {
+    return `
+        <div class="form-section">
+            <div class="form-section-title">Auto Build</div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
+                    <input type="checkbox" id="edit_auto_build_enabled" ${job.auto_build_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditAutoBuildFields()">
+                    <span><strong>Enable Auto-Build</strong></span>
+                    <small style="color: var(--text-secondary); font-weight: normal; font-size: 0.75rem;">Automatically build on a recurring schedule</small>
+                </label>
+            </div>
+
+            <div id="edit-auto-build-fields" class="toggle-fields ${job.auto_build_enabled ? '' : 'disabled'}" style="margin-bottom: 1rem; margin-left: 1.5rem;">
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label>Build Interval</label>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                        <input type="number" id="edit_auto_build_interval_hours" class="form-control" min="1" max="8760" value="${job.auto_build_interval_hours || 168}" style="width: 100px;">
+                        <small style="color: var(--text-secondary);">hours</small>
+                        <div class="auto-build-presets" style="display: flex; gap: 0.25rem; flex-wrap: wrap; margin-left: 0.5rem;">
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 1)">Hourly</button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 24)">Daily</button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 168)">Weekly</button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="setAutoBuildInterval('edit_auto_build_interval_hours', 720)">Monthly</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group flex-1">
+                        <label>FPS</label>
+                        <input type="number" id="edit_auto_build_fps" class="form-control" min="1" max="120" value="${job.auto_build_fps || 30}">
+                    </div>
+                    <div class="form-group flex-1">
+                        <label>Quality</label>
+                        <select id="edit_auto_build_quality" class="form-control">
+                            <option value="low" ${job.auto_build_quality === 'low' ? 'selected' : ''}>Low</option>
+                            <option value="medium" ${(!job.auto_build_quality || job.auto_build_quality === 'medium') ? 'selected' : ''}>Medium</option>
+                            <option value="high" ${job.auto_build_quality === 'high' ? 'selected' : ''}>High</option>
+                            <option value="maximum" ${job.auto_build_quality === 'maximum' ? 'selected' : ''}>Maximum</option>
+                        </select>
+                    </div>
+                    <div class="form-group flex-1">
+                        <label>Resolution</label>
+                        <select id="edit_auto_build_resolution" class="form-control">
+                            <option value="3840x2160" ${job.auto_build_resolution === '3840x2160' ? 'selected' : ''}>4K (3840x2160)</option>
+                            <option value="1920x1080" ${(!job.auto_build_resolution || job.auto_build_resolution === '1920x1080') ? 'selected' : ''}>Full HD (1920x1080)</option>
+                            <option value="1280x720" ${job.auto_build_resolution === '1280x720' ? 'selected' : ''}>HD (1280x720)</option>
+                            <option value="640x480" ${job.auto_build_resolution === '640x480' ? 'selected' : ''}>SD (640x480)</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="edit-ab-overlay-container"></div>
+                ${job.last_auto_build_at ? `<small style="color: var(--text-secondary);">Last auto-build: ${formatDateTime(job.last_auto_build_at)}</small>` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function initJobDetailPostRender(job, capturesData) {
+    const content = document.getElementById('job-detail-content');
+    content.scrollTop = 0;
+    sizeDetailPanels();
+    initializeEditTimePickers(job);
+    initEditJobOverlay(job);
+    
+    // Populate capture resolution dropdown from persisted source dimensions
+    if (job.source_width && job.source_height) {
+        const options = _generateResolutionOptions(job.source_width, job.source_height, job.capture_resolution || 'native');
+        _populateResolutionDropdown('edit_capture_resolution', options, job.capture_resolution || 'native');
+        _nativeDimensions['edit_capture_resolution'] = { w: job.source_width, h: job.source_height };
+        document.getElementById('edit-source-info').style.display = 'block';
+        document.getElementById('edit-source-dimensions').textContent = `Source: ${job.source_width}x${job.source_height}`;
+    }
+    
+    // Load device list for device-type jobs
+    if (job.stream_type === 'device') {
+        refreshDevices('edit_device_path').then(() => {
+            const sel = document.getElementById('edit_device_path');
+            if (sel) sel.value = job.url;
+        });
+    }
+    
+    // Add native resolution option to auto-build dropdown
+    if (job.capture_count > 0) {
+        fetch(`${API_BASE}/captures/job/${job.id}/time-range`).then(r => r.json()).then(tr => {
+            if (tr.native_resolution) {
+                const sel = document.getElementById('edit_auto_build_resolution');
+                if (sel && !sel.querySelector(`option[value="${tr.native_resolution}"]`)) {
+                    const opt = document.createElement('option');
+                    opt.value = tr.native_resolution;
+                    opt.textContent = `Native (${tr.native_resolution})`;
+                    sel.insertBefore(opt, sel.firstChild);
+                    if (job.auto_build_resolution === tr.native_resolution) sel.value = tr.native_resolution;
+                }
+            }
+        }).catch(() => {});
+    }
+    
+    // Render tag picker with auto-save on toggle
+    renderTagPicker('edit-job-tags', (job.tags || []).map(t => t.id), (tagIds) => {
+        apiRequest(`/jobs/${job.id}`, { method: 'PATCH', body: { tag_ids: tagIds } })
+            .then(() => loadJobs())
+            .catch(err => showNotification(err.message || 'Failed to update tags', 'error'));
+    });
+    
+    setupJobEditChangeTracking(job);
 }
 
 // Compatibility wrapper for internal calls that need to navigate to job detail
