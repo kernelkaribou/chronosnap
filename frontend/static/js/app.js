@@ -7087,17 +7087,18 @@ async function viewJobTimelapses(jobId) {
 
 // ===== Homepage =====
 async function loadHomepage() {
-    const [stats, captures, videos, jobs] = await Promise.all([
+    const [stats, captures, videos, allVideos, jobs] = await Promise.all([
         apiRequest('/storage/stats'),
         apiRequest('/captures/', { query: { page: 1, page_size: 5, sort_order: 'desc' } }),
         apiRequest('/videos/', { query: { limit: 5 } }),
+        apiRequest('/videos/'),
         apiRequest('/jobs/')
     ]);
 
-    renderHomepageStats(stats, captures, videos, jobs);
+    renderHomepageStats(stats, captures, allVideos, jobs);
     renderHomepageCaptures(captures);
     renderHomepageVideos(videos);
-    renderHomepageJobs(jobs);
+    renderHomepageRandomVideos(allVideos);
 }
 
 function renderHomepageStats(stats, captures, videos, jobs) {
@@ -7191,39 +7192,37 @@ function renderHomepageVideos(videos) {
     }).join('');
 }
 
-function renderHomepageJobs(jobs) {
-    const container = document.getElementById('homepage-jobs');
-    const active = jobs
-        .filter(j => j.status === 'active')
-        .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
-        .slice(0, 5);
+function renderHomepageRandomVideos(videos) {
+    const container = document.getElementById('homepage-random-videos');
+    const completed = videos.filter(v => v.status === 'completed');
 
-    if (!active.length) {
+    if (!completed.length) {
         container.innerHTML = `
             <div class="homepage-empty">
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.4">
-                    <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
+                    <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
                 </svg>
-                <p>No active jobs</p>
-                <span>Create a capture job to start building your timelapse library</span>
-                <button class="btn btn-accent btn-sm" onclick="navigateTo('/jobs')">Create a Job →</button>
+                <p>No timelapses yet</p>
+                <span>Time to create your first timelapse! Set up a capture job and start collecting frames.</span>
+                <button class="btn btn-accent btn-sm" onclick="showCreateJobModal()">+ Create Job</button>
             </div>`;
         return;
     }
 
-    container.innerHTML = active.map(j => {
-        const thumbSrc = j.latest_capture ? `${API_BASE}/captures/${j.latest_capture.id}/thumbnail` : '';
+    // Shuffle and pick up to 5
+    const shuffled = [...completed].sort(() => Math.random() - 0.5).slice(0, 5);
+
+    container.innerHTML = shuffled.map(v => {
+        const thumbSrc = v.thumbnail_path ? `${API_BASE}/videos/${v.id}/thumbnail` : '';
         return `
-        <div class="homepage-capture-card" onclick="navigateTo('/jobs/${j.id}')" title="${escapeHtml(j.name)}">
-            ${thumbSrc ?
-                `<img src="${thumbSrc}" alt="" loading="lazy"
-                      onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22112%22%3E%3Crect width=%22200%22 height=%22112%22 fill=%22%231e293b%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23cbd5e1%22 font-family=%22sans-serif%22%3ENo Captures%3C/text%3E%3C/svg%3E'">` :
+        <div class="homepage-capture-card" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeHtml(v.name)}">
+            ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy">` :
                 `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-muted);">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
                 </div>`}
             <div class="homepage-card-overlay">
-                <div class="homepage-card-title">${escapeHtml(j.name)}</div>
-                <div class="homepage-card-sub">${j.capture_count || 0} captures · <span class="job-status running" style="font-size:0.65rem;padding:1px 6px;">Active</span></div>
+                <div class="homepage-card-title">${escapeHtml(v.name)}</div>
+                <div class="homepage-card-sub">${v.duration_seconds ? formatDuration(v.duration_seconds) : ''} ${v.job_name ? '· ' + escapeHtml(v.job_name) : ''}</div>
             </div>
         </div>`;
     }).join('');
