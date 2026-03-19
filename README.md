@@ -31,6 +31,9 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 - [Capture Sources](#capture-sources)
   - [Network Streams (RTSP / HTTP)](#network-streams-rtsp--http)
   - [Local Cameras](#local-cameras)
+- [Importing and Exporting](#importing-and-exporting)
+  - [Importing](#importing)
+  - [Exporting](#exporting)
 - [Scheduling Guides](#scheduling-guides)
   - [Short-Term Capture](#short-term-capture-hours-to-days)
   - [Long-Term Capture](#long-term-capture-weeks-to-months)
@@ -289,6 +292,43 @@ ldd $(which rpicam-still)
 **Step 3: Create the job**
 
 In the web interface, select "Local Device" as the source type. Available devices will be listed automatically. Select the device and test the capture before saving.
+
+---
+
+## Importing and Exporting
+
+### Importing
+
+ChronoSnap can import existing images and videos that were not captured by the application. This is useful for bringing in photos from a camera, migrating data from another system, or restoring a previous export.
+
+There are two ways to get files into the import pipeline:
+
+**Browser upload** -- Drag and drop files or folders directly into the import dialog, or use the file/folder picker buttons. Supports individual images, videos, and archive files (ZIP, TAR, GZ, RAR, 7Z). Archives are automatically extracted. Maximum upload size is 25 GB per file.
+
+**Server path import** -- If you have a large batch of files already on the host machine, mount a directory to `/imports` in the container and browse it from the import dialog. This avoids uploading over the network entirely.
+
+```yaml
+volumes:
+  - ./imports:/imports  # Optional: only needed for server-path imports
+```
+
+The `/imports` volume is optional. If you only plan to import via browser upload, you do not need to mount it.
+
+Once files are staged (either by upload or server path scan), ChronoSnap analyzes them automatically. Images are classified with timestamps extracted from EXIF data, and videos are probed for resolution, duration, and codec information. You can review the results, name the job, and execute the import. Imported images are organized into the standard folder hierarchy and tracked in the database like any other captures.
+
+If the staged files came from a ChronoSnap export archive, the job metadata (name, interval, time window, tags) is detected and pre-filled automatically. The stream URL is intentionally excluded from exports for privacy.
+
+### Exporting
+
+Any job can be exported as a ZIP archive from its detail view. The archive contains:
+
+- All capture images with their original directory structure preserved
+- All completed videos and thumbnails
+- A `job.json` metadata file with the job configuration, schedule, and tags
+
+Exports are streamed directly to the browser with no temporary files created on the server. Stream URLs that contain credentials are redacted in the metadata before export.
+
+Exported archives can be re-imported into the same or a different ChronoSnap instance. This makes exports a convenient way to back up individual jobs, move data between hosts, or share a timelapse dataset without exposing your network details.
 
 ---
 
