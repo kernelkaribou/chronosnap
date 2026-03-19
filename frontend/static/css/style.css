@@ -452,13 +452,13 @@ body {
 }
 
 .nav-brand-icon {
-    width: 1.75rem;
-    height: 1.75rem;
+    width: 2.25rem;
+    height: 2.25rem;
     border-radius: 50%;
 }
 
 .nav-brand h1 {
-    font-size: 1.25rem;
+    font-size: 1.5rem;
     letter-spacing: -0.02em;
     background: var(--gradient-primary);
     -webkit-background-clip: text;
