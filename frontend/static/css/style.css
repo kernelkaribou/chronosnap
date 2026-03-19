@@ -796,7 +796,6 @@ body.detail-view-active {
     gap: var(--space-xs);
     flex-wrap: wrap;
     align-items: center;
-    justify-content: flex-start;
 }
 
 .detail-sidebar-actions-row .btn {
