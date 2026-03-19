@@ -6,18 +6,18 @@ services:
       # Recommended environment variables:
       - PUID=1000 
       - PGID=1000
-      - TZ=America/Chicago
+      - TZ=Etc/UTC
       # Optional environment variables:
-      - LOG_LEVEL=INFO # Logging level: DEBUG, INFO, WARNING, ERROR. Default: INFO
+      # - LOG_LEVEL=INFO # Logging level: DEBUG, INFO, WARNING, ERROR. Default: INFO
       # - PORT=8080 # Set custom port
       # - FFMPEG_TIMEOUT=10 # Set custom ffmpeg timeout in seconds
     ports:
       - "8080:8080"
     volumes:
+      - ${PWD}/data:/app/data
       - ${PWD}/captures:/captures
       - ${PWD}/timelapses:/timelapses
       # - ${PWD}/imports:/imports  # Optional: enable server path imports
-      - ${PWD}/data:/app/data
     # Security: Resource limits
     deploy:
       resources:
