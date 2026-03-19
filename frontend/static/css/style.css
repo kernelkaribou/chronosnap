@@ -2088,13 +2088,18 @@ body.detail-view-active {
 
 .storage-card-icon {
     display: flex;
+    align-items: center;
     justify-content: center;
-    margin-bottom: 0.75rem;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--accent-purple) 12%, transparent);
+    margin: 0 auto 0.75rem;
 }
 
 .storage-card-icon svg {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     color: var(--accent-purple);
 }
 
