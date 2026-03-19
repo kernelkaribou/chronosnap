@@ -2861,6 +2861,16 @@ body.detail-view-active {
     transform: translateY(-2px);
 }
 
+.homepage-stat-pulse {
+    animation: statPulse 1.5s ease-out;
+}
+
+@keyframes statPulse {
+    0% { box-shadow: 0 0 0 0 rgba(86, 184, 214, 0.4); }
+    30% { box-shadow: 0 0 20px 4px rgba(86, 184, 214, 0.3); border-color: var(--primary-color); }
+    100% { box-shadow: 0 0 0 0 rgba(86, 184, 214, 0); }
+}
+
 .homepage-stat-value {
     font-size: 2rem;
     font-weight: 700;
@@ -3058,13 +3068,13 @@ body.detail-view-active {
 }
 
 .homepage-card-new {
-    animation: homepageSlideIn 0.5s ease-out;
+    animation: homepageSlideIn 0.8s ease-out;
 }
 
 @keyframes homepageSlideIn {
     from {
         opacity: 0;
-        transform: translateX(-30px) scale(0.95);
+        transform: translateX(-40px) scale(0.9);
     }
     to {
         opacity: 1;

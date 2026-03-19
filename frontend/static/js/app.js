@@ -7225,14 +7225,22 @@ function prependHomepageVideos(newVideos, recentVideos) {
     container.scrollTo({ left: 0, behavior: 'smooth' });
 }
 
-function animateCounter(el, target, duration = 800) {
+function animateCounter(el, target, duration = 2000) {
     const start = parseInt(el.dataset.currentValue || '0', 10);
     if (start === target) return;
     el.dataset.currentValue = target;
+
+    // Pulse the parent stat card to draw attention
+    const card = el.closest('.homepage-stat-card');
+    if (card && start !== 0) {
+        card.classList.add('homepage-stat-pulse');
+        setTimeout(() => card.classList.remove('homepage-stat-pulse'), 1500);
+    }
+
     const startTime = performance.now();
     const step = (now) => {
         const progress = Math.min((now - startTime) / duration, 1);
-        const ease = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+        const ease = 1 - Math.pow(1 - progress, 3);
         const current = Math.round(start + (target - start) * ease);
         el.textContent = current.toLocaleString();
         if (progress < 1) requestAnimationFrame(step);
