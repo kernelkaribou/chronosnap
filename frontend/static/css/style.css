@@ -454,20 +454,28 @@ body {
 .nav-brand-icon {
     width: 1.75rem;
     height: 1.75rem;
+    border-radius: 50%;
 }
 
 .nav-brand h1 {
     font-size: 1.25rem;
-    font-weight: 700;
     letter-spacing: -0.02em;
-    background: var(--gradient-accent);
+    background: var(--gradient-primary);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
 
+.brand-bold {
+    font-weight: 700;
+}
+
+.brand-light {
+    font-weight: 300;
+}
+
 [data-theme="light"] .nav-brand h1 {
-    background: var(--gradient-accent);
+    background: var(--gradient-primary);
     -webkit-background-clip: text;
     background-clip: text;
 }

@@ -1,4 +1,8 @@
-# TimeLapse-Manager
+<p align="center">
+  <img src="frontend/static/img/chronosnap.png" alt="ChronoSnap" width="120">
+</p>
+<h1 align="center">ChronoSnap</h1>
+<p align="center"><em>Timelapse Manager</em></p>
 
 A self-hosted web application for creating automated timelapse captures from HTTP and RTSP video streams. Define a schedule, point it at a camera, and let it collect images over days, weeks, or months, then process them into timelapse videos.
 
@@ -14,7 +18,7 @@ A self-hosted web application for creating automated timelapse captures from HTT
 
 ### Capture Sources
 
-Timelapse Manager supports four types of capture sources. Each source type captures a single image per interval using FFmpeg or rpicam-apps.
+ChronoSnap supports four types of capture sources. Each source type captures a single image per interval using FFmpeg or rpicam-apps.
 
 - **HTTP/HTTPS** -- Snapshot URLs that return a JPEG or image frame. Common with IP cameras that expose a `/snap.jpeg` or similar endpoint. Captured via FFmpeg.
 - **RTSP/RTSPS** -- Real-time streaming protocol feeds. Used by most IP cameras and NVR systems (including UniFi Protect). Captured via FFmpeg with TCP transport for reliability.

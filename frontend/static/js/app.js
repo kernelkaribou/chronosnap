@@ -5603,7 +5603,7 @@ function renderDiskChart(data, colors) {
         type: 'doughnut',
         data: {
             labels: [
-                `Timelapse Manager (${formatBytes(appUsed)})`,
+                `ChronoSnap (${formatBytes(appUsed)})`,
                 `Other (${formatBytes(otherUsed)})`,
                 `Free (${formatBytes(free)})`
             ],
@@ -5750,7 +5750,7 @@ async function loadSettings() {
     try {
         const ver = await apiRequest('/settings/version');
         const el = document.getElementById('app-version');
-        if (el) el.textContent = `Timelapse Manager v${ver.version}`;
+        if (el) el.textContent = `ChronoSnap v${ver.version}`;
         if (ver.update_available && ver.latest) {
             const badge = document.getElementById('update-badge');
             if (badge) {

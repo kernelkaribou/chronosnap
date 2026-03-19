@@ -1,5 +1,5 @@
 """
-Main FastAPI application for Timelapse Manager
+Main FastAPI application for ChronoSnap
 """
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from fastapi.staticfiles import StaticFiles
@@ -110,7 +110,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Timelapse Manager",
+    title="ChronoSnap",
     description="Configuration and management tool for timelapse videos",
     version=get_app_version(),
     lifespan=lifespan,
