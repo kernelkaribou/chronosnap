@@ -1101,7 +1101,7 @@ async function loadJobDetail(jobId) {
                             <button id="save-job-btn" class="btn btn-primary" onclick="saveJobChanges(${job.id})" disabled style="width: 100%;">
                                 Save Changes
                             </button>
-                            <button class="btn btn-accent btn-sm" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')" style="width: 100%;">
+                            <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeHtml(job.name)}')" style="width: 100%;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                                 Build Timelapse
                             </button>
