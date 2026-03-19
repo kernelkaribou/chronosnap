@@ -2781,6 +2781,28 @@ body.detail-view-active {
     color: var(--primary-text-on);
 }
 
+.filter-reset-btn {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    font-size: 1rem;
+    padding: 0.35rem 0.55rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    line-height: 1;
+    color: var(--text-secondary);
+    opacity: 0.5;
+}
+.filter-reset-btn:hover {
+    opacity: 1;
+    border-color: var(--text-secondary);
+}
+.filter-reset-btn.active {
+    opacity: 1;
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
 /* Bulk favorite buttons in selection bar */
 .btn-fav-bulk {
     background: var(--gradient-accent);

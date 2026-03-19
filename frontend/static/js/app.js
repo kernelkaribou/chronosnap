@@ -2067,7 +2067,7 @@ function populateVideoFilters(videos) {
     const yearSelect = document.getElementById('video-year-filter');
     const currentYear = yearSelect.value;
     const years = [...new Set(videos.map(v => new Date(v.created_at).getFullYear()))].sort((a, b) => b - a);
-    yearSelect.innerHTML = '<option value="">All Years</option>' +
+    yearSelect.innerHTML = '<option value="">Year</option>' +
         years.map(y => `<option value="${y}">${y}</option>`).join('');
     yearSelect.value = currentYear;
     
@@ -2095,7 +2095,7 @@ function onYearFilterChange() {
     const monthSelect = document.getElementById('video-month-filter');
     
     if (!yearVal) {
-        monthSelect.innerHTML = '<option value="">All Months</option>';
+        monthSelect.innerHTML = '<option value="">Month</option>';
         monthSelect.value = '';
         monthSelect.disabled = true;
     } else {
@@ -2107,7 +2107,7 @@ function onYearFilterChange() {
                 .map(v => new Date(v.created_at).getMonth())
         )].sort((a, b) => a - b);
         
-        monthSelect.innerHTML = '<option value="">All Months</option>' +
+        monthSelect.innerHTML = '<option value="">Month</option>' +
             months.map(m => `<option value="${m}">${MONTH_NAMES[m]}</option>`).join('');
         monthSelect.value = '';
         monthSelect.disabled = false;
@@ -2201,9 +2201,9 @@ function filterVideos(opts = {}) {
         default: filtered.sort((a, b) => b.created_at.localeCompare(a.created_at)); break;
     }
     
-    // Show/hide reset button
+    // Illuminate reset button when any filters are active
     const hasFilters = search || yearFilter || monthFilter !== '' || jobFilter || videoImportedOnly || videoAutoOnly || videoFavoritesOnly || videoSharedOnly || selectedTags.length > 0;
-    document.getElementById('video-filter-reset').style.display = hasFilters ? '' : 'none';
+    document.getElementById('video-filter-reset').classList.toggle('active', hasFilters);
     
     const countEl = document.getElementById('video-count');
     countEl.textContent = `${filtered.length} videos`;
@@ -6903,9 +6903,9 @@ function applyCaptureSortAndFilter() {
     capturesState.pageSize = parseInt(pageSize) || 16;
     capturesState.currentPage = 1;
     
-    // Show/hide reset button
+    // Illuminate reset button when any filters are active
     const hasFilters = jobFilter || selectedTags.length > 0 || startTime || endTime || capturesState.favoritesOnly;
-    document.getElementById('captures-filter-reset').style.display = hasFilters ? '' : 'none';
+    document.getElementById('captures-filter-reset').classList.toggle('active', hasFilters);
     
     loadCapturesPage();
 }
@@ -6915,7 +6915,7 @@ function clearCaptureFilters() {
     clearTagFilter('captures-tag-filter-wrap');
     setValue('captures-start-time', '');
     setValue('captures-end-time', '');
-    document.getElementById('captures-filter-reset').style.display = 'none';
+    document.getElementById('captures-filter-reset').classList.remove('active');
     capturesState.jobFilter = null;
     capturesState.tagFilter = null;
     capturesState.startTime = null;
@@ -7001,10 +7001,11 @@ function toggleCaptureFavoritesFilter() {
     capturesState.currentPage = 1;
     document.getElementById('captures-fav-filter').classList.toggle('active', capturesState.favoritesOnly);
     const jobFilter = getValue('captures-job-filter');
+    const selectedTags = getTagFilterIds('captures-tag-filter-wrap');
     const startTime = getValue('captures-start-time');
     const endTime = getValue('captures-end-time');
-    document.getElementById('captures-filter-reset').style.display = 
-        (jobFilter || startTime || endTime || capturesState.favoritesOnly) ? '' : 'none';
+    const hasFilters = jobFilter || selectedTags.length > 0 || startTime || endTime || capturesState.favoritesOnly;
+    document.getElementById('captures-filter-reset').classList.toggle('active', hasFilters);
     loadCapturesPage();
 }
 
@@ -7016,36 +7017,28 @@ let videoAutoOnly = false;
 function toggleVideoFavoritesFilter() {
     videoFavoritesOnly = !videoFavoritesOnly;
     document.getElementById('video-fav-filter').classList.toggle('active', videoFavoritesOnly);
-    if (videoFavoritesOnly) {
-        document.getElementById('video-filter-reset').style.display = '';
-    }
     loadVideos();
 }
 
 function toggleVideoSharedFilter() {
     videoSharedOnly = !videoSharedOnly;
     document.getElementById('video-share-filter').classList.toggle('active', videoSharedOnly);
-    if (videoSharedOnly) {
-        document.getElementById('video-filter-reset').style.display = '';
-    }
     loadVideos();
 }
 
 function toggleVideoImportedFilter() {
     videoImportedOnly = !videoImportedOnly;
+    if (videoImportedOnly) videoAutoOnly = false;
     document.getElementById('video-imported-filter').classList.toggle('active', videoImportedOnly);
-    if (videoImportedOnly) {
-        document.getElementById('video-filter-reset').style.display = '';
-    }
+    document.getElementById('video-auto-filter').classList.toggle('active', videoAutoOnly);
     filterVideos();
 }
 
 function toggleVideoAutoFilter() {
     videoAutoOnly = !videoAutoOnly;
+    if (videoAutoOnly) videoImportedOnly = false;
     document.getElementById('video-auto-filter').classList.toggle('active', videoAutoOnly);
-    if (videoAutoOnly) {
-        document.getElementById('video-filter-reset').style.display = '';
-    }
+    document.getElementById('video-imported-filter').classList.toggle('active', videoImportedOnly);
     filterVideos();
 }
 
