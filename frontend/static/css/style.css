@@ -3240,6 +3240,57 @@ body.detail-view-active {
     padding: 1rem;
 }
 
+.capture-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.5);
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    z-index: 2;
+    backdrop-filter: blur(4px);
+}
+
+.capture-nav-btn:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.75);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.capture-nav-btn:disabled {
+    opacity: 0.25;
+    cursor: default;
+}
+
+.capture-nav-prev {
+    left: 0.5rem;
+}
+
+.capture-nav-next {
+    right: 0.5rem;
+}
+
+.capture-nav-counter {
+    position: absolute;
+    bottom: 0.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-sm);
+    backdrop-filter: blur(4px);
+}
+
 .detail-row {
     display: flex;
     gap: 1rem;

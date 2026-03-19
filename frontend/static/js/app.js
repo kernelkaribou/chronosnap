@@ -6542,7 +6542,8 @@ let capturesState = {
     startTime: null,
     endTime: null,
     favoritesOnly: false,
-    currentCaptureId: null
+    currentCaptureId: null,
+    visibleIds: []
 };
 
 const captureSelection = new SelectionManager({
@@ -6797,6 +6798,7 @@ async function loadCapturesPage() {
         const countEl = document.getElementById('captures-count');
         countEl.textContent = `${data.total} captures`;
         
+        capturesState.visibleIds = data.captures.map(c => c.id);
         renderCaptures(data.captures);
         renderPagination(data);
         captureSelection.updateControls();
@@ -6937,22 +6939,61 @@ async function showCapturePreview(captureId) {
         capturesState.currentCaptureId = captureId;
         
         // Populate modal
-        document.getElementById('capture-preview-image').src = `${API_BASE}/captures/${captureId}/image`;
+        const img = document.getElementById('capture-preview-image');
+        img.style.opacity = '0';
+        img.src = `${API_BASE}/captures/${captureId}/image`;
+        img.onload = () => { img.style.opacity = '1'; };
+        
         document.getElementById('capture-detail-job').innerHTML = `<a href="/jobs/${capture.job_id}" onclick="event.preventDefault(); closeModal('capture-preview-modal'); navigateTo('/jobs/${capture.job_id}');" style="color: var(--primary-color); text-decoration: underline;">${escapeHtml(capture.job_name || 'Unknown Job')}</a>`;
         document.getElementById('capture-detail-time').textContent = formatDateTime(capture.captured_at);
         document.getElementById('capture-detail-size').textContent = formatBytes(capture.file_size);
         document.getElementById('capture-detail-path').textContent = capture.file_path;
         
+        // Update nav button states
+        updateCaptureNavButtons();
+        
         showModal('capture-preview-modal');
+        document.addEventListener('keydown', handleCaptureNavKeys);
     } catch (error) {
         console.error('Failed to load capture preview:', error);
         showNotification(`Failed to load capture preview: ${error.message}`, 'error');
     }
 }
 
+function updateCaptureNavButtons() {
+    const ids = capturesState.visibleIds;
+    const idx = ids.indexOf(capturesState.currentCaptureId);
+    const prevBtn = document.getElementById('capture-nav-prev');
+    const nextBtn = document.getElementById('capture-nav-next');
+    const counter = document.getElementById('capture-nav-counter');
+    if (prevBtn) prevBtn.disabled = idx <= 0;
+    if (nextBtn) nextBtn.disabled = idx < 0 || idx >= ids.length - 1;
+    if (counter && ids.length > 0) counter.textContent = `${idx + 1} / ${ids.length}`;
+    else if (counter) counter.textContent = '';
+}
+
+function showPrevCapture() {
+    const ids = capturesState.visibleIds;
+    const idx = ids.indexOf(capturesState.currentCaptureId);
+    if (idx > 0) showCapturePreview(ids[idx - 1]);
+}
+
+function showNextCapture() {
+    const ids = capturesState.visibleIds;
+    const idx = ids.indexOf(capturesState.currentCaptureId);
+    if (idx >= 0 && idx < ids.length - 1) showCapturePreview(ids[idx + 1]);
+}
+
 function closeCapturePreview() {
     document.getElementById('capture-preview-modal').classList.remove('active');
     capturesState.currentCaptureId = null;
+    document.removeEventListener('keydown', handleCaptureNavKeys);
+}
+
+function handleCaptureNavKeys(e) {
+    if (!document.getElementById('capture-preview-modal').classList.contains('active')) return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); showPrevCapture(); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); showNextCapture(); }
 }
 
 function deleteSingleCapture() {

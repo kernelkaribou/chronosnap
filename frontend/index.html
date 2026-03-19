@@ -1005,8 +1005,15 @@
                 <span class="close" onclick="closeCapturePreview()">&times;</span>
             </div>
             <div style="padding: 1.5rem;">
-                <div style="text-align: center; margin-bottom: 1rem;">
-                    <img id="capture-preview-image" style="max-width: 100%; max-height: 75vh; background: #000; border-radius: var(--radius-md);">
+                <div style="position:relative;text-align:center;margin-bottom:1rem;">
+                    <button id="capture-nav-prev" class="capture-nav-btn capture-nav-prev" onclick="showPrevCapture()" title="Previous">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <img id="capture-preview-image" style="max-width: 100%; max-height: 75vh; background: #000; border-radius: var(--radius-md); transition: opacity 0.3s ease;">
+                    <button id="capture-nav-next" class="capture-nav-btn capture-nav-next" onclick="showNextCapture()" title="Next">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                    <div id="capture-nav-counter" class="capture-nav-counter"></div>
                 </div>
                 <div id="capture-preview-details" class="capture-details">
                     <div class="detail-row">
