@@ -2408,14 +2408,15 @@ async function loadVideoDetail(videoId) {
         // Build actions
         let actionsHtml = '';
         if (video.status === 'processing') {
-            actionsHtml += `<button class="btn btn-danger btn-sm" onclick="cancelVideoBuild(${video.id}, '${escapeHtml(video.name)}')">Cancel Build</button>`;
-        }
-        if (video.status === 'completed') {
-            actionsHtml += `<a href="${API_BASE}/videos/${video.id}/download" class="btn btn-primary btn-sm">Download</a>`;
-        }
-        actionsHtml += `<button class="btn btn-danger btn-sm" onclick="deleteVideoFromDetail(${video.id}, '${escapeHtml(video.name)}')">Delete</button>`;
-        if (video.status === 'completed') {
-            actionsHtml += shareToggleHTML(video.id, video.share_token || null);
+            actionsHtml += `<button class="btn btn-danger btn-sm" onclick="cancelVideoBuild(${video.id}, '${escapeHtml(video.name)}')">Cancel</button>`;
+        } else {
+            if (video.status === 'completed') {
+                actionsHtml += `<a href="${API_BASE}/videos/${video.id}/download" class="btn btn-primary btn-sm">Download</a>`;
+            }
+            actionsHtml += `<button class="btn btn-danger btn-sm" onclick="deleteVideoFromDetail(${video.id}, '${escapeHtml(video.name)}')">Delete</button>`;
+            if (video.status === 'completed') {
+                actionsHtml += shareToggleHTML(video.id, video.share_token || null);
+            }
         }
         actions.innerHTML = actionsHtml;
     } catch (error) {
