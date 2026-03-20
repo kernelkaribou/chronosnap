@@ -12,17 +12,31 @@ let confirmCallback = null;
 // Template Variable Definitions (single source of truth for UI hints)
 // =============================================================================
 
-const NAMING_PATTERN_VARS = ['job_name', 'count', 'timestamp', 'month', 'day', 'hour'];
-const TEXT_OVERLAY_VARS   = ['job_name', 'date', 'time', 'datetime', 'month', 'day', 'hour', 'frame', 'total_frames'];
+// Master template variable definitions (single source of truth for UI hints)
+// ctx: 'both' = naming + overlay, 'naming' = naming only, 'overlay' = overlay only
+const TEMPLATE_VARS = [
+    { name: 'job_name',     ctx: 'both' },
+    { name: 'count',        ctx: 'naming' },
+    { name: 'timestamp',    ctx: 'both' },
+    { name: 'date',         ctx: 'both' },
+    { name: 'time',         ctx: 'both' },
+    { name: 'datetime',     ctx: 'both' },
+    { name: 'month',        ctx: 'both' },
+    { name: 'day',          ctx: 'both' },
+    { name: 'hour',         ctx: 'both' },
+    { name: 'frame',        ctx: 'overlay' },
+    { name: 'total_frames', ctx: 'overlay' },
+];
+const NAMING_PATTERN_VARS = TEMPLATE_VARS.filter(v => v.ctx !== 'overlay').map(v => v.name);
+const TEXT_OVERLAY_VARS   = TEMPLATE_VARS.filter(v => v.ctx !== 'naming').map(v => v.name);
 const TEMPLATE_VARS_DOC   = 'https://github.com/kernelkaribou/chronosnap#template-variables';
 
 function renderVarHints(vars) {
     return vars.map(v => `<code>{${v}}</code>`).join(' ');
 }
 
-function renderVarSubtext(vars, docAnchor) {
-    const link = `<a href="${TEMPLATE_VARS_DOC}" target="_blank" rel="noopener" style="color:var(--text-secondary);">docs</a>`;
-    return renderVarHints(vars) + ` (${link})`;
+function renderDocLink(label) {
+    return `<a href="${TEMPLATE_VARS_DOC}" target="_blank" rel="noopener" style="color:var(--text-secondary);">${label || 'Variable reference'}</a>`;
 }
 
 // =============================================================================
@@ -607,9 +621,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Populate template variable hints from shared definitions
     const settingsVars = document.getElementById('settings-naming-vars');
-    if (settingsVars) settingsVars.innerHTML = renderVarSubtext(NAMING_PATTERN_VARS);
+    if (settingsVars) settingsVars.innerHTML = renderVarHints(NAMING_PATTERN_VARS) + ' (' + renderDocLink('docs') + ')';
     const jobVars = document.getElementById('job-naming-vars');
-    if (jobVars) jobVars.innerHTML = renderVarSubtext(NAMING_PATTERN_VARS);
+    if (jobVars) jobVars.innerHTML = renderDocLink('Variable reference');
     
     // Measure navbar height for detail view layout calculations
     const navbar = document.querySelector('.navbar');
@@ -3320,7 +3334,7 @@ function generateOverlayHTML(prefix, opts = {}) {
                             <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr} style="margin-top:10px; margin-left:6px;">
                         </div>
                     </div>
-                    <small style="color: var(--text-secondary); font-size:0.6rem;">${renderVarSubtext(TEXT_OVERLAY_VARS)}</small>
+                    <small style="color: var(--text-secondary); font-size:0.6rem;">${renderDocLink('Variable reference')}</small>
                     <div style="display:flex; gap:0.3rem; align-items:center;">
                         <span style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">Text:</span>
                         <input type="color" id="${prefix}-overlay-color" value="#FFFFFF" style="border:none;padding:0;height:18px;width:18px;border-radius:50%;cursor:pointer;background:none;"${inputEvent}>

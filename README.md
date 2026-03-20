@@ -39,8 +39,8 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
   - [Long-Term Capture](#long-term-capture-weeks-to-months)
   - [Daily Snapshot Over Time](#daily-snapshot-over-time-months-to-years)
 - [Template Variables](#template-variables)
-  - [Naming Pattern Variables](#naming-pattern-variables)
-  - [Text Overlay Variables](#text-overlay-variables)
+  - [Naming Pattern Examples](#naming-pattern-examples)
+  - [Text Overlay Examples](#text-overlay-examples)
 - [Technical Overview](#technical-overview)
   - [Architecture](#architecture)
   - [Data Storage](#data-storage)
@@ -393,41 +393,39 @@ Ideal for yearly comparisons, landscape changes, or long-duration monitoring.
 
 ChronoSnap uses template variables in two places: **capture naming patterns** (file names for saved images) and **text overlays** (burned-in text on timelapse frames). Variables are wrapped in curly braces and replaced with real values at capture or build time.
 
-### Naming Pattern Variables
+Most variables work in both contexts. A few are specific to one:
 
-Used when saving each captured image. Configure the default pattern in **Settings → Default Naming Pattern**, or override per-job when creating a capture job.
+| Variable | Description | Example | Context |
+|---|---|---|---|
+| `{job_name}` | Name of the capture job | `MyJob` | Both |
+| `{count}` | Zero-padded capture count | `000001` | Naming only |
+| `{timestamp}` | Compact date and time (filename-safe) | `20260319_231400` | Both |
+| `{date}` | Date | `2026-03-19` | Both |
+| `{time}` | Time | `23:14:00` | Both |
+| `{datetime}` | Full date and time | `2026-03-19 23:14:00` | Both |
+| `{month}` | Month, zero-padded | `03` | Both |
+| `{day}` | Day of month, zero-padded | `19` | Both |
+| `{hour}` | Hour, 24-hour format | `23` | Both |
+| `{frame}` | Current frame number | `1` | Overlay only |
+| `{total_frames}` | Total number of frames | `500` | Overlay only |
 
-| Variable | Description | Example |
-|---|---|---|
-| `{job_name}` | Name of the capture job | `MyJob` |
-| `{count}` | Zero-padded capture count | `000001` |
-| `{timestamp}` | Compact date and time (filename-safe) | `20260319_231400` |
-| `{month}` | Month, zero-padded | `03` |
-| `{day}` | Day of month, zero-padded | `19` |
-| `{hour}` | Hour, 24-hour format | `23` |
+### Naming Pattern Examples
 
-**Default pattern:** `{job_name}_{count}_{timestamp}`
-**Example result:** `MyJob_000001_20260319_231400.jpg`
+Configure the default pattern in **Settings → Default Naming Pattern**, or override per-job when creating a capture job.
 
-> **Tip:** `{timestamp}` includes the full date and time in a filename-safe format. Use `{month}`, `{day}`, or `{hour}` when you only need part of the date — for example, `{job_name}_{month}-{day}_{count}` produces `MyJob_03-19_000001.jpg`.
+- **Default pattern:** `{job_name}_{count}_{timestamp}` → `MyJob_000001_20260319_231400.jpg`
+- **Date parts:** `{job_name}_{month}-{day}_{count}` → `MyJob_03-19_000001.jpg`
+- **Hourly folders:** Use `{hour}` in the pattern to group by hour of day
 
-### Text Overlay Variables
+> **Note:** `{time}` and `{datetime}` contain colons and spaces which may cause issues on some filesystems. Prefer `{timestamp}` for filenames.
 
-Used when building a timelapse video with text overlay enabled. Each variable is resolved per-frame using that frame's capture timestamp.
+### Text Overlay Examples
 
-| Variable | Description | Example |
-|---|---|---|
-| `{job_name}` | Name of the capture job | `MyJob` |
-| `{date}` | Capture date | `2026-03-19` |
-| `{time}` | Capture time | `23:14:00` |
-| `{datetime}` | Full date and time | `2026-03-19 23:14:00` |
-| `{month}` | Month, zero-padded | `03` |
-| `{day}` | Day of month, zero-padded | `19` |
-| `{hour}` | Hour, 24-hour format | `23` |
-| `{frame}` | Current frame number | `1` |
-| `{total_frames}` | Total number of frames | `500` |
+Enable text overlay when building a timelapse video. Each variable is resolved per-frame using that frame's capture timestamp.
 
-**Example:** An overlay text of `{job_name} — {date} {time}` renders as `MyJob — 2026-03-19 23:14:00` on each frame.
+- **Date stamp:** `{job_name} — {date} {time}` → `MyJob — 2026-03-19 23:14:00`
+- **Frame counter:** `Frame {frame} of {total_frames}` → `Frame 1 of 500`
+- **Compact:** `{month}/{day} {time}` → `03/19 23:14:00`
 
 ---
 

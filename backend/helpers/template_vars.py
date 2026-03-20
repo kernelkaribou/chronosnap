@@ -5,34 +5,34 @@ patterns and timelapse text overlays import from here.
 """
 
 # ---------------------------------------------------------------------------
-# Variable definitions:  (token_name, description)
-# Each list is ordered for display in the UI hint text.
+# Master variable list:  (token_name, description, context)
+#   context: 'both'    = available in naming patterns AND text overlays
+#            'naming'  = capture naming patterns only
+#            'overlay' = text overlays only
 # ---------------------------------------------------------------------------
 
-NAMING_PATTERN_VARS = [
-    ('job_name',  'Job name'),
-    ('count',     'Zero-padded capture count'),
-    ('timestamp', 'Compact datetime (YYYYmmdd_HHMMSS)'),
-    ('month',     'Month (01-12)'),
-    ('day',       'Day of month (01-31)'),
-    ('hour',      'Hour, 24-hour (00-23)'),
+TEMPLATE_VARS = [
+    ('job_name',     'Job name',                           'both'),
+    ('count',        'Zero-padded capture count',          'naming'),
+    ('timestamp',    'Compact datetime (YYYYmmdd_HHMMSS)', 'both'),
+    ('date',         'Date (YYYY-MM-DD)',                  'both'),
+    ('time',         'Time (HH:MM:SS)',                    'both'),
+    ('datetime',     'Full date and time',                 'both'),
+    ('month',        'Month (01-12)',                      'both'),
+    ('day',          'Day of month (01-31)',               'both'),
+    ('hour',         'Hour, 24-hour (00-23)',              'both'),
+    ('frame',        'Current frame number',               'overlay'),
+    ('total_frames', 'Total frame count',                  'overlay'),
 ]
 
-TEXT_OVERLAY_VARS = [
-    ('job_name',     'Job name'),
-    ('date',         'Date (YYYY-MM-DD)'),
-    ('time',         'Time (HH:MM:SS)'),
-    ('datetime',     'Full date and time'),
-    ('month',        'Month (01-12)'),
-    ('day',          'Day of month (01-31)'),
-    ('hour',         'Hour, 24-hour (00-23)'),
-    ('frame',        'Current frame number'),
-    ('total_frames', 'Total frame count'),
-]
+# Derived per-context lists
+NAMING_PATTERN_VARS = [(n, d) for n, d, c in TEMPLATE_VARS if c in ('both', 'naming')]
+TEXT_OVERLAY_VARS   = [(n, d) for n, d, c in TEMPLATE_VARS if c in ('both', 'overlay')]
 
 # Overlay variables that change per-frame (used to decide if re-render is needed)
 DYNAMIC_OVERLAY_VARS = [
-    'date', 'time', 'datetime', 'month', 'day', 'hour', 'frame', 'total_frames',
+    'date', 'time', 'datetime', 'timestamp', 'month', 'day', 'hour',
+    'frame', 'total_frames',
 ]
 
 
