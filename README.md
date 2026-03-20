@@ -4,7 +4,7 @@
 <h1 align="center">ChronoSnap</h1>
 <p align="center"><em>Timelapse Manager</em></p>
 
-A self-hosted timelapse management application that automates the capture, organization, and video creation of timelapse projects. Configure a capture source, set a schedule, and let it run -- whether that is a few hours or an entire year.
+A self-hosted timelapse management application that automates the capture, organization, and video creation of timelapse projects. Configure a capture source, set a schedule, and let it run, whether that is a few hours or an entire year.
 
 ChronoSnap runs as a single Docker container with a built-in web interface. No external services, no cloud dependencies, no accounts. Everything stays on your hardware.
 
@@ -205,7 +205,7 @@ services:
 
 ### Resource Limits
 
-The included compose file sets resource limits of 2 CPU cores and 2 GB of RAM. These are reasonable defaults -- video encoding is the most resource-intensive operation. Adjust based on your hardware and how frequently you build videos.
+The included compose file sets resource limits of 2 CPU cores and 2 GB of RAM. These are reasonable defaults. Video encoding is the most resource-intensive operation. Adjust based on your hardware and how frequently you build videos.
 
 ---
 
@@ -215,14 +215,14 @@ The included compose file sets resource limits of 2 CPU cores and 2 GB of RAM. T
 
 Network sources are the most common setup. Point ChronoSnap at any camera or image endpoint accessible over your network.
 
-**RTSP / RTSPS** -- Used by most security cameras and NVR systems. Provide the full stream URL from your camera's configuration.
+**RTSP / RTSPS**: Used by most security cameras and NVR systems. Provide the full stream URL from your camera's configuration.
 
 ```
 rtsp://192.168.1.100:554/stream1
 rtsps://10.0.10.1:7441/your-stream-token
 ```
 
-**HTTP / HTTPS** -- Used for image endpoints, webcam snapshots, weather maps, or any URL that returns an image.
+**HTTP / HTTPS**: Used for image endpoints, webcam snapshots, weather maps, or any URL that returns an image.
 
 ```
 http://192.168.1.50:8080/snapshot.jpg
@@ -245,7 +245,7 @@ ls /dev/video*
 v4l2-ctl --list-devices
 ```
 
-Cameras often register multiple `/dev/video` entries. You want the one associated with "Video Capture" -- typically the lowest-numbered device for that camera.
+Cameras often register multiple `/dev/video` entries. You want the one associated with "Video Capture", typically the lowest-numbered device for that camera.
 
 **Step 2: Ensure the host user has video group access**
 
@@ -319,9 +319,9 @@ ChronoSnap can import existing images and videos that were not captured by the a
 
 There are two ways to get files into the import pipeline:
 
-**Browser upload** -- Drag and drop files or folders directly into the import dialog, or use the file/folder picker buttons. Supports individual images, videos, and archive files (ZIP, TAR, GZ, RAR, 7Z). Archives are automatically extracted. Maximum upload size is 25 GB per file.
+**Browser upload**: Drag and drop files or folders directly into the import dialog, or use the file/folder picker buttons. Supports individual images, videos, and archive files (ZIP, TAR, GZ, RAR, 7Z). Archives are automatically extracted. Maximum upload size is 25 GB per file.
 
-**Server path import** -- If you have a large batch of files already on the host machine, mount a directory to `/imports` in the container and browse it from the import dialog. This avoids uploading over the network entirely.
+**Server path import**: If you have a large batch of files already on the host machine, mount a directory to `/imports` in the container and browse it from the import dialog. This avoids uploading over the network entirely.
 
 ```yaml
 volumes:
@@ -360,7 +360,7 @@ Exported archives can be re-imported into the same or a different ChronoSnap ins
 
 Ideal for 3D prints, construction progress within a day, or weather events.
 
-- **Interval:** 5--30 seconds
+- **Interval:** 5–30 seconds
 - **Time window:** Disabled (capture continuously)
 - **Example:** Capture every 10 seconds for 8 hours to record a 3D print. At 30 FPS, that produces roughly 96 seconds of video.
 
@@ -368,7 +368,7 @@ Ideal for 3D prints, construction progress within a day, or weather events.
 
 Ideal for garden growth, construction projects, or seasonal changes.
 
-- **Interval:** 5--60 minutes
+- **Interval:** 5–60 minutes
 - **Time window:** Optional, but useful to capture at consistent lighting
 - **Example:** Capture every 15 minutes from sunrise to sunset for 3 months. Auto-build weekly videos to track progress without manual intervention.
 
@@ -393,7 +393,7 @@ Ideal for yearly comparisons, landscape changes, or long-duration monitoring.
 
 ChronoSnap uses template variables in two places: **capture naming patterns** (file names for saved images) and **text overlays** (burned-in text on timelapse frames). Variables are wrapped in curly braces and replaced with real values at capture or build time.
 
-Most variables work in both naming patterns and text overlays. A few are specific to one — see the **Context** column:
+Most variables work in both naming patterns and text overlays. A few are specific to one context. See the **Context** column:
 
 | Variable | Description | Example | Context |
 |---|---|---|---|
@@ -425,7 +425,7 @@ Configure the default pattern in **Settings → Default Naming Pattern**, or ove
 
 Enable text overlay when building a timelapse video. Each variable is resolved per-frame using that frame's capture timestamp.
 
-- **Date stamp:** `{job_name} — {date} {time}` → `MyJob — 2026-03-19 23:14:00`
+- **Date stamp:** `{job_name} - {date} {time}` → `MyJob - 2026-03-19 23:14:00`
 - **Frame counter:** `Frame {frame} of {total_frames}` → `Frame 1 of 500`
 - **Compact:** `{month}/{day} {hour}:{minute}` → `03/19 23:14`
 
@@ -438,10 +438,10 @@ Enable text overlay when building a timelapse video. Each variable is resolved p
 ChronoSnap is a single-container application with three layers:
 
 - **Backend:** Python with FastAPI, handling scheduling, capture, video processing, and the REST API
-- **Frontend:** Vanilla JavaScript served as static files through the same container -- no build toolchain or framework dependencies
+- **Frontend:** Vanilla JavaScript served as static files through the same container. No build toolchain or framework dependencies
 - **Database:** SQLite with WAL journaling for safe concurrent access from the scheduler, API, and video processing threads
 
-The scheduler runs as a background thread, managing capture timing for all active jobs. Video builds are processed by spawning ffmpeg as a subprocess with real-time progress tracking. There are no external service dependencies -- everything runs within the single container.
+The scheduler runs as a background thread, managing capture timing for all active jobs. Video builds are processed by spawning ffmpeg as a subprocess with real-time progress tracking. There are no external service dependencies. Everything runs within the single container.
 
 ### Data Storage
 
