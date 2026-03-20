@@ -213,6 +213,7 @@
                     <button class="btn btn-secondary btn-sm" id="video-toggle-selection-btn" onclick="videoSelection.toggleAll()">Select Visible</button>
                     <button class="btn btn-sm btn-fav-bulk" onclick="videoSelection.favoriteSelected(true)" title="Favorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Favorite</button>
                     <button class="btn btn-sm btn-unfav-bulk" onclick="videoSelection.favoriteSelected(false)" title="Unfavorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Unfavorite</button>
+                    <button class="btn btn-primary btn-sm" onclick="downloadSelectedVideos()" title="Download selected"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download</button>
                     <button class="btn btn-danger btn-sm" onclick="videoSelection.deleteSelected()">Delete Selected</button>
                 </div>
                 <div id="videos-list" class="videos-grid"></div>
@@ -221,7 +222,7 @@
             <!-- Video Detail View -->
             <div id="video-detail-view" class="view">
                 <div class="view-header detail-view-header">
-                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <div class="video-detail-header-left">
                         <button class="btn btn-secondary btn-sm" onclick="navigateTo('/timelapses')" title="Back to Timelapses" style="display:inline-flex;align-items:center;gap:0.35rem;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                             Timelapses
@@ -236,6 +237,7 @@
                             <button id="video-rename-cancel" class="btn btn-sm btn-secondary" style="display:none;" onclick="cancelVideoRename()">Cancel</button>
                         </h2>
                     </div>
+                    <div class="video-detail-actions" id="video-detail-actions"></div>
                 </div>
                 <div class="detail-view-body">
                     <div class="detail-page-content">
@@ -247,7 +249,6 @@
                             </div>
                             <dl class="video-detail-meta" id="video-detail-meta"></dl>
                             <div id="video-detail-tags"></div>
-                            <div class="video-detail-actions" id="video-detail-actions"></div>
                         </div>
                     </div>
                 </div>

@@ -1498,10 +1498,29 @@ body.detail-view-active .view.active {
     display: block;
 }
 
+#video-detail-view .detail-view-header {
+    flex-wrap: nowrap;
+}
+
+.video-detail-header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+    flex: 1;
+}
+
 .video-detail-title-row {
     display: flex;
     align-items: center;
     gap: 0.3rem;
+    min-width: 0;
+}
+
+.video-detail-title-row #video-detail-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .video-detail-meta {
@@ -1526,8 +1545,8 @@ body.detail-view-active .view.active {
 .video-detail-actions {
     display: flex;
     gap: 0.5rem;
-    padding-top: 0.5rem;
-    border-top: 1px solid var(--border-color);
+    align-items: center;
+    flex-shrink: 0;
 }
 
 .video-detail-meta .job-link {
@@ -1984,6 +2003,7 @@ body.detail-view-active .view.active {
     transition: all var(--transition-base);
     max-width: 400px;
     word-wrap: break-word;
+    pointer-events: none;
 }
 
 .toast-close {
@@ -2008,6 +2028,7 @@ body.detail-view-active .view.active {
 .notification-toast.show {
     opacity: 1;
     transform: translateX(0);
+    pointer-events: auto;
 }
 
 .notification-toast.success {
@@ -3969,6 +3990,53 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     margin-left: 0.5rem;
     flex: 1;
     min-width: min(500px, 60vw);
+}
+
+/* Share popover */
+.share-popover-wrap {
+    position: relative;
+}
+.share-popover-wrap .btn-icon.share-active {
+    color: var(--primary-color);
+}
+.share-popover {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.5rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    padding: 0.75rem;
+    min-width: 280px;
+    z-index: 100;
+}
+.share-popover-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+.share-popover-url {
+    display: flex;
+    gap: 0.3rem;
+    align-items: center;
+    margin-top: 0.5rem;
+}
+.share-popover-url input {
+    flex: 1;
+    font-size: 0.75rem;
+    padding: 0.3rem 0.5rem;
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    outline: none;
+    font-family: monospace;
+}
+.share-popover-url input:focus {
+    border-color: var(--primary-color);
 }
 .toggle-switch {
     position: relative; display: inline-block; width: 40px; height: 22px;
