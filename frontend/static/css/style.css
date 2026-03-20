@@ -2629,33 +2629,90 @@ body.detail-view-active .view.active {
 /* Captures selection controls */
 .selection-controls {
     display: flex;
-    gap: 1rem;
     align-items: center;
     margin-bottom: 1rem;
-    padding: 0.75rem 1rem;
+    padding: 0.5rem 1rem;
     background: var(--primary-color);
     color: var(--primary-text-on);
     border-radius: var(--radius-sm);
 }
 
-.selection-controls span {
-    font-weight: 500;
+.ribbon-left {
+    font-weight: 600;
+    font-size: 0.85rem;
+    white-space: nowrap;
 }
 
-.selection-controls span:not(.selection-clear) {
-    flex: 1;
+.ribbon-center {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin: 0 auto;
 }
 
-.selection-clear {
+.ribbon-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: inherit;
     cursor: pointer;
-    font-size: 1.25rem;
-    line-height: 1;
-    opacity: 0.8;
-    padding: 0 0.25rem;
+    padding: 0.5rem;
+    border-radius: var(--radius-sm);
+    opacity: 0.85;
+    transition: opacity var(--transition-base), background var(--transition-base);
 }
 
-.selection-clear:hover {
+.ribbon-icon-btn svg {
+    width: 22px;
+    height: 22px;
+}
+
+.ribbon-icon-btn:hover:not(:disabled) {
     opacity: 1;
+    background: rgba(255,255,255,0.15);
+}
+
+.ribbon-icon-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.ribbon-icon-btn.ribbon-icon-danger:hover:not(:disabled) {
+    background: rgba(239,68,68,0.25);
+}
+
+/* Favorite heart: gradient pink = will favorite, dark = will unfavorite */
+.ribbon-icon-btn .fav-heart-icon {
+    fill: url(#fav-gradient);
+    stroke: none;
+}
+
+.ribbon-icon-btn.fav-active .fav-heart-icon {
+    fill: rgba(0,0,0,0.5);
+}
+
+.ribbon-clear {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    opacity: 0.8;
+    padding: 0.35rem 0.5rem;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+    transition: opacity var(--transition-base), background var(--transition-base);
+}
+
+.ribbon-clear:hover {
+    opacity: 1;
+    background: rgba(255,255,255,0.15);
 }
 
 .captures-grid {
@@ -4088,62 +4145,6 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    Video Comparison
    ============================================================================= */
 
-.compare-mode-banner {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0.75rem;
-    background: var(--primary-color);
-    color: var(--primary-text-on);
-    border-radius: 8px;
-    font-size: 0.85rem;
-    font-weight: 500;
-    margin-bottom: 0.5rem;
-}
-.compare-mode-banner .btn {
-    margin-left: auto;
-    color: var(--primary-text-on);
-    border-color: rgba(255,255,255,0.3);
-}
-.compare-mode-banner .btn:hover {
-    background: rgba(255,255,255,0.15);
-}
-.compare-btn {
-    color: var(--text-primary);
-    background: transparent;
-    border: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    position: relative;
-    padding: 0.625rem 0.75rem;
-    border-radius: var(--radius-sm);
-    z-index: 0;
-    cursor: pointer;
-}
-.compare-btn::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: var(--radius-sm);
-    padding: 1.5px;
-    background: var(--gradient-primary);
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    z-index: -1;
-}
-.compare-btn:hover {
-    color: var(--text-primary);
-    background: rgba(167, 139, 250, 0.08);
-}
-.compare-btn.active {
-    background: var(--gradient-glow);
-    color: var(--text-primary);
-}
-.compare-mode .video-gallery-card {
-    cursor: pointer;
-}
 
 .comparison-modal-content {
     max-width: 95vw;

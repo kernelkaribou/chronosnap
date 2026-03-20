@@ -471,8 +471,6 @@ function setButtonState(btnOrId, disabled) {
 // SelectionManager — reusable bulk selection for card grids
 // =============================================================================
 
-const compareMode = { active: false };
-
 class SelectionManager {
     constructor({ name, cardSelector, dataAttr, controlsId, countId, toggleBtnId, deleteEndpoint, deleteBodyKey, favoriteEndpoint, itemLabel, onReload }) {
         this.name = name;
@@ -494,7 +492,7 @@ class SelectionManager {
 
     handleCardClick(id, event, openFn) {
         if (event.target.type === 'checkbox') return;
-        if (compareMode.active || this.selected.size > 0) {
+        if (this.selected.size > 0) {
             this.toggle(id, event);
         } else {
             openFn(id);
@@ -506,8 +504,6 @@ class SelectionManager {
         if (this.selected.has(id)) {
             this.selected.delete(id);
         } else {
-            // In compare mode, limit to 4 selections
-            if (compareMode.active && this.name === 'videos' && this.selected.size >= 4) return;
             this.selected.add(id);
         }
         const card = document.querySelector(`${this.cardSelector}[${this.dataAttr}="${id}"]`);
@@ -543,25 +539,49 @@ class SelectionManager {
         const count = this.selected.size;
         const controls = document.getElementById(this.controlsId);
 
-        // In compare mode, hide the regular selection toolbar
-        if (this.name === 'videos' && compareMode.active) {
-            controls.style.display = 'none';
-            updateCompareModeText(count);
-            return;
-        }
-
         controls.style.display = count > 0 ? 'flex' : 'none';
         document.getElementById(this.countId).textContent = `${count} selected`;
 
-        // Show compare button when 2-4 videos selected (outside compare mode)
+        // Compare icon: enabled for videos 2-4, captures exactly 2
         if (this.name === 'videos') {
-            const compareBtn = document.getElementById('video-compare-selected-btn');
-            if (compareBtn) compareBtn.style.display = (count >= 2 && count <= 4) ? '' : 'none';
+            const compareBtn = document.getElementById('video-compare-btn');
+            if (compareBtn) compareBtn.disabled = !(count >= 2 && count <= 4);
+        } else if (this.name === 'captures') {
+            const compareBtn = document.getElementById('capture-compare-btn');
+            if (compareBtn) compareBtn.disabled = !(count >= 1 && count <= 2);
         }
 
+        // Smart favorite: check if all selected are favorited
+        const favBtnId = this.name === 'videos' ? 'video-fav-btn' : 'capture-fav-btn';
+        const favBtn = document.getElementById(favBtnId);
+        if (favBtn && count > 0) {
+            const allFav = this._allSelectedFavorited();
+            favBtn.classList.toggle('fav-active', allFav);
+            favBtn.title = allFav ? 'Unfavorite' : 'Favorite';
+        }
+
+        // Select all toggle icon title
         const cards = document.querySelectorAll(`${this.cardSelector}[${this.dataAttr}]`);
         const allSelected = cards.length > 0 && [...cards].every(c => this.selected.has(parseInt(c.getAttribute(this.dataAttr))));
-        document.getElementById(this.toggleBtnId).textContent = allSelected ? 'Clear Selection' : 'Select Visible';
+        const toggleBtn = document.getElementById(this.toggleBtnId);
+        if (toggleBtn) toggleBtn.title = allSelected ? 'Clear Selection' : 'Select Visible';
+    }
+
+    _allSelectedFavorited() {
+        for (const id of this.selected) {
+            const card = document.querySelector(`${this.cardSelector}[${this.dataAttr}="${id}"]`);
+            if (card) {
+                const favBtn = card.querySelector('.card-fav-btn');
+                if (favBtn && !favBtn.classList.contains('favorited')) return false;
+            }
+        }
+        return true;
+    }
+
+    smartFavorite() {
+        if (this.selected.size === 0) return;
+        const allFav = this._allSelectedFavorited();
+        this.favoriteSelected(!allFav);
     }
 
     clear() {
@@ -609,7 +629,8 @@ class SelectionManager {
                     body: { ids: [...this.selected], is_favorite: isFavorite }
                 });
                 showNotification(`${count} ${this.itemLabel}${count > 1 ? 's' : ''} ${isFavorite ? 'favorited' : 'unfavorited'}`);
-                this.onReload();
+                await this.onReload();
+                this.updateControls();
             } catch (error) {
                 showNotification('Failed to update favorites', 'error');
             }
@@ -2811,40 +2832,6 @@ async function disableShareFromSettings(videoId) {
 
 let comparisonState = { playing: false, players: [], animFrame: null };
 
-function toggleCompareMode() {
-    compareMode.active = !compareMode.active;
-    const btn = document.getElementById('compare-mode-btn');
-    const banner = document.getElementById('compare-mode-banner');
-    const gallery = document.getElementById('videos-view');
-
-    if (compareMode.active) {
-        videoSelection.clear();
-        btn.classList.add('active');
-        banner.style.display = 'flex';
-        gallery.classList.add('compare-mode');
-        updateCompareModeText(0);
-    } else {
-        videoSelection.clear();
-        btn.classList.remove('active');
-        banner.style.display = 'none';
-        gallery.classList.remove('compare-mode');
-    }
-}
-
-function updateCompareModeText(count) {
-    const text = document.getElementById('compare-mode-text');
-    const launchBtn = document.getElementById('compare-launch-btn');
-    if (!text) return;
-    if (count < 2) {
-        const remaining = 2 - count;
-        text.textContent = remaining === 2 ? 'Select 2-4 timelapses to compare' : 'Select at least 1 more';
-        if (launchBtn) launchBtn.style.display = 'none';
-    } else {
-        text.textContent = `${count} selected`;
-        if (launchBtn) launchBtn.style.display = '';
-    }
-}
-
 async function openComparison() {
     const ids = [...videoSelection.selected];
     if (ids.length < 2 || ids.length > 4) return;
@@ -2911,7 +2898,6 @@ function closeComparison() {
     comparisonState.animFrame = null;
     comparisonState.players = [];
     modal.classList.remove('active');
-    if (compareMode.active) toggleCompareMode();
     
     if (wasActive && _modalHistoryDepth > 0 && !_closingFromPopstate) {
         _modalHistoryDepth--;
@@ -7595,6 +7581,118 @@ let compareState = {
     firstTime: null,
     lastTime: null
 };
+
+async function openCaptureCompareFromSelection() {
+    const ids = [...captureSelection.selected];
+    if (ids.length === 0 || ids.length > 2) return;
+
+    try {
+        if (ids.length === 2) {
+            const [capA, capB] = await Promise.all([
+                apiRequest(`/captures/${ids[0]}`),
+                apiRequest(`/captures/${ids[1]}`)
+            ]);
+            // Order by time: older on left
+            const sorted = [capA, capB].sort((a, b) =>
+                new Date(a.captured_at) - new Date(b.captured_at)
+            );
+            await openCompareWithCaptures(sorted[0], sorted[1]);
+        } else {
+            const cap = await apiRequest(`/captures/${ids[0]}`);
+            if (!cap.job_id) {
+                showNotification('Cannot compare: capture has no job', 'error');
+                return;
+            }
+            const range = await apiRequest(`/captures/job/${cap.job_id}/time-range`);
+            if (range.count < 2) {
+                showNotification('Need at least 2 captures in this job to compare', 'error');
+                return;
+            }
+            // If selected is the newest, pair with oldest; otherwise pair with newest
+            const isNewest = cap.captured_at === range.last_capture_time;
+            const pairTimestamp = isNewest ? range.first_capture_time : range.last_capture_time;
+            const pairCap = await apiRequest(`/captures/job/${cap.job_id}/nearest`, {
+                query: { timestamp: pairTimestamp }
+            });
+            // Order by time
+            const sorted = [cap, pairCap].sort((a, b) =>
+                new Date(a.captured_at) - new Date(b.captured_at)
+            );
+            await openCompareWithCaptures(sorted[0], sorted[1]);
+        }
+    } catch (e) {
+        console.error('Failed to open comparison:', e);
+        showNotification('Failed to load captures for comparison', 'error');
+    }
+}
+
+async function openCompareWithCaptures(capA, capB) {
+    compareState = {
+        jobId: capA.job_id || capB.job_id,
+        captureA: capA,
+        captureB: capB,
+        mode: 'side',
+        firstTime: capA.captured_at,
+        lastTime: capB.captured_at
+    };
+
+    setCompareMode('side');
+
+    // Populate job selector and controls for further browsing
+    const select = document.getElementById('compare-job-select');
+    select.innerHTML = '<option value="">Choose a job...</option>';
+    try {
+        const jobs = await apiRequest('/jobs/');
+        jobs.filter(j => j.capture_count >= 2).forEach(job => {
+            const opt = document.createElement('option');
+            opt.value = job.id;
+            opt.textContent = `${job.name} (${job.capture_count} captures)`;
+            select.appendChild(opt);
+        });
+    } catch (_) {}
+
+    if (compareState.jobId) {
+        select.value = compareState.jobId;
+        // Set date pickers and store actual job range for First vs Last
+        const range = await apiRequest(`/captures/job/${compareState.jobId}/time-range`).catch(() => null);
+        if (range) {
+            compareState.firstTime = range.first_capture_time;
+            compareState.lastTime = range.last_capture_time;
+            const firstLocal = isoToDatetimeLocal(range.first_capture_time);
+            const lastLocal = isoToDatetimeLocal(range.last_capture_time);
+            const dateA = document.getElementById('compare-date-a');
+            const dateB = document.getElementById('compare-date-b');
+            dateA.min = firstLocal; dateA.max = lastLocal;
+            dateB.min = firstLocal; dateB.max = lastLocal;
+            dateA.value = isoToDatetimeLocal(capA.captured_at);
+            dateB.value = isoToDatetimeLocal(capB.captured_at);
+        }
+        document.getElementById('compare-controls').style.display = '';
+    } else {
+        document.getElementById('compare-controls').style.display = 'none';
+    }
+
+    // Load images directly
+    const imgUrlA = `${API_BASE}/captures/${capA.id}/image`;
+    const imgUrlB = `${API_BASE}/captures/${capB.id}/image`;
+    const labelA = formatDateTime(capA.captured_at);
+    const labelB = formatDateTime(capB.captured_at);
+
+    document.getElementById('compare-img-a').src = imgUrlA;
+    document.getElementById('compare-img-b').src = imgUrlB;
+    document.getElementById('compare-label-a').textContent = labelA;
+    document.getElementById('compare-label-b').textContent = labelB;
+    document.getElementById('compare-slider-img-a').src = imgUrlA;
+    document.getElementById('compare-slider-img-b').src = imgUrlB;
+    document.getElementById('compare-slider-label-a').textContent = labelA;
+    document.getElementById('compare-slider-label-b').textContent = labelB;
+
+    document.getElementById('compare-display').style.display = '';
+    document.getElementById('compare-empty').style.display = 'none';
+
+    showModal('compare-modal');
+    updateSliderPosition(0.5);
+}
 
 async function openCompareModal(preselectedJobId) {
     compareState = { jobId: null, captureA: null, captureB: null, mode: 'side', firstTime: null, lastTime: null };
