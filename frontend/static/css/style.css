@@ -797,9 +797,26 @@ body {
     max-width: 100%;
 }
 
-/* Detail view: lock page scroll on desktop, JS sizes the panels */
+/* Detail view: lock page scroll on desktop, flex chain constrains height */
 body.detail-view-active {
     overflow: hidden;
+}
+
+body.detail-view-active .app-container {
+    height: 100vh;
+}
+
+body.detail-view-active .main-content {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+body.detail-view-active .view.active {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
 }
 
 /* Detail view header stays at top */
@@ -812,6 +829,9 @@ body.detail-view-active {
 }
 
 .detail-view-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
     padding-top: var(--space-lg);
 }
 
@@ -940,8 +960,19 @@ body.detail-view-active {
     body.detail-view-active {
         overflow: visible;
     }
+    body.detail-view-active .app-container {
+        height: auto;
+    }
     body.detail-view-active .main-content {
         overflow: visible;
+        display: block;
+    }
+    body.detail-view-active .view.active {
+        display: block;
+    }
+    .detail-view-body {
+        overflow-y: visible;
+        min-height: auto;
     }
     .detail-layout {
         grid-template-columns: 1fr;
@@ -1446,10 +1477,7 @@ body.detail-view-active {
     margin-top: 0.25rem;
 }
 
-/* Video detail modal */
-#video-detail-view .detail-view-body {
-    overflow-y: auto;
-}
+/* Video detail layout */
 
 .video-detail-layout {
     display: flex;
