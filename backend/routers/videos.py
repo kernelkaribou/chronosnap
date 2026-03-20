@@ -13,6 +13,7 @@ from ..database import get_db, dict_from_row
 from ..services.video_processor import process_video, cancel_video
 from ..utils import get_now, to_iso
 from ..helpers.db_helpers import get_or_404, normalize_favorite, fetch_tags_for_videos, fetch_tags_for_jobs, set_video_tags
+from ..helpers.template_vars import build_datetime_vars
 from ..helpers.file_helpers import delete_video_files, resolve_video_path, make_relative
 from ..services.event_service import add_event
 
@@ -150,11 +151,9 @@ async def text_overlay_preview(request: TextOverlayPreviewRequest):
     now = get_now()
     variables = {
         'job_name': request.job_name,
-        'date': now.strftime('%Y-%m-%d'),
-        'time': now.strftime('%H:%M:%S'),
-        'datetime': now.strftime('%Y-%m-%d %H:%M:%S'),
         'frame': '1',
         'total_frames': '100',
+        **build_datetime_vars(now),
     }
 
     try:

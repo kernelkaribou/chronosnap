@@ -1,0 +1,38 @@
+services:
+  chronosnap:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: chronosnap:dev
+    container_name: chronosnap-dev
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - LOG_LEVEL=DEBUG
+    ports:
+      - "8080:8080"
+    volumes:
+      - ${PWD}/data:/app/data
+      - ${PWD}/captures:/captures
+      - ${PWD}/timelapses:/timelapses
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

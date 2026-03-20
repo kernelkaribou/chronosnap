@@ -58,6 +58,17 @@ class JobCreate(BaseModel):
         if not v.startswith(('http://', 'https://', 'rtsp://', 'rtsps://', '/dev/video')):
             raise ValueError("URL must start with http://, https://, rtsp://, rtsps://, or /dev/video")
         return v
+
+    @field_validator('naming_pattern')
+    @classmethod
+    def check_naming_pattern(cls, v):
+        if v is None:
+            return v
+        from .helpers.template_vars import validate_naming_pattern
+        err = validate_naming_pattern(v)
+        if err:
+            raise ValueError(err)
+        return v
     
     @model_validator(mode='after')
     def validate_device_url(self):

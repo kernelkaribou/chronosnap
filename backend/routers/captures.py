@@ -34,7 +34,7 @@ async def list_captures(
     start_time: Optional[str] = Query(None, description="Start time (ISO format)"),
     end_time: Optional[str] = Query(None, description="End time (ISO format)"),
     favorites_only: bool = Query(False, description="Show only favorites"),
-    sort_order: str = Query("asc", regex="^(asc|desc)$", description="Sort order: asc or desc"),
+    sort_order: str = Query("asc", pattern="^(asc|desc)$", description="Sort order: asc or desc"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page")
 ):

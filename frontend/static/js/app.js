@@ -9,6 +9,63 @@ let videoRefreshInterval = null;
 let confirmCallback = null;
 
 // =============================================================================
+// Template Variable Definitions (single source of truth for UI hints)
+// =============================================================================
+
+// Master template variable definitions (single source of truth for UI hints)
+// ctx: 'both' = naming + overlay, 'naming' = naming only, 'overlay' = overlay only
+const TEMPLATE_VARS = [
+    { name: 'job_name',     ctx: 'both' },
+    { name: 'count',        ctx: 'naming' },
+    { name: 'timestamp',    ctx: 'both' },
+    { name: 'date',         ctx: 'both' },
+    { name: 'time',         ctx: 'overlay' },
+    { name: 'datetime',     ctx: 'overlay' },
+    { name: 'month',        ctx: 'both' },
+    { name: 'day',          ctx: 'both' },
+    { name: 'hour',         ctx: 'both' },
+    { name: 'minute',       ctx: 'both' },
+    { name: 'second',       ctx: 'both' },
+    { name: 'frame',        ctx: 'overlay' },
+    { name: 'total_frames', ctx: 'overlay' },
+];
+const NAMING_PATTERN_VARS = TEMPLATE_VARS.filter(v => v.ctx !== 'overlay').map(v => v.name);
+const TEXT_OVERLAY_VARS   = TEMPLATE_VARS.filter(v => v.ctx !== 'naming').map(v => v.name);
+const TEMPLATE_VARS_DOC   = 'https://github.com/kernelkaribou/chronosnap#template-variables';
+
+function renderVarHints(vars) {
+    return vars.map(v => `<code>{${v}}</code>`).join(' ');
+}
+
+function renderDocLink(label) {
+    return `<a href="${TEMPLATE_VARS_DOC}" target="_blank" rel="noopener" style="color:var(--text-secondary);">${label || 'Variable reference'}</a>`;
+}
+
+const _NAMING_VAR_SET = new Set(NAMING_PATTERN_VARS);
+const _OVERLAY_ONLY_SET = new Set(TEXT_OVERLAY_VARS.filter(v => !_NAMING_VAR_SET.has(v)));
+const _ALL_VAR_SET = new Set([...NAMING_PATTERN_VARS, ...TEXT_OVERLAY_VARS]);
+const _UNSAFE_CHARS = /[<>:"/\\|?*]/;
+const _ALLOWED_LITERAL = /^[A-Za-z0-9 _\-.{}]*$/;
+
+function validateNamingPattern(pattern) {
+    if (!pattern || !pattern.trim()) return null;
+    const literal = pattern.replace(/\{[^}]+\}/g, '');
+    if (_UNSAFE_CHARS.test(literal)) return 'Characters not allowed: < > : " / \\ | ? *';
+    if (!_ALLOWED_LITERAL.test(pattern)) {
+        const bad = literal.replace(/[A-Za-z0-9 _\-.{}]/g, '');
+        if (bad) return `Characters not allowed: ${[...new Set(bad)].join(' ')}`;
+    }
+    const tokens = [...pattern.matchAll(/\{([^}]+)\}/g)].map(m => m[1].split(':')[0]);
+    for (const name of tokens) {
+        if (_OVERLAY_ONLY_SET.has(name))
+            return `{${name}} is not allowed in naming patterns`;
+        if (!_NAMING_VAR_SET.has(name) && name !== 'num' && !_ALL_VAR_SET.has(name))
+            return `Unknown variable {${name}}`;
+    }
+    return null;
+}
+
+// =============================================================================
 // Theme Toggle & Presets
 // =============================================================================
 
@@ -587,6 +644,12 @@ function toggleTimeWindow() {
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
+
+    // Populate template variable hints from shared definitions
+    const settingsVars = document.getElementById('settings-naming-vars');
+    if (settingsVars) settingsVars.innerHTML = renderVarHints(NAMING_PATTERN_VARS) + ' (' + renderDocLink('docs') + ')';
+    const jobVars = document.getElementById('job-naming-vars');
+    if (jobVars) jobVars.innerHTML = renderDocLink('Variable reference');
     
     // Measure navbar height for detail view layout calculations
     const navbar = document.querySelector('.navbar');
@@ -3297,7 +3360,7 @@ function generateOverlayHTML(prefix, opts = {}) {
                             <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr} style="margin-top:10px; margin-left:6px;">
                         </div>
                     </div>
-                    <small style="color: var(--text-secondary); font-size:0.6rem;"><code>{job_name}</code> <code>{date}</code> <code>{time}</code> <code>{datetime}</code> <code>{frame}</code></small>
+                    <small style="color: var(--text-secondary); font-size:0.6rem;">${renderDocLink('Variable reference')}</small>
                     <div style="display:flex; gap:0.3rem; align-items:center;">
                         <span style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">Text:</span>
                         <input type="color" id="${prefix}-overlay-color" value="#FFFFFF" style="border:none;padding:0;height:18px;width:18px;border-radius:50%;cursor:pointer;background:none;"${inputEvent}>
@@ -4359,6 +4422,8 @@ async function executeImport() {
     }
 }
 
+let _savedNamingPattern = '';
+
 async function loadNamingPattern() {
     try {
         const result = await apiRequest('/settings/naming-pattern');
@@ -4366,6 +4431,8 @@ async function loadNamingPattern() {
     } catch (e) {
         document.getElementById('default-naming-pattern').value = '{job_name}_{count}_{timestamp}';
     }
+    _savedNamingPattern = document.getElementById('default-naming-pattern').value;
+    updateSettingsNamingPreview();
 }
 
 async function saveNamingPattern() {
@@ -4378,24 +4445,60 @@ async function saveNamingPattern() {
     try {
         await apiRequest('/settings/naming-pattern', { method: 'PUT', body: { naming_pattern: pattern } });
         showNotification('Default naming pattern updated', 'success');
+        _savedNamingPattern = pattern;
+        updateSettingsNamingPreview();
     } catch (error) {
         showNotification(error.message || 'Failed to update naming pattern', 'error');
+    }
+}
+
+function buildNamingExample(pattern, jobName) {
+    const now = new Date();
+    const pad = (n) => (n + '').padStart(2, '0');
+    const ts = now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate())
+        + '_' + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds());
+    const dateStr = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+    const timeStr = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+    return pattern
+        .replace('{job_name}', jobName)
+        .replace('{count}', '000001')
+        .replace(/\{num(?::0?(\d+)d)?\}/, '000001')
+        .replace('{timestamp}', ts)
+        .replace('{date}', dateStr)
+        .replace('{time}', timeStr)
+        .replace('{datetime}', dateStr + ' ' + timeStr)
+        .replace('{month}', pad(now.getMonth() + 1))
+        .replace('{day}', pad(now.getDate()))
+        .replace('{hour}', pad(now.getHours()))
+        .replace('{minute}', pad(now.getMinutes()))
+        .replace('{second}', pad(now.getSeconds()));
+}
+
+function showNamingValidation(previewEl, pattern) {
+    if (!previewEl) return;
+    const err = validateNamingPattern(pattern);
+    if (err) {
+        previewEl.innerHTML = `<span style="color:var(--danger,#ef4444);">${err}</span>`;
     }
 }
 
 function updateNamingPreview() {
     const pattern = document.getElementById('naming_pattern').value || '{job_name}_{count}_{timestamp}';
     const jobName = document.getElementById('job_name')?.value || 'MyJob';
-    const now = new Date();
-    const ts = now.getFullYear() + (now.getMonth()+1+'').padStart(2,'0') + (now.getDate()+'').padStart(2,'0')
-        + '_' + (now.getHours()+'').padStart(2,'0') + (now.getMinutes()+'').padStart(2,'0') + (now.getSeconds()+'').padStart(2,'0');
-    const example = pattern
-        .replace('{job_name}', jobName)
-        .replace('{count}', '000001')
-        .replace(/\{num(?::0?(\d+)d)?\}/, '000001')
-        .replace('{timestamp}', ts);
     const el = document.getElementById('naming-preview');
-    if (el) el.textContent = `Example: ${example}.jpg`;
+    if (el) el.textContent = `Example: ${buildNamingExample(pattern, jobName)}.jpg`;
+    showNamingValidation(el, document.getElementById('naming_pattern').value);
+}
+
+function updateSettingsNamingPreview() {
+    const raw = document.getElementById('default-naming-pattern').value;
+    const pattern = raw || '{job_name}_{count}_{timestamp}';
+    const el = document.getElementById('settings-naming-preview');
+    if (el) el.textContent = `Example: ${buildNamingExample(pattern, 'MyJob')}.jpg`;
+    const err = validateNamingPattern(raw);
+    if (err && el) el.innerHTML = `<span style="color:var(--danger,#ef4444);">${err}</span>`;
+    const btn = document.getElementById('save-naming-pattern-btn');
+    if (btn) btn.disabled = !!err || raw === _savedNamingPattern || !raw.trim();
 }
 
 async function showCreateJobModal() {

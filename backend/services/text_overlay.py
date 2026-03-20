@@ -9,6 +9,11 @@ from io import BytesIO
 
 from PIL import Image, ImageDraw, ImageFont
 
+from ..helpers.template_vars import (
+    TEXT_OVERLAY_VARS, DYNAMIC_OVERLAY_VARS,
+    build_datetime_vars, empty_datetime_vars,
+)
+
 logger = logging.getLogger(__name__)
 
 # Font search paths inside the Docker container
@@ -88,13 +93,7 @@ def _hex_to_rgba(hex_color: str, opacity: float = 1.0) -> Tuple[int, int, int, i
 def resolve_template(text: str, variables: Dict[str, str]) -> str:
     """Resolve template variables in text.
 
-    Supported variables:
-        {job_name}      - Job name
-        {date}          - Capture date (YYYY-MM-DD)
-        {time}          - Capture time (HH:MM:SS)
-        {datetime}      - Capture date and time
-        {frame}         - Current frame number
-        {total_frames}  - Total frame count
+    Supported variables are defined in helpers.template_vars.TEXT_OVERLAY_VARS.
     """
     try:
         return text.format(**variables)
@@ -310,13 +309,9 @@ def process_frames_with_overlay(
         if captured_at:
             try:
                 dt = parse_iso(captured_at)
-                variables['date'] = dt.strftime('%Y-%m-%d')
-                variables['time'] = dt.strftime('%H:%M:%S')
-                variables['datetime'] = dt.strftime('%Y-%m-%d %H:%M:%S')
+                variables.update(build_datetime_vars(dt))
             except Exception:
-                variables['date'] = ''
-                variables['time'] = ''
-                variables['datetime'] = ''
+                variables.update(empty_datetime_vars())
 
         out_name = f"frame_{i:06d}.jpg"
         out_path = os.path.join(temp_dir, out_name)
@@ -351,5 +346,4 @@ def process_frames_with_overlay(
 
 def _has_dynamic_variables(text: str) -> bool:
     """Check if text contains per-frame dynamic variables."""
-    dynamic_vars = ['{date}', '{time}', '{datetime}', '{frame}', '{total_frames}']
-    return any(v in text for v in dynamic_vars)
+    return any('{' + v + '}' in text for v in DYNAMIC_OVERLAY_VARS)

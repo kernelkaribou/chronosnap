@@ -3,6 +3,7 @@ Image capture service - handles capturing images from HTTP and RTSP streams
 """
 import subprocess
 import os
+import re
 from typing import Dict, Any, Optional
 import logging
 
@@ -11,6 +12,7 @@ from .. import config
 from ..utils import get_now, to_iso
 from .thumbnail_generator import generate_thumbnail
 from ..helpers.file_helpers import resolve_capture_path, make_relative
+from ..helpers.template_vars import build_datetime_vars
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +60,6 @@ def capture_image(job: Dict[str, Any]) -> tuple[bool, Optional[str]]:
         
         # Generate filename and hierarchical path structure
         now = get_now()
-        timestamp = now.strftime("%Y%m%d_%H%M%S")
         pattern = job['naming_pattern']
         count_val = capture_count + 1
         
@@ -66,12 +67,15 @@ def capture_image(job: Dict[str, Any]) -> tuple[bool, Optional[str]]:
         pattern = pattern.replace('{count}', f'{count_val:06d}')
         
         # Replace remaining placeholders (backward compat: {num:06d}, {timestamp}, etc.)
+        dt_vars = build_datetime_vars(now)
         filename = pattern.format(
             job_name=job['name'],
             num=count_val,
-            timestamp=timestamp,
-            created_timestamp=timestamp
+            **dt_vars,
         )
+
+        # Defense-in-depth: sanitize resolved filename in case job_name contains unsafe chars
+        filename = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', filename)
         filename += ".jpg"
         
         # Create hierarchical directory structure: job/year/month/day/hour/

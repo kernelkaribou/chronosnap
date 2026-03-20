@@ -38,6 +38,9 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
   - [Short-Term Capture](#short-term-capture-hours-to-days)
   - [Long-Term Capture](#long-term-capture-weeks-to-months)
   - [Daily Snapshot Over Time](#daily-snapshot-over-time-months-to-years)
+- [Template Variables](#template-variables)
+  - [Naming Pattern Examples](#naming-pattern-examples)
+  - [Text Overlay Examples](#text-overlay-examples)
 - [Technical Overview](#technical-overview)
   - [Architecture](#architecture)
   - [Data Storage](#data-storage)
@@ -383,6 +386,48 @@ Ideal for yearly comparisons, landscape changes, or long-duration monitoring.
 - Lower intervals generate more data. A 5-second interval at 1080p can produce several GB per day.
 - Auto-build is useful for long-running jobs so you can review progress without manually building videos.
 - Set the `TZ` environment variable to match your local timezone so scheduling and timestamps are intuitive.
+
+---
+
+## Template Variables
+
+ChronoSnap uses template variables in two places: **capture naming patterns** (file names for saved images) and **text overlays** (burned-in text on timelapse frames). Variables are wrapped in curly braces and replaced with real values at capture or build time.
+
+Most variables work in both naming patterns and text overlays. A few are specific to one — see the **Context** column:
+
+| Variable | Description | Example | Context |
+|---|---|---|---|
+| `{job_name}` | Name of the capture job | `MyJob` | Both |
+| `{count}` | Zero-padded capture count | `000001` | Naming |
+| `{timestamp}` | Compact datetime (YYYYmmdd_HHMMSS) | `20260319_231400` | Both |
+| `{date}` | Date (YYYY-MM-DD) | `2026-03-19` | Both |
+| `{time}` | Time (HH:MM:SS) | `23:14:00` | Overlay |
+| `{datetime}` | Full date and time | `2026-03-19 23:14:00` | Overlay |
+| `{month}` | Month, zero-padded | `03` | Both |
+| `{day}` | Day of month, zero-padded | `19` | Both |
+| `{hour}` | Hour, 24-hour (00-23) | `23` | Both |
+| `{minute}` | Minute (00-59) | `14` | Both |
+| `{second}` | Second (00-59) | `00` | Both |
+| `{frame}` | Current frame number | `1` | Overlay |
+| `{total_frames}` | Total number of frames | `500` | Overlay |
+
+Naming patterns are validated to reject characters that are unsafe across filesystems (`< > : " / \ | ? *`). Use `{hour}{minute}{second}` to build a filesystem-safe time format for filenames. `{time}` and `{datetime}` are overlay-only because they contain colons and spaces.
+
+### Naming Pattern Examples
+
+Configure the default pattern in **Settings → Default Naming Pattern**, or override per-job when creating a capture job.
+
+- **Default:** `{job_name}_{count}_{timestamp}` → `MyJob_000001_20260319_231400.jpg`
+- **Date parts:** `{job_name}_{month}-{day}_{count}` → `MyJob_03-19_000001.jpg`
+- **Custom time:** `{job_name}_{count}_{hour}{minute}{second}` → `MyJob_000001_231400.jpg`
+
+### Text Overlay Examples
+
+Enable text overlay when building a timelapse video. Each variable is resolved per-frame using that frame's capture timestamp.
+
+- **Date stamp:** `{job_name} — {date} {time}` → `MyJob — 2026-03-19 23:14:00`
+- **Frame counter:** `Frame {frame} of {total_frames}` → `Frame 1 of 500`
+- **Compact:** `{month}/{day} {hour}:{minute}` → `03/19 23:14`
 
 ---
 
