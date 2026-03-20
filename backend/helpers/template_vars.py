@@ -77,12 +77,12 @@ def validate_naming_pattern(pattern: str) -> str | None:
     # First strip out {var} tokens, then check the remaining literal text
     literal = _TOKEN_RE.sub('', pattern)
     if _UNSAFE_FILENAME_CHARS.search(literal):
-        return 'Pattern contains characters not allowed in filenames: < > : " / \\ | ? *'
+        return 'Characters not allowed: < > : " / \\ | ? *'
 
     if not _ALLOWED_LITERAL_RE.match(pattern):
         bad = set(re.findall(r'[^A-Za-z0-9 _\-\.{}]', literal))
         if bad:
-            return f"Pattern contains disallowed characters: {' '.join(sorted(bad))}"
+            return f"Characters not allowed: {' '.join(sorted(bad))}"
 
     # Validate that all {tokens} are recognised variable names
     tokens = _TOKEN_RE.findall(pattern)
@@ -90,10 +90,7 @@ def validate_naming_pattern(pattern: str) -> str | None:
         name = tok.split(':')[0]  # handle legacy {num:06d} style
         if name not in _NAMING_VAR_NAMES:
             if name in _OVERLAY_ONLY_NAMES:
-                return (
-                    f"{{{name}}} is not allowed in naming patterns "
-                    f"(overlay only)"
-                )
+                return f"{{{name}}} is not allowed in naming patterns"
             valid = ', '.join(f'{{{n}}}' for n in sorted(_NAMING_VAR_NAMES))
             return f"Unknown variable {{{tok}}}. Valid variables: {valid}"
 

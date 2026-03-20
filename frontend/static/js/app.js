@@ -50,15 +50,15 @@ const _ALLOWED_LITERAL = /^[A-Za-z0-9 _\-.{}]*$/;
 function validateNamingPattern(pattern) {
     if (!pattern || !pattern.trim()) return null;
     const literal = pattern.replace(/\{[^}]+\}/g, '');
-    if (_UNSAFE_CHARS.test(literal)) return 'Contains characters not allowed in filenames';
+    if (_UNSAFE_CHARS.test(literal)) return 'Characters not allowed: < > : " / \\ | ? *';
     if (!_ALLOWED_LITERAL.test(pattern)) {
         const bad = literal.replace(/[A-Za-z0-9 _\-.{}]/g, '');
-        if (bad) return `Contains disallowed characters: ${[...new Set(bad)].join(' ')}`;
+        if (bad) return `Characters not allowed: ${[...new Set(bad)].join(' ')}`;
     }
     const tokens = [...pattern.matchAll(/\{([^}]+)\}/g)].map(m => m[1].split(':')[0]);
     for (const name of tokens) {
         if (_OVERLAY_ONLY_SET.has(name))
-            return `{${name}} is not allowed in naming patterns (overlay only)`;
+            return `{${name}} is not allowed in naming patterns`;
         if (!_NAMING_VAR_SET.has(name) && name !== 'num' && !_ALL_VAR_SET.has(name))
             return `Unknown variable {${name}}`;
     }
