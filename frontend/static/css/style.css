@@ -567,6 +567,27 @@ body {
     gap: 0.5rem;
 }
 
+/* Import button in nav */
+.nav-import-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 2px solid var(--border-color);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color var(--transition-base), background var(--transition-base);
+    flex-shrink: 0;
+}
+
+.nav-import-btn:hover {
+    color: var(--primary-color);
+    background: var(--primary-glow);
+}
+
 /* Event bell button */
 .event-bell {
     position: relative;
