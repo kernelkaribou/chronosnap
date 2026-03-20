@@ -3,6 +3,7 @@ Image capture service - handles capturing images from HTTP and RTSP streams
 """
 import subprocess
 import os
+import re
 from typing import Dict, Any, Optional
 import logging
 
@@ -72,6 +73,9 @@ def capture_image(job: Dict[str, Any]) -> tuple[bool, Optional[str]]:
             num=count_val,
             **dt_vars,
         )
+
+        # Sanitize resolved filename: replace chars unsafe across OS/filesystem types
+        filename = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', filename)
         filename += ".jpg"
         
         # Create hierarchical directory structure: job/year/month/day/hour/

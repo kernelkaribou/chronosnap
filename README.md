@@ -405,19 +405,21 @@ Most variables work in both contexts. A few are specific to one:
 | `{datetime}` | Full date and time | `2026-03-19 23:14:00` | Both |
 | `{month}` | Month, zero-padded | `03` | Both |
 | `{day}` | Day of month, zero-padded | `19` | Both |
-| `{hour}` | Hour, 24-hour format | `23` | Both |
+| `{hour}` | Hour, 24-hour (00-23) | `23` | Both |
+| `{minute}` | Minute (00-59) | `14` | Both |
+| `{second}` | Second (00-59) | `00` | Both |
 | `{frame}` | Current frame number | `1` | Overlay only |
 | `{total_frames}` | Total number of frames | `500` | Overlay only |
+
+Naming patterns are validated to reject characters that are unsafe across filesystems (`< > : " / \ | ? *`). Variables like `{time}` and `{datetime}` that expand to colons and spaces are automatically sanitized in filenames. To build a custom time format that is always filename-safe, use the individual components: `{hour}{minute}{second}`.
 
 ### Naming Pattern Examples
 
 Configure the default pattern in **Settings → Default Naming Pattern**, or override per-job when creating a capture job.
 
-- **Default pattern:** `{job_name}_{count}_{timestamp}` → `MyJob_000001_20260319_231400.jpg`
+- **Default:** `{job_name}_{count}_{timestamp}` → `MyJob_000001_20260319_231400.jpg`
 - **Date parts:** `{job_name}_{month}-{day}_{count}` → `MyJob_03-19_000001.jpg`
-- **Hourly folders:** Use `{hour}` in the pattern to group by hour of day
-
-> **Note:** `{time}` and `{datetime}` contain colons and spaces which may cause issues on some filesystems. Prefer `{timestamp}` for filenames.
+- **Custom time:** `{job_name}_{count}_{hour}{minute}{second}` → `MyJob_000001_231400.jpg`
 
 ### Text Overlay Examples
 
@@ -425,7 +427,7 @@ Enable text overlay when building a timelapse video. Each variable is resolved p
 
 - **Date stamp:** `{job_name} — {date} {time}` → `MyJob — 2026-03-19 23:14:00`
 - **Frame counter:** `Frame {frame} of {total_frames}` → `Frame 1 of 500`
-- **Compact:** `{month}/{day} {time}` → `03/19 23:14:00`
+- **Compact:** `{month}/{day} {hour}:{minute}` → `03/19 23:14`
 
 ---
 

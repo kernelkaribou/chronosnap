@@ -24,6 +24,8 @@ const TEMPLATE_VARS = [
     { name: 'month',        ctx: 'both' },
     { name: 'day',          ctx: 'both' },
     { name: 'hour',         ctx: 'both' },
+    { name: 'minute',       ctx: 'both' },
+    { name: 'second',       ctx: 'both' },
     { name: 'frame',        ctx: 'overlay' },
     { name: 'total_frames', ctx: 'overlay' },
 ];
@@ -4426,14 +4428,21 @@ function buildNamingExample(pattern, jobName) {
     const pad = (n) => (n + '').padStart(2, '0');
     const ts = now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate())
         + '_' + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds());
+    const dateStr = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+    const timeStr = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
     return pattern
         .replace('{job_name}', jobName)
         .replace('{count}', '000001')
         .replace(/\{num(?::0?(\d+)d)?\}/, '000001')
         .replace('{timestamp}', ts)
+        .replace('{date}', dateStr)
+        .replace('{time}', timeStr)
+        .replace('{datetime}', dateStr + ' ' + timeStr)
         .replace('{month}', pad(now.getMonth() + 1))
         .replace('{day}', pad(now.getDate()))
-        .replace('{hour}', pad(now.getHours()));
+        .replace('{hour}', pad(now.getHours()))
+        .replace('{minute}', pad(now.getMinutes()))
+        .replace('{second}', pad(now.getSeconds()));
 }
 
 function updateNamingPreview() {

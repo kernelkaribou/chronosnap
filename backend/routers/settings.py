@@ -142,6 +142,12 @@ async def update_naming_pattern(body: dict):
     pattern = body.get('naming_pattern', '').strip()
     if not pattern:
         raise HTTPException(status_code=400, detail="naming_pattern must not be empty")
+
+    from ..helpers.template_vars import validate_naming_pattern
+    err = validate_naming_pattern(pattern)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+
     try:
         now = to_iso(get_now())
         with get_db() as conn:
