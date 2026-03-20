@@ -4422,6 +4422,8 @@ async function executeImport() {
     }
 }
 
+let _savedNamingPattern = '';
+
 async function loadNamingPattern() {
     try {
         const result = await apiRequest('/settings/naming-pattern');
@@ -4429,6 +4431,7 @@ async function loadNamingPattern() {
     } catch (e) {
         document.getElementById('default-naming-pattern').value = '{job_name}_{count}_{timestamp}';
     }
+    _savedNamingPattern = document.getElementById('default-naming-pattern').value;
     updateSettingsNamingPreview();
 }
 
@@ -4442,6 +4445,8 @@ async function saveNamingPattern() {
     try {
         await apiRequest('/settings/naming-pattern', { method: 'PUT', body: { naming_pattern: pattern } });
         showNotification('Default naming pattern updated', 'success');
+        _savedNamingPattern = pattern;
+        updateSettingsNamingPreview();
     } catch (error) {
         showNotification(error.message || 'Failed to update naming pattern', 'error');
     }
@@ -4486,10 +4491,14 @@ function updateNamingPreview() {
 }
 
 function updateSettingsNamingPreview() {
-    const pattern = document.getElementById('default-naming-pattern').value || '{job_name}_{count}_{timestamp}';
+    const raw = document.getElementById('default-naming-pattern').value;
+    const pattern = raw || '{job_name}_{count}_{timestamp}';
     const el = document.getElementById('settings-naming-preview');
     if (el) el.textContent = `Example: ${buildNamingExample(pattern, 'MyJob')}.jpg`;
-    showNamingValidation(el, document.getElementById('default-naming-pattern').value);
+    const err = validateNamingPattern(raw);
+    if (err && el) el.innerHTML = `<span style="color:var(--danger,#ef4444);">${err}</span>`;
+    const btn = document.getElementById('save-naming-pattern-btn');
+    if (btn) btn.disabled = !!err || raw === _savedNamingPattern || !raw.trim();
 }
 
 async function showCreateJobModal() {
