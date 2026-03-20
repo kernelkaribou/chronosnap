@@ -37,17 +37,6 @@ class JobCreate(BaseModel):
     framerate: int = Field(default=30, gt=0)
     naming_pattern: Optional[str] = None
     time_window_enabled: bool = Field(default=False, description="Enable daily time window for captures")
-
-    @field_validator('naming_pattern')
-    @classmethod
-    def check_naming_pattern(cls, v):
-        if v is None:
-            return v
-        from .helpers.template_vars import validate_naming_pattern
-        err = validate_naming_pattern(v)
-        if err:
-            raise ValueError(err)
-        return v
     time_window_start: Optional[str] = Field(None, description="Start time in HH:MM format (e.g., '08:00')")
     time_window_end: Optional[str] = Field(None, description="End time in HH:MM format (e.g., '20:00')")
     warning_threshold: int = Field(default=3, ge=1, le=50, description="Consecutive failures before warning state")
@@ -68,6 +57,17 @@ class JobCreate(BaseModel):
     def validate_url(cls, v):
         if not v.startswith(('http://', 'https://', 'rtsp://', 'rtsps://', '/dev/video')):
             raise ValueError("URL must start with http://, https://, rtsp://, rtsps://, or /dev/video")
+        return v
+
+    @field_validator('naming_pattern')
+    @classmethod
+    def check_naming_pattern(cls, v):
+        if v is None:
+            return v
+        from .helpers.template_vars import validate_naming_pattern
+        err = validate_naming_pattern(v)
+        if err:
+            raise ValueError(err)
         return v
     
     @model_validator(mode='after')

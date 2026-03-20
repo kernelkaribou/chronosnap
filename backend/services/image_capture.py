@@ -74,7 +74,7 @@ def capture_image(job: Dict[str, Any]) -> tuple[bool, Optional[str]]:
             **dt_vars,
         )
 
-        # Sanitize resolved filename: replace chars unsafe across OS/filesystem types
+        # Defense-in-depth: sanitize resolved filename in case job_name contains unsafe chars
         filename = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', filename)
         filename += ".jpg"
         
