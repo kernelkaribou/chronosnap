@@ -393,25 +393,25 @@ Ideal for yearly comparisons, landscape changes, or long-duration monitoring.
 
 ChronoSnap uses template variables in two places: **capture naming patterns** (file names for saved images) and **text overlays** (burned-in text on timelapse frames). Variables are wrapped in curly braces and replaced with real values at capture or build time.
 
-Most variables work in both naming patterns and text overlays. A few are specific to one — see the **Available In** column:
+Most variables work in both naming patterns and text overlays. A few are specific to one — see the **Context** column:
 
-| Variable | Description | Example | Available In |
+| Variable | Description | Example | Context |
 |---|---|---|---|
-| `{job_name}` | Name of the capture job | `MyJob` | Naming, Overlay |
+| `{job_name}` | Name of the capture job | `MyJob` | Both |
 | `{count}` | Zero-padded capture count | `000001` | Naming |
-| `{timestamp}` | Compact date and time (filename-safe) | `20260319_231400` | Naming, Overlay |
-| `{date}` | Date | `2026-03-19` | Naming, Overlay |
-| `{time}` | Time | `23:14:00` | Naming, Overlay |
-| `{datetime}` | Full date and time | `2026-03-19 23:14:00` | Naming, Overlay |
-| `{month}` | Month, zero-padded | `03` | Naming, Overlay |
-| `{day}` | Day of month, zero-padded | `19` | Naming, Overlay |
-| `{hour}` | Hour, 24-hour (00-23) | `23` | Naming, Overlay |
-| `{minute}` | Minute (00-59) | `14` | Naming, Overlay |
-| `{second}` | Second (00-59) | `00` | Naming, Overlay |
+| `{timestamp}` | Compact datetime (YYYYmmdd_HHMMSS) | `20260319_231400` | Both |
+| `{date}` | Date (YYYY-MM-DD) | `2026-03-19` | Both |
+| `{time}` | Time (HH:MM:SS) | `23:14:00` | Overlay |
+| `{datetime}` | Full date and time | `2026-03-19 23:14:00` | Overlay |
+| `{month}` | Month, zero-padded | `03` | Both |
+| `{day}` | Day of month, zero-padded | `19` | Both |
+| `{hour}` | Hour, 24-hour (00-23) | `23` | Both |
+| `{minute}` | Minute (00-59) | `14` | Both |
+| `{second}` | Second (00-59) | `00` | Both |
 | `{frame}` | Current frame number | `1` | Overlay |
 | `{total_frames}` | Total number of frames | `500` | Overlay |
 
-Naming patterns are validated to reject characters that are unsafe across filesystems (`< > : " / \ | ? *`). Variables like `{time}` and `{datetime}` that expand to colons and spaces are automatically sanitized in filenames. To build a custom time format that is always filename-safe, use the individual components: `{hour}{minute}{second}`.
+Naming patterns are validated to reject characters that are unsafe across filesystems (`< > : " / \ | ? *`). Use `{hour}{minute}{second}` to build a filesystem-safe time format for filenames. `{time}` and `{datetime}` are overlay-only because they contain colons and spaces.
 
 ### Naming Pattern Examples
 
