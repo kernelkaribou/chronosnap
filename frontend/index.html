@@ -184,10 +184,6 @@
                     <button class="btn btn-sm share-filter-btn" id="video-share-filter" onclick="toggleVideoSharedFilter()" title="Show shared only">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
                     </button>
-                    <button class="btn btn-secondary compare-btn btn-sm" id="compare-mode-btn" onclick="toggleCompareMode()" title="Compare timelapses">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="10" height="18" rx="1"/><rect x="13" y="3" width="10" height="18" rx="1"/><polyline points="3,17 6,12 9,17"/><polyline points="15,17 18,12 21,17"/></svg>
-                        Compare
-                    </button>
                     <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;">
                         <select class="gallery-filter-select" id="video-sort" onchange="filterVideos()">
                             <option value="created_desc">Newest</option>
@@ -200,20 +196,29 @@
                         <span class="gallery-count" id="video-count"></span>
                     </div>
                 </div>
-                <div class="compare-mode-banner" id="compare-mode-banner" style="display:none;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="10" height="18" rx="1"/><rect x="13" y="3" width="10" height="18" rx="1"/><polyline points="3,17 6,12 9,17"/><polyline points="15,17 18,12 21,17"/></svg>
-                    <span id="compare-mode-text">Select 2-4 timelapses to compare</span>
-                    <button class="btn btn-accent btn-sm" id="compare-launch-btn" style="display:none;" onclick="openComparison()">Compare</button>
-                    <button class="btn btn-secondary btn-sm" onclick="toggleCompareMode()">Cancel</button>
-                </div>
                 <div class="selection-controls" id="video-selection-controls" style="display: none;">
-                    <span class="selection-clear" onclick="videoSelection.clear()" title="Clear selection">&times;</span>
-                    <span id="video-selected-count">0 selected</span>
-                    <button class="btn btn-accent btn-sm" id="video-compare-selected-btn" style="display:none;" onclick="openComparison()">Compare</button>
-                    <button class="btn btn-secondary btn-sm" id="video-toggle-selection-btn" onclick="videoSelection.toggleAll()">Select Visible</button>
-                    <button class="btn btn-sm btn-fav-bulk" onclick="videoSelection.favoriteSelected(true)" title="Favorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Favorite</button>
-                    <button class="btn btn-sm btn-unfav-bulk" onclick="videoSelection.favoriteSelected(false)" title="Unfavorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Unfavorite</button>
-                    <button class="btn btn-danger btn-sm" onclick="videoSelection.deleteSelected()">Delete Selected</button>
+                    <span class="ribbon-left" id="video-selected-count">0 selected</span>
+                    <div class="ribbon-center">
+                        <button class="ribbon-icon-btn" id="video-toggle-selection-btn" onclick="videoSelection.toggleAll()" title="Select Visible">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                        </button>
+                        <button class="ribbon-icon-btn" id="video-compare-btn" onclick="openComparison()" title="Compare (select 2-4)" disabled>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="10" height="18" rx="1"/><rect x="13" y="3" width="10" height="18" rx="1"/><polyline points="3,17 6,12 9,17"/><polyline points="15,17 18,12 21,17"/></svg>
+                        </button>
+                        <button class="ribbon-icon-btn" id="video-fav-btn" onclick="videoSelection.smartFavorite()" title="Favorite">
+                            <svg class="fav-heart-icon" viewBox="0 0 24 24" width="16" height="16"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                        </button>
+                        <button class="ribbon-icon-btn" onclick="downloadSelectedVideos()" title="Download">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        </button>
+                        <button class="ribbon-icon-btn ribbon-icon-danger" onclick="videoSelection.deleteSelected()" title="Delete">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                        </button>
+                    </div>
+                    <button class="ribbon-clear" onclick="videoSelection.clear()" title="Clear selection">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        Clear
+                    </button>
                 </div>
                 <div id="videos-list" class="videos-grid"></div>
             </div>
@@ -221,7 +226,7 @@
             <!-- Video Detail View -->
             <div id="video-detail-view" class="view">
                 <div class="view-header detail-view-header">
-                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <div class="video-detail-header-left">
                         <button class="btn btn-secondary btn-sm" onclick="navigateTo('/timelapses')" title="Back to Timelapses" style="display:inline-flex;align-items:center;gap:0.35rem;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                             Timelapses
@@ -236,6 +241,7 @@
                             <button id="video-rename-cancel" class="btn btn-sm btn-secondary" style="display:none;" onclick="cancelVideoRename()">Cancel</button>
                         </h2>
                     </div>
+                    <div class="video-detail-actions" id="video-detail-actions"></div>
                 </div>
                 <div class="detail-view-body">
                     <div class="detail-page-content">
@@ -247,7 +253,6 @@
                             </div>
                             <dl class="video-detail-meta" id="video-detail-meta"></dl>
                             <div id="video-detail-tags"></div>
-                            <div class="video-detail-actions" id="video-detail-actions"></div>
                         </div>
                     </div>
                 </div>
@@ -285,16 +290,6 @@
                     <button class="btn btn-sm fav-filter-btn" id="captures-fav-filter" onclick="toggleCaptureFavoritesFilter()" title="Show favorites only">
                         <svg class="fav-heart-icon" viewBox="0 0 24 24" width="16" height="16"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                     </button>
-                    <button class="btn btn-sm compare-btn" onclick="openCompareModal()">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 0.25rem;">
-                            <rect x="2" y="2" width="20" height="20" rx="2"/>
-                            <path d="M12 2v20"/>
-                            <circle cx="7.5" cy="7.5" r="1.5"/>
-                            <path d="M6 18l3-4 2 2 4-5 3 4"/>
-                            <rect x="12" y="2" width="10" height="20" rx="2" fill="currentColor" opacity="0.15" stroke="none"/>
-                        </svg>
-                        Compare
-                    </button>
                     <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;">
                         <select class="gallery-filter-select" id="captures-sort-order" onchange="applyCaptureSortAndFilter()">
                             <option value="desc">Newest</option>
@@ -311,12 +306,25 @@
 
                 <!-- Selection controls -->
                 <div class="selection-controls" id="selection-controls" style="display: none;">
-                    <span class="selection-clear" onclick="captureSelection.clear()" title="Clear selection">&times;</span>
-                    <span id="captures-selected-count">0 selected</span>
-                    <button class="btn btn-secondary btn-sm" id="toggle-selection-btn" onclick="captureSelection.toggleAll()">Select Visible</button>
-                    <button class="btn btn-sm btn-fav-bulk" onclick="captureSelection.favoriteSelected(true)" title="Favorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Favorite</button>
-                    <button class="btn btn-sm btn-unfav-bulk" onclick="captureSelection.favoriteSelected(false)" title="Unfavorite selected"><svg class="fav-heart-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Unfavorite</button>
-                    <button class="btn btn-danger btn-sm" onclick="captureSelection.deleteSelected()">Delete Selected</button>
+                    <span class="ribbon-left" id="captures-selected-count">0 selected</span>
+                    <div class="ribbon-center">
+                        <button class="ribbon-icon-btn" id="toggle-selection-btn" onclick="captureSelection.toggleAll()" title="Select Visible">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                        </button>
+                        <button class="ribbon-icon-btn" id="capture-compare-btn" onclick="openCaptureCompareFromSelection()" title="Compare (select 1 or 2)" disabled>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M12 2v20"/><circle cx="7.5" cy="7.5" r="1.5"/><path d="M6 18l3-4 2 2 4-5 3 4"/></svg>
+                        </button>
+                        <button class="ribbon-icon-btn" id="capture-fav-btn" onclick="captureSelection.smartFavorite()" title="Favorite">
+                            <svg class="fav-heart-icon" viewBox="0 0 24 24" width="16" height="16"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                        </button>
+                        <button class="ribbon-icon-btn ribbon-icon-danger" onclick="captureSelection.deleteSelected()" title="Delete">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                        </button>
+                    </div>
+                    <button class="ribbon-clear" onclick="captureSelection.clear()" title="Clear selection">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        Clear
+                    </button>
                 </div>
 
                 <!-- Grid -->

@@ -2,7 +2,7 @@
 Processed videos API endpoints
 """
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import os
@@ -234,6 +234,60 @@ async def list_videos(
             video_dict['share_token'] = share_map.get(video_dict['id'])
             videos.append(video_dict)
         return videos
+
+
+@router.get("/download-multiple")
+async def download_multiple_videos(ids: str = Query(..., description="Comma-separated video IDs")):
+    """Download one or more videos. Single video returns mp4, multiple returns a streamed zip."""
+    try:
+        video_ids = [int(x.strip()) for x in ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid video ID format")
+
+    if not video_ids:
+        raise HTTPException(status_code=400, detail="No video IDs provided")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        placeholders = ",".join("?" for _ in video_ids)
+        cursor.execute(
+            f"SELECT id, file_path, name, status FROM processed_videos WHERE id IN ({placeholders})",
+            video_ids
+        )
+        videos = [dict_from_row(row) for row in cursor.fetchall()]
+
+    completed = [v for v in videos if v["status"] == "completed"]
+    if not completed:
+        raise HTTPException(status_code=400, detail="No completed videos found for the given IDs")
+
+    ready = []
+    for v in completed:
+        abs_path = resolve_video_path(v["file_path"])
+        if os.path.exists(abs_path):
+            ready.append((v["name"], abs_path))
+
+    if not ready:
+        raise HTTPException(status_code=404, detail="No video files found on disk")
+
+    if len(ready) == 1:
+        name, path = ready[0]
+        return FileResponse(path, media_type="video/mp4", filename=f"{name}.mp4")
+
+    import zipstream
+    import time
+
+    ts = int(time.time())
+    zip_name = f"timelapses_{ts}.zip"
+
+    zs = zipstream.ZipStream(compress_type=zipstream.ZIP_STORED)
+    for name, path in ready:
+        zs.add_path(path, f"{name}.mp4")
+
+    return StreamingResponse(
+        zs,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_name}"'},
+    )
 
 
 @router.get("/{video_id}", response_model=VideoResponse)
