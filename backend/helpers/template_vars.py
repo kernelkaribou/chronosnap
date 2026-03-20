@@ -46,8 +46,14 @@ DYNAMIC_OVERLAY_VARS = [
 # Characters that are unsafe across Windows, macOS, Linux, NFS, SMB
 _UNSAFE_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
+# All known variable names (any context)
+_ALL_VAR_NAMES = {n for n, _, _ in TEMPLATE_VARS} | {'num'}
+
 # Valid variable tokens for naming patterns (includes legacy 'num' alias)
 _NAMING_VAR_NAMES = {n for n, _, c in TEMPLATE_VARS if c in ('both', 'naming')} | {'num'}
+
+# Variables that exist but are overlay-only
+_OVERLAY_ONLY_NAMES = {n for n, _, c in TEMPLATE_VARS if c == 'overlay'}
 
 # Matches {var_name} tokens in a pattern
 _TOKEN_RE = re.compile(r'\{([^}]+)\}')
@@ -80,10 +86,14 @@ def validate_naming_pattern(pattern: str) -> str | None:
 
     # Validate that all {tokens} are recognised variable names
     tokens = _TOKEN_RE.findall(pattern)
-    # Allow legacy {num:06d} style
     for tok in tokens:
-        name = tok.split(':')[0]
+        name = tok.split(':')[0]  # handle legacy {num:06d} style
         if name not in _NAMING_VAR_NAMES:
+            if name in _OVERLAY_ONLY_NAMES:
+                return (
+                    f"{{{name}}} is not allowed in naming patterns "
+                    f"(overlay only)"
+                )
             valid = ', '.join(f'{{{n}}}' for n in sorted(_NAMING_VAR_NAMES))
             return f"Unknown variable {{{tok}}}. Valid variables: {valid}"
 
