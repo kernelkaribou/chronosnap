@@ -20,7 +20,9 @@ TEMPLATE_VARS = [
     ('date',         'Date (YYYY-MM-DD)',                  'both'),
     ('time',         'Time (HH:MM:SS)',                    'overlay'),
     ('datetime',     'Full date and time',                 'overlay'),
+    ('year',         'Year (YYYY)',                         'both'),
     ('month',        'Month (01-12)',                      'both'),
+    ('full_month',   'Full month name (January)',           'both'),
     ('day',          'Day of month (01-31)',               'both'),
     ('hour',         'Hour, 24-hour (00-23)',              'both'),
     ('minute',       'Minute (00-59)',                     'both'),
@@ -35,8 +37,8 @@ TEXT_OVERLAY_VARS   = [(n, d) for n, d, c in TEMPLATE_VARS if c in ('both', 'ove
 
 # Overlay variables that change per-frame (used to decide if re-render is needed)
 DYNAMIC_OVERLAY_VARS = [
-    'date', 'time', 'datetime', 'timestamp', 'month', 'day', 'hour',
-    'minute', 'second', 'frame', 'total_frames',
+    'date', 'time', 'datetime', 'timestamp', 'year', 'month', 'full_month',
+    'day', 'hour', 'minute', 'second', 'frame', 'total_frames',
 ]
 
 # ---------------------------------------------------------------------------
@@ -104,21 +106,23 @@ def build_datetime_vars(dt):
     Callers can pass the full dict to str.format(); unused keys are ignored.
     """
     return {
-        'timestamp': dt.strftime('%Y%m%d_%H%M%S'),
-        'date':      dt.strftime('%Y-%m-%d'),
-        'time':      dt.strftime('%H:%M:%S'),
-        'datetime':  dt.strftime('%Y-%m-%d %H:%M:%S'),
-        'month':     dt.strftime('%m'),
-        'day':       dt.strftime('%d'),
-        'hour':      dt.strftime('%H'),
-        'minute':    dt.strftime('%M'),
-        'second':    dt.strftime('%S'),
+        'timestamp':  dt.strftime('%Y%m%d_%H%M%S'),
+        'date':       dt.strftime('%Y-%m-%d'),
+        'time':       dt.strftime('%H:%M:%S'),
+        'datetime':   dt.strftime('%Y-%m-%d %H:%M:%S'),
+        'year':       dt.strftime('%Y'),
+        'month':      dt.strftime('%m'),
+        'full_month': dt.strftime('%B'),
+        'day':        dt.strftime('%d'),
+        'hour':       dt.strftime('%H'),
+        'minute':     dt.strftime('%M'),
+        'second':     dt.strftime('%S'),
     }
 
 
 _DATETIME_KEYS = (
     'timestamp', 'date', 'time', 'datetime',
-    'month', 'day', 'hour', 'minute', 'second',
+    'year', 'month', 'full_month', 'day', 'hour', 'minute', 'second',
 )
 
 
