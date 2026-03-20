@@ -2729,16 +2729,26 @@ function sharePopoverHTML(videoId, shareToken) {
     `;
 }
 
+let _popoverCloseListener = null;
+
+function _removePopoverCloseListener() {
+    if (_popoverCloseListener) {
+        document.removeEventListener('click', _popoverCloseListener);
+        _popoverCloseListener = null;
+    }
+}
+
 function _attachPopoverCloseListener() {
+    _removePopoverCloseListener();
     const popover = document.getElementById('share-popover');
     if (!popover) return;
-    const close = (ev) => {
+    _popoverCloseListener = (ev) => {
         if (!popover.contains(ev.target) && !ev.target.closest('.share-popover-wrap')) {
             popover.style.display = 'none';
-            document.removeEventListener('click', close);
+            _removePopoverCloseListener();
         }
     };
-    setTimeout(() => document.addEventListener('click', close), 0);
+    setTimeout(() => document.addEventListener('click', _popoverCloseListener), 0);
 }
 
 function toggleSharePopover(e) {
@@ -2747,7 +2757,11 @@ function toggleSharePopover(e) {
     if (!popover) return;
     const isOpen = popover.style.display !== 'none';
     popover.style.display = isOpen ? 'none' : '';
-    if (!isOpen) _attachPopoverCloseListener();
+    if (isOpen) {
+        _removePopoverCloseListener();
+    } else {
+        _attachPopoverCloseListener();
+    }
 }
 
 function shareToggleHTML(videoId, shareToken) {
