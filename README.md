@@ -403,7 +403,9 @@ Most variables work in both naming patterns and text overlays. A few are specifi
 | `{date}` | Date (YYYY-MM-DD) | `2026-03-19` | Both |
 | `{time}` | Time (HH:MM:SS) | `23:14:00` | Overlay |
 | `{datetime}` | Full date and time | `2026-03-19 23:14:00` | Overlay |
+| `{year}` | Four-digit year | `2026` | Both |
 | `{month}` | Month, zero-padded | `03` | Both |
+| `{full_month}` | Full month name | `March` | Both |
 | `{day}` | Day of month, zero-padded | `19` | Both |
 | `{hour}` | Hour, 24-hour (00-23) | `23` | Both |
 | `{minute}` | Minute (00-59) | `14` | Both |
@@ -418,7 +420,8 @@ Naming patterns are validated to reject characters that are unsafe across filesy
 Configure the default pattern in **Settings → Default Naming Pattern**, or override per-job when creating a capture job.
 
 - **Default:** `{job_name}_{count}_{timestamp}` → `MyJob_000001_20260319_231400.jpg`
-- **Date parts:** `{job_name}_{month}-{day}_{count}` → `MyJob_03-19_000001.jpg`
+- **Date parts:** `{job_name}_{year}-{month}-{day}_{count}` → `MyJob_2026-03-19_000001.jpg`
+- **Month name:** `{job_name}_{full_month}_{count}` → `MyJob_March_000001.jpg`
 - **Custom time:** `{job_name}_{count}_{hour}{minute}{second}` → `MyJob_000001_231400.jpg`
 
 ### Text Overlay Examples
@@ -428,6 +431,7 @@ Enable text overlay when building a timelapse video. Each variable is resolved p
 - **Date stamp:** `{job_name} - {date} {time}` → `MyJob - 2026-03-19 23:14:00`
 - **Frame counter:** `Frame {frame} of {total_frames}` → `Frame 1 of 500`
 - **Compact:** `{month}/{day} {hour}:{minute}` → `03/19 23:14`
+- **Month name:** `{full_month} {day}, {year}` → `March 19, 2026`
 
 ---
 
