@@ -4726,6 +4726,11 @@ async function duplicateJob(jobId) {
                     // Mount widget first, then populate
                     initCreateJobOverlay();
                     writeOverlayConfig('create-ab', overlayConfig);
+                    // Trigger preview render — writeOverlayConfig sets checkbox
+                    // programmatically which doesn't fire the change event
+                    if (overlayConfig.enabled) {
+                        fetchOverlayPreviewFromUrl('create-ab');
+                    }
                 } catch (e) { /* ignore invalid overlay config */ }
             }
         } else {
