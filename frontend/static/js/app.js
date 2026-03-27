@@ -1240,12 +1240,10 @@ function renderJobWarning(job) {
     if (job.status !== 'warning' || !job.warning_message) return '';
     return `
         <div class="info-box" style="margin-bottom: 1rem; border-left-color: var(--warning-color);">
-            <div class="info-box">
-                <div>
-                    <strong style="color: var(--warning-color);">Capture Warning</strong>
-                    <p class="mt-sm text-base">${escapeHtml(job.warning_message)}</p>
-                    <p class="mt-sm text-xs" style="opacity: 0.8;">Verify settings for the job. The job will continue attempting captures in case this is a temporary issue.</p>
-                </div>
+            <div>
+                <strong style="color: var(--warning-color);">Capture Warning</strong>
+                <p class="mt-sm text-base">${escapeHtml(job.warning_message)}</p>
+                <p class="mt-sm text-xs" style="opacity: 0.8;">Verify settings for the job. The job will continue attempting captures in case this is a temporary issue.</p>
             </div>
         </div>
     `;
@@ -1255,12 +1253,10 @@ function renderJobTimeWindow(job) {
     if (!job.time_window_enabled) return '';
     return `
         <div class="info-box" style="margin: 1rem 0;">
-            <div class="info-box">
-                <div>
-                    <strong>Time Window Enabled</strong>
-                    <p class="mt-sm text-base">Captures only happen between <strong>${job.time_window_start}</strong> and <strong>${job.time_window_end}</strong> each day.</p>
-                    ${job.time_window_start > job.time_window_end ? '<p class="mt-sm text-xs" style="opacity: 0.8;">This window spans midnight (e.g., captures from evening to early morning)</p>' : ''}
-                </div>
+            <div>
+                <strong>Time Window Enabled</strong>
+                <p class="mt-sm text-base">Captures only happen between <strong>${job.time_window_start}</strong> and <strong>${job.time_window_end}</strong> each day.</p>
+                ${job.time_window_start > job.time_window_end ? '<p class="mt-sm text-xs" style="opacity: 0.8;">This window spans midnight (e.g., captures from evening to early morning)</p>' : ''}
             </div>
         </div>
     `;
