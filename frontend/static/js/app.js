@@ -1036,6 +1036,10 @@ function renderJobs(jobs) {
             ${thumbnailHtml}
             <div class="job-card-header">
                 <div class="job-card-title">${escapeHtml(job.name)}</div>
+                <div class="job-card-status-row">
+                    <span class="job-status ${statusClass}">${statusLabel}</span>
+                    ${job.auto_build_enabled ? '<span class="auto-build-badge">Auto-Build</span>' : ''}
+                </div>
             </div>
             <div class="job-info">
                 <div><strong>${job.stream_type === 'device' ? 'Device:' : 'Stream URL:'}</strong> <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; max-width: 250px; vertical-align: bottom;">${escapeHtml(job.stream_type === 'device' ? job.url : getStreamHost(job.url))}</span></div>
@@ -1061,11 +1065,7 @@ function renderJobs(jobs) {
                     <span class="stat-inline">${formatBytes(job.storage_size)}</span>
                 </div>
             </div>
-            <div class="job-card-badges">
-                ${job.tags && job.tags.length ? `<div class="card-tags">${job.tags.map(t => tagChipHTML(t, true)).join('')}</div>` : ''}
-                ${job.auto_build_enabled ? '<span class="auto-build-badge">Auto-Build</span>' : ''}
-                <span class="job-status ${statusClass}">${statusLabel}</span>
-            </div>
+            ${job.tags && job.tags.length ? `<div class="job-card-tags"><div class="card-tags">${job.tags.map(t => tagChipHTML(t, true)).join('')}</div></div>` : ''}
         </div>
     `;
     }).join('');
@@ -1240,12 +1240,10 @@ function renderJobWarning(job) {
     if (job.status !== 'warning' || !job.warning_message) return '';
     return `
         <div class="info-box" style="margin-bottom: 1rem; border-left-color: var(--warning-color);">
-            <div class="info-box">
-                <div>
-                    <strong style="color: var(--warning-color);">Capture Warning</strong>
-                    <p class="mt-sm text-base">${escapeHtml(job.warning_message)}</p>
-                    <p class="mt-sm text-xs" style="opacity: 0.8;">Verify settings for the job. The job will continue attempting captures in case this is a temporary issue.</p>
-                </div>
+            <div>
+                <strong style="color: var(--warning-color);">Capture Warning</strong>
+                <p class="mt-sm text-base">${escapeHtml(job.warning_message)}</p>
+                <p class="mt-sm text-xs" style="opacity: 0.8;">Verify settings for the job. The job will continue attempting captures in case this is a temporary issue.</p>
             </div>
         </div>
     `;
@@ -1255,12 +1253,10 @@ function renderJobTimeWindow(job) {
     if (!job.time_window_enabled) return '';
     return `
         <div class="info-box" style="margin: 1rem 0;">
-            <div class="info-box">
-                <div>
-                    <strong>Time Window Enabled</strong>
-                    <p class="mt-sm text-base">Captures only happen between <strong>${job.time_window_start}</strong> and <strong>${job.time_window_end}</strong> each day.</p>
-                    ${job.time_window_start > job.time_window_end ? '<p class="mt-sm text-xs" style="opacity: 0.8;">This window spans midnight (e.g., captures from evening to early morning)</p>' : ''}
-                </div>
+            <div>
+                <strong>Time Window Enabled</strong>
+                <p class="mt-sm text-base">Captures only happen between <strong>${job.time_window_start}</strong> and <strong>${job.time_window_end}</strong> each day.</p>
+                ${job.time_window_start > job.time_window_end ? '<p class="mt-sm text-xs" style="opacity: 0.8;">This window spans midnight (e.g., captures from evening to early morning)</p>' : ''}
             </div>
         </div>
     `;
@@ -4726,6 +4722,11 @@ async function duplicateJob(jobId) {
                     // Mount widget first, then populate
                     initCreateJobOverlay();
                     writeOverlayConfig('create-ab', overlayConfig);
+                    // Trigger preview render — writeOverlayConfig sets checkbox
+                    // programmatically which doesn't fire the change event
+                    if (overlayConfig.enabled) {
+                        fetchOverlayPreviewFromUrl('create-ab');
+                    }
                 } catch (e) { /* ignore invalid overlay config */ }
             }
         } else {
