@@ -1161,13 +1161,17 @@ body.detail-view-active .view.active {
 }
 
 .job-card-header {
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
 }
 
-.job-card-badges {
+.job-card-status-row {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
     gap: 0.4rem;
+    margin-top: 0.4rem;
+}
+
+.job-card-tags {
     margin-top: auto;
     padding-top: 0.75rem;
 }

@@ -1036,6 +1036,10 @@ function renderJobs(jobs) {
             ${thumbnailHtml}
             <div class="job-card-header">
                 <div class="job-card-title">${escapeHtml(job.name)}</div>
+                <div class="job-card-status-row">
+                    <span class="job-status ${statusClass}">${statusLabel}</span>
+                    ${job.auto_build_enabled ? '<span class="auto-build-badge">Auto-Build</span>' : ''}
+                </div>
             </div>
             <div class="job-info">
                 <div><strong>${job.stream_type === 'device' ? 'Device:' : 'Stream URL:'}</strong> <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; max-width: 250px; vertical-align: bottom;">${escapeHtml(job.stream_type === 'device' ? job.url : getStreamHost(job.url))}</span></div>
@@ -1061,11 +1065,7 @@ function renderJobs(jobs) {
                     <span class="stat-inline">${formatBytes(job.storage_size)}</span>
                 </div>
             </div>
-            <div class="job-card-badges">
-                ${job.tags && job.tags.length ? `<div class="card-tags">${job.tags.map(t => tagChipHTML(t, true)).join('')}</div>` : ''}
-                ${job.auto_build_enabled ? '<span class="auto-build-badge">Auto-Build</span>' : ''}
-                <span class="job-status ${statusClass}">${statusLabel}</span>
-            </div>
+            ${job.tags && job.tags.length ? `<div class="job-card-tags"><div class="card-tags">${job.tags.map(t => tagChipHTML(t, true)).join('')}</div></div>` : ''}
         </div>
     `;
     }).join('');
