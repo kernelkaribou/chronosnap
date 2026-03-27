@@ -843,6 +843,9 @@ body.detail-view-active .view.active {
 }
 
 .detail-sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
     padding-bottom: var(--space-xl);
 }
 
