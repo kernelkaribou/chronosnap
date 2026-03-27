@@ -875,7 +875,6 @@ body.detail-view-active .view.active {
 
 .detail-main {
     min-width: 0;
-    overflow-y: auto;
     padding-bottom: var(--space-xl);
     padding-right: var(--space-sm);
 }
