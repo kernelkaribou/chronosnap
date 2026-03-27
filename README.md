@@ -47,6 +47,8 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
   - [Security and Privacy](#security-and-privacy)
   - [API](#api)
 - [Considerations](#considerations)
+- [Integrations](#integrations)
+  - [Home Assistant](#home-assistant)
 - [Technology Stack](#technology-stack)
 
 ---
@@ -118,6 +120,10 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 - Mobile-friendly responsive design
 - Built-in API documentation (Swagger UI) at `/docs`
 - Version check with update notifications
+
+### Integrations
+
+- [Home Assistant custom integration](https://github.com/kernelkaribou/ha-chronosnap) for automating timelapses based on entity state changes
 
 ---
 
@@ -555,6 +561,33 @@ Deleting a job removes all its captures, videos, thumbnails, and database record
 ### Network and Camera Reliability
 
 Cameras and network streams can be intermittent. ChronoSnap tracks consecutive failures per job and sends webhook notifications when the warning threshold is reached. When a job recovers, a recovery notification is sent. The capture scheduler continues retrying on the configured interval.
+
+---
+
+## Integrations
+
+### Home Assistant
+
+[ha-chronosnap](https://github.com/kernelkaribou/ha-chronosnap) is a custom Home Assistant integration that turns entity state changes into automated timelapses. Install it via HACS or manually, connect it to your ChronoSnap instance, and create profiles that start and stop capture jobs based on any entity in Home Assistant.
+
+**Use cases:**
+
+- Timelapse every 3D print from start to finish, triggered by your printer's status entity
+- Capture what happens when the house is detected as empty
+- Timelapse a storm rolling through your backyard, triggered by a weather sensor
+- Record a garage workbench session whenever a presence sensor activates
+
+**Key features:**
+
+- UI-based configuration with entity and state selectors
+- Multiple profiles running simultaneously on different cameras
+- Fixed interval or target duration capture modes
+- Start delay, stop debounce, and exclude states for reliable triggering
+- Auto-cleanup of jobs and raw frames after video build
+- Per-profile sensors for status and capture count in Home Assistant
+- Server-level sensors for jobs, videos, captures, and disk usage
+
+See the [ha-chronosnap README](https://github.com/kernelkaribou/ha-chronosnap#readme) for installation and configuration details.
 
 ---
 
