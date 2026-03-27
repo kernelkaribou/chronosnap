@@ -439,9 +439,7 @@ body {
 
 @media (max-width: 640px) {
     .navbar {
-        padding: 1rem;
-        flex-direction: column;
-        align-items: stretch;
+        padding: 0.75rem 1rem;
     }
 }
 
@@ -483,7 +481,6 @@ body {
 @media (max-width: 640px) {
     .nav-brand h1 {
         font-size: 1.25rem;
-        text-align: center;
     }
 }
 
@@ -491,13 +488,6 @@ body {
     display: flex;
     gap: 1rem;
     flex-wrap: wrap;
-}
-
-@media (max-width: 640px) {
-    .nav-links {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
 }
 
 .nav-link {
@@ -565,6 +555,84 @@ body {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+}
+
+/* Hamburger button — hidden on desktop */
+.nav-hamburger {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    width: 36px;
+    height: 36px;
+    padding: 6px;
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+}
+
+.nav-hamburger span {
+    display: block;
+    height: 2px;
+    background: var(--text-secondary);
+    border-radius: 1px;
+    transition: all var(--transition-fast);
+}
+
+.nav-hamburger:hover {
+    border-color: var(--primary-color);
+}
+
+.nav-hamburger:hover span {
+    background: var(--primary-color);
+}
+
+/* Animated open state */
+.navbar.nav-open .nav-hamburger span:nth-child(1) {
+    transform: translateY(6px) rotate(45deg);
+}
+
+.navbar.nav-open .nav-hamburger span:nth-child(2) {
+    opacity: 0;
+}
+
+.navbar.nav-open .nav-hamburger span:nth-child(3) {
+    transform: translateY(-6px) rotate(-45deg);
+}
+
+@media (max-width: 640px) {
+    .navbar {
+        flex-wrap: wrap;
+    }
+
+    .nav-hamburger {
+        display: flex;
+        order: 2;
+        margin-left: auto;
+    }
+
+    .nav-brand {
+        order: 1;
+    }
+
+    .nav-links {
+        display: none;
+        flex-direction: column;
+        width: 100%;
+        order: 4;
+        gap: 0.25rem;
+        padding-top: 0.75rem;
+    }
+
+    .navbar.nav-open .nav-links {
+        display: flex;
+    }
+
+    .nav-actions {
+        order: 3;
+        margin-left: 0.5rem;
+    }
 }
 
 /* Import button in nav */

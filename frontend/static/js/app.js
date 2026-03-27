@@ -98,6 +98,14 @@ function toggleTheme() {
     renderThemePresets();
 }
 
+function toggleMobileNav() {
+    document.querySelector('.navbar').classList.toggle('nav-open');
+}
+
+function closeMobileNav() {
+    document.querySelector('.navbar').classList.remove('nav-open');
+}
+
 function setThemePreset(preset) {
     document.documentElement.setAttribute('data-preset', preset);
     localStorage.setItem('themePreset', preset);
@@ -805,6 +813,7 @@ function setupNavigation() {
     document.querySelectorAll('.nav-link').forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
+            closeMobileNav();
             navigateTo(e.currentTarget.getAttribute('href'));
         });
     });
@@ -1168,7 +1177,7 @@ function renderJobSidebar(job, capturesData) {
 
 function getJobStatusDisplay(job) {
     if (job.status === 'warning') return { statusLabel: 'Warning', statusClass: 'warning' };
-    if (job.status === 'sleeping') return { statusLabel: 'Sleeping (Outside Time Window)', statusClass: 'sleeping' };
+    if (job.status === 'sleeping') return { statusLabel: 'Sleeping', statusClass: 'sleeping' };
     if (job.status === 'disabled') return { statusLabel: 'Disabled', statusClass: 'disabled' };
     return { statusLabel: job.status.charAt(0).toUpperCase() + job.status.slice(1), statusClass: job.status };
 }
