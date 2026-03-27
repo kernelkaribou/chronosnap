@@ -872,29 +872,6 @@ function switchView(view, pushState = true) {
     if (view === 'captures') loadCaptures();
 }
 
-// Size detail panels so sidebar + main fill viewport below the header.
-// Called after loading a detail view and on window resize.
-function sizeDetailPanels() {
-    const sidebar = document.querySelector('.detail-sidebar');
-    const main = document.querySelector('.detail-main');
-    if (!sidebar || !main) return;
-    
-    // Measure where the panels start
-    const top = sidebar.getBoundingClientRect().top;
-    const available = window.innerHeight - top;
-    
-    sidebar.style.maxHeight = available + 'px';
-    sidebar.style.overflowY = 'auto';
-    main.style.maxHeight = available + 'px';
-    main.style.overflowY = 'auto';
-}
-
-window.addEventListener('resize', () => {
-    if (currentView === 'job-detail' || currentView === 'video-detail') {
-        sizeDetailPanels();
-    }
-});
-
 // Jobs
 let allJobs = [];
 
@@ -1443,7 +1420,6 @@ function renderJobAutoBuildSection(job) {
 function initJobDetailPostRender(job, capturesData) {
     const content = document.getElementById('job-detail-content');
     content.scrollTop = 0;
-    sizeDetailPanels();
     initializeEditTimePickers(job);
     initEditJobOverlay(job);
     

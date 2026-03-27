@@ -843,6 +843,9 @@ body.detail-view-active .view.active {
 }
 
 .detail-sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
     padding-bottom: var(--space-xl);
 }
 
@@ -3503,6 +3506,32 @@ body.detail-view-active .view.active {
     gap: 0.5rem;
     align-items: center;
 }
+
+.compare-btn {
+    background: var(--secondary-color);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    padding: 0.5rem 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.compare-btn:hover {
+    background: var(--secondary-hover);
+}
+
+.compare-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 .source-row > input.form-control,
 .source-row > select.form-control,
 .source-row > .compare-btn,
