@@ -15,6 +15,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: dev
     
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -47,6 +49,7 @@ jobs:
           
           **Security Check:** Run `safety check` to verify no known vulnerabilities.
         branch: update-dependencies
+        base: dev
         delete-branch: true
     
     - name: Auto-merge Pull Request
