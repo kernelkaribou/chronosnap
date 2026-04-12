@@ -118,6 +118,7 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 
 - Dark and light mode with five visual themes (Cosmic, Ocean, Forest, Sunset, Minimal)
 - Mobile-friendly responsive design
+- Installable as a Progressive Web App (PWA) on mobile and desktop
 - Built-in API documentation (Swagger UI) at `/docs`
 - Version check with update notifications
 
