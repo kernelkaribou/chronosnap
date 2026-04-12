@@ -10,7 +10,7 @@
 **ChronoSnap** (formerly timelapse-manager) is a self-hosted, Docker-based timelapse capture management application. It captures images from RTSP streams, USB webcams, and Raspberry Pi camera modules on configurable schedules, then builds timelapse videos from those captures.
 
 - **Repository:** `kernelkaribou/chronosnap`
-- **Current version:** Read from `VERSION` file at repo root (currently 3.3.0)
+- **Current version:** Read from `VERSION` file at repo root (currently 3.4.0)
 - **Stack:** FastAPI (Python 3.11) backend, vanilla JS frontend, SQLite (WAL mode), Docker
 - **Single container** serving on port 8080
 
@@ -22,8 +22,8 @@
 
 ```
 main  ← production releases (tagged with version)
-  ↑ PR (manual, created by maintainer only)
-dev   ← integration branch, all feature work merges here
+  ↑ PR (manual, created by maintainer ONLY — never Copilot)
+dev   ← integration branch, ALL work merges here first
   ↑ merge (after testing)
 feature/xyz  ← individual feature branches
 fix/xyz      ← bug fix branches
@@ -31,17 +31,19 @@ fix/xyz      ← bug fix branches
 
 ### Rules
 
-1. **Always branch from the latest `dev`**: `git checkout dev && git pull origin dev`
-2. **Feature branches** use `feature/<name>` prefix, bug fixes use `fix/<name>`
-3. **Merge to dev** when feature is tested — delete the feature branch after merge
-4. **Never create PRs** — the maintainer will manually create PRs from dev → main when ready
-5. **Never push directly to main**
-6. **Delete feature branches** after merging to dev
-7. **Commit messages** follow conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`
-8. **Co-author trailer** required on all commits:
+1. **All work happens on branches off `dev`** — never commit directly to dev or main
+2. **Always branch from the latest `dev`**: `git checkout dev && git pull origin dev`
+3. **Feature branches** use `feature/<name>` prefix, bug fixes use `fix/<name>`
+4. **Merge to dev** when feature is tested — delete the feature branch after merge
+5. **Never create PRs** — the maintainer will manually create PRs from dev → main when ready. Do not create PRs or suggest PR creation until the maintainer explicitly asks.
+6. **Never push directly to main**
+7. **Delete feature branches** after merging to dev (both local and remote)
+8. **Commit messages** follow conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`
+9. **Co-author trailer** required on all commits:
    ```
    Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
    ```
+10. **Before a release**, remind the maintainer to bump the `VERSION` file appropriately (semver: patch for fixes, minor for features, major for breaking changes)
 
 ### Starting New Work
 
@@ -74,12 +76,12 @@ backend/
 ├── utils.py                # Module (get_now, to_iso, parse_iso) — do NOT convert to a package
 ├── helpers/
 │   ├── db_helpers.py       # get_or_404, ensure_column, enrich_capture, normalize_favorite
-│   ├── file_helpers.py     # validate_writable_directory, delete_capture_file, delete_video_files
+│   ├── file_helpers.py     # validate_writable_directory, delete_capture_file, delete_video_files, cleanup_empty_parents
 │   └── template_vars.py    # Shared template variable definitions
 ├── routers/
 │   ├── jobs.py             # Job CRUD, scheduling config
 │   ├── captures.py         # Capture listing, preview, metadata
-│   ├── videos.py           # Video listing, build, share links
+│   ├── videos.py           # Video listing, build, share links, GIF download
 │   ├── settings.py         # App settings
 │   ├── storage.py          # Storage dashboard data
 │   ├── tags.py             # Tag CRUD, assignment
@@ -91,7 +93,7 @@ backend/
     ├── capture_scheduler.py    # Main scheduler loop (10s cycle)
     ├── capture_backends/       # V4L2, libcamera backends
     ├── image_capture.py        # RTSP/HTTP capture logic
-    ├── video_processor.py      # FFmpeg timelapse builder
+    ├── video_processor.py      # FFmpeg timelapse builder + GIF generation
     ├── auto_builder.py         # Auto-build after capture sessions
     ├── text_overlay.py         # Text overlay on videos
     ├── job_state.py            # Job state machine logic
@@ -109,18 +111,21 @@ backend/
 
 ```
 frontend/
-├── index.html              # Single-page app shell (~1,154 lines)
+├── index.html              # Single-page app shell (~1,172 lines)
+├── manifest.json           # PWA manifest (app name, icons, standalone display)
+├── sw.js                   # Service worker (network-first caching)
 └── static/
     ├── css/
-    │   └── style.css       # All styles (~4,336 lines), CSS variables, dark/light themes
+    │   └── style.css       # All styles (~4,533 lines), CSS variables, dark/light themes
     └── js/
-        └── app.js          # All client-side logic (~7,949 lines), global scope
+        └── app.js          # All client-side logic (~8,020 lines), global scope
 ```
 
 - **Client-side routing** via History API (`_routeMap`, `_viewToPath`)
 - **All JS functions are global scope** — no ES modules (onclick handlers reference globals)
 - **CSS variables** for theming (dark/light mode), cosmic nebula default theme
 - **No build tools** — vanilla JS/CSS served directly
+- **PWA support** — manifest.json, service worker, iOS safe area handling
 
 ### Key Frontend Utilities
 
@@ -155,9 +160,12 @@ docker compose -f docker-compose.dev.yml logs -f
 # For JS/CSS-only changes: Ctrl+Shift+R in browser (hard refresh)
 ```
 
+There is **no unit test suite** — testing is manual via Docker. For mobile testing, push to dev so GHCR builds the `dev` tag, then deploy on a network-accessible machine.
+
 ### Production Notes
 
 - Image: `ghcr.io/kernelkaribou/chronosnap:latest`
+- Dev image: `ghcr.io/kernelkaribou/chronosnap:dev` (built automatically on push to dev)
 - Runs as non-root with PUID/PGID
 - `cap_drop: ALL` + only CHOWN/SETUID/SETGID
 - Health check: `GET /health`
@@ -178,6 +186,17 @@ Version is managed via the `VERSION` file at repo root.
 - Backend reads it via `get_app_version()` in `app.py`
 - Frontend cache-busts using `__APP_VERSION__` placeholder in `index.html`, replaced at serve time
 - To bump version: edit `VERSION` file only
+- **Reminder:** Before the maintainer merges dev → main for a release, prompt them to bump VERSION appropriately (semver)
+
+---
+
+## Development Preferences
+
+- **Minimize dependencies** — prefer using what's already available (e.g., FFmpeg) over adding new packages. Only add a dependency if the benefit clearly justifies the maintenance cost.
+- **Keep it simple** — straightforward solutions over clever ones. This is a self-hosted timelapse app, not enterprise software.
+- **No backwards compatibility concerns** — this is a new application, no legacy migration needed.
+- **Pace changes** — don't rush through implementation. Check in with the maintainer before merging feature branches to dev. Let them test before moving on.
+- **Docker for everything** — all building, testing, and validation happens through Docker. Do not use local tooling (node, python, etc.) outside the container.
 
 ---
 
@@ -187,7 +206,7 @@ Version is managed via the `VERSION` file at repo root.
 - **Subtext inline** with labels (flex baseline alignment), not below as separate blocks
 - **No parentheses** around hint subtext
 - **Prefer colors over emojis** for status indicators
-- **No backwards compatibility concerns** — this is a new application
+- **Popover pattern** — reusable across features (share links, GIF options): absolute-positioned panel below trigger button with card background, border, shadow
 
 ---
 
@@ -217,6 +236,14 @@ Version is managed via the `VERSION` file at repo root.
 - `{year}` and `{full_month}` template variables
 - Share popover cleanup, import button in nav bar
 
+### v3.4.0
+- Version file fix (VERSION now matches release tags)
+- Empty folder cleanup on timelapse delete (cleanup_empty_parents helper)
+- Mobile viewport fixes for captures date filter and timelapse detail views
+- PWA support (manifest.json, service worker, iOS safe area handling)
+- GIF download from timelapse detail page (FFmpeg two-pass palette, 128-color, min(720, half-source) width)
+- README features section condensed
+
 ---
 
 ## Pending / In-Progress Ideas
@@ -224,3 +251,4 @@ Version is managed via the `VERSION` file at repo root.
 - **Split app.js into module files** — natural section boundaries identified; planned approach is split source files + concatenation build script (no behavior change)
 - **UI theming standardization** — CSS token system, button semantics, inline style extraction, mobile responsiveness, theme presets
 - **Home Assistant integration** — full plan exists for HACS-installable custom integration (`ha-chronosnap`)
+- **Animated WebP export** — as an alternative to GIF for significantly smaller file sizes (same FFmpeg pipeline, different output format)

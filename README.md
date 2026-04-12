@@ -64,6 +64,7 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 - Build timelapse videos from any capture range with adjustable resolution, framerate, and quality
 - Text overlay with dynamic variables (job name, timestamp, frame count, etc.) and live preview
 - Automated builds on configurable intervals with webhook notifications
+- Download timelapses as GIF with loop/single-play options
 - Background processing with real-time progress tracking
 
 ### Organization and Sharing
