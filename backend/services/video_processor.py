@@ -459,18 +459,6 @@ def generate_gif(video_path: str, loop: bool = True, fps: int = 10) -> str:
         if not os.path.exists(gif_path):
             raise RuntimeError("GIF file was not created")
 
-        # Pass 3: lossy optimization with gifsicle
-        optimized_path = os.path.join(tmp_dir, "optimized.gif")
-        cmd_opt = [
-            'gifsicle', '--optimize=3', '--lossy=80',
-            gif_path, '-o', optimized_path
-        ]
-        result = subprocess.run(cmd_opt, capture_output=True, text=True, timeout=120)
-        if result.returncode == 0 and os.path.exists(optimized_path):
-            os.replace(optimized_path, gif_path)
-        else:
-            logger.warning(f"gifsicle optimization skipped: {result.stderr[:200]}")
-
         return gif_path
 
     except Exception:
