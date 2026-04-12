@@ -8,6 +8,10 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#080510">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="stylesheet" href="/static/css/style.css?v=__APP_VERSION__">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1159,5 +1163,10 @@
 
     <script src="/static/js/chart.min.js"></script>
     <script src="/static/js/app.js?v=__APP_VERSION__"></script>
+    <script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js');
+    }
+    </script>
 </body>
 </html>

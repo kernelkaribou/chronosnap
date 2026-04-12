@@ -1,0 +1,27 @@
+{
+  "name": "ChronoSnap",
+  "short_name": "ChronoSnap",
+  "description": "Self-hosted timelapse capture management",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080510",
+  "theme_color": "#080510",
+  "icons": [
+    {
+      "src": "/static/img/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/img/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/img/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

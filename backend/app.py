@@ -58,8 +58,10 @@ class AccessLogFilter(logging.Filter):
 
             ]):
                 return False
-            # Suppress static file requests, root path, and health checks
+            # Suppress static file requests, root path, health checks, and PWA assets
             if '"GET /static/' in message or '"GET / HTTP' in message or '"GET /health' in message:
+                return False
+            if '"GET /sw.js' in message or '"GET /manifest.json' in message:
                 return False
         return True
 
@@ -187,6 +189,20 @@ async def read_root():
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "scheduler": scheduler.is_running() if scheduler else False}
+
+
+@app.get("/manifest.json")
+async def manifest():
+    """Serve PWA manifest"""
+    from fastapi.responses import FileResponse
+    return FileResponse("frontend/manifest.json", media_type="application/manifest+json")
+
+
+@app.get("/sw.js")
+async def service_worker():
+    """Serve service worker from root scope"""
+    from fastapi.responses import FileResponse
+    return FileResponse("frontend/sw.js", media_type="application/javascript")
 
 
 @app.get("/{path:path}")
