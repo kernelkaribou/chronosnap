@@ -277,8 +277,14 @@
                 
                 <!-- Filters -->
                 <div class="gallery-filters">
-                    <input type="datetime-local" class="gallery-filter-input" id="captures-start-time" onchange="applyCaptureSortAndFilter()" title="From">
-                    <input type="datetime-local" class="gallery-filter-input" id="captures-end-time" onchange="applyCaptureSortAndFilter()" title="To">
+                    <div class="gallery-date-group">
+                        <label class="gallery-date-label" for="captures-start-time">From</label>
+                        <input type="datetime-local" class="gallery-filter-input" id="captures-start-time" onchange="applyCaptureSortAndFilter()" title="From">
+                    </div>
+                    <div class="gallery-date-group">
+                        <label class="gallery-date-label" for="captures-end-time">To</label>
+                        <input type="datetime-local" class="gallery-filter-input" id="captures-end-time" onchange="applyCaptureSortAndFilter()" title="To">
+                    </div>
                     <select class="gallery-filter-select" id="captures-job-filter" onchange="applyCaptureSortAndFilter()" style="flex:1;min-width:0;">
                         <option value="">All Jobs</option>
                     </select>
