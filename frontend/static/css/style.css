@@ -4224,6 +4224,29 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 }
 
 /* Share popover */
+.gif-popover-wrap {
+    position: relative;
+}
+.gif-popover {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.5rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    padding: 0.75rem;
+    min-width: 180px;
+    z-index: 100;
+}
+.gif-popover-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
 .share-popover-wrap {
     position: relative;
 }

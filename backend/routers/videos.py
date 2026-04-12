@@ -10,7 +10,7 @@ import logging
 
 from ..models import VideoCreate, VideoResponse
 from ..database import get_db, dict_from_row
-from ..services.video_processor import process_video, cancel_video
+from ..services.video_processor import process_video, cancel_video, generate_gif
 from ..utils import get_now, to_iso
 from ..helpers.db_helpers import get_or_404, normalize_favorite, fetch_tags_for_videos, fetch_tags_for_jobs, set_video_tags
 from ..helpers.template_vars import build_datetime_vars
@@ -512,6 +512,47 @@ async def download_video(video_id: int):
             media_type="video/mp4",
             filename=f"{vid['name']}.mp4"
         )
+
+
+@router.get("/{video_id}/gif")
+async def download_video_as_gif(
+    video_id: int,
+    loop: bool = Query(True, description="Loop the GIF infinitely"),
+):
+    """Generate and download a video as an optimized GIF"""
+    import shutil
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        vid = get_or_404(cursor,
+            "SELECT file_path, name, status FROM processed_videos WHERE id = ?",
+            (video_id,), "Video not found")
+
+        if vid['status'] != "completed":
+            raise HTTPException(status_code=400, detail="Video is not ready")
+
+        abs_path = resolve_video_path(vid['file_path'])
+        if not os.path.exists(abs_path):
+            raise HTTPException(status_code=404, detail="Video file not found on disk")
+
+    try:
+        gif_path = generate_gif(abs_path, loop=loop)
+    except Exception as e:
+        logger.error(f"GIF generation failed for video {video_id}: {e}")
+        raise HTTPException(status_code=500, detail="GIF generation failed")
+
+    tmp_dir = os.path.dirname(gif_path)
+
+    def cleanup():
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    from starlette.background import BackgroundTask
+    return FileResponse(
+        gif_path,
+        media_type="image/gif",
+        filename=f"{vid['name']}.gif",
+        background=BackgroundTask(cleanup),
+    )
 
 
 @router.post("/{video_id}/cancel")

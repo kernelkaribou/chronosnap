@@ -3,6 +3,7 @@ Video processing service - builds timelapse videos from captured images
 """
 import subprocess
 import os
+import tempfile
 import threading
 from typing import Dict, Any, Optional
 import logging
@@ -390,3 +391,53 @@ def backfill_thumbnails():
     from ..helpers.file_helpers import resolve_video_path
     for row in rows:
         generate_thumbnail(row[0], resolve_video_path(row[1]))
+
+
+def generate_gif(video_path: str, loop: bool = True, fps: int = 10, width: int = 480) -> str:
+    """Convert a video to an optimized GIF using two-pass palette method.
+    Returns the path to the generated GIF file (caller must clean up)."""
+    if not os.path.exists(video_path):
+        raise FileNotFoundError(f"Video file not found: {video_path}")
+
+    tmp_dir = tempfile.mkdtemp(prefix="chronosnap_gif_")
+    palette_path = os.path.join(tmp_dir, "palette.png")
+    gif_path = os.path.join(tmp_dir, "output.gif")
+
+    vf_scale = f"fps={fps},scale={width}:-1:flags=lanczos"
+
+    try:
+        # Pass 1: generate optimized palette
+        cmd_palette = [
+            'ffmpeg', '-loglevel', 'error',
+            '-i', video_path,
+            '-vf', f'{vf_scale},palettegen=stats_mode=diff',
+            '-y', palette_path
+        ]
+        result = subprocess.run(cmd_palette, capture_output=True, text=True, timeout=120)
+        if result.returncode != 0:
+            raise RuntimeError(f"Palette generation failed: {result.stderr[:300]}")
+
+        # Pass 2: create GIF using palette
+        loop_flag = '0' if loop else '-1'
+        cmd_gif = [
+            'ffmpeg', '-loglevel', 'error',
+            '-i', video_path,
+            '-i', palette_path,
+            '-filter_complex', f'[0:v]{vf_scale}[v];[v][1:v]paletteuse=dither=sierra2_4a',
+            '-loop', loop_flag,
+            '-y', gif_path
+        ]
+        result = subprocess.run(cmd_gif, capture_output=True, text=True, timeout=300)
+        if result.returncode != 0:
+            raise RuntimeError(f"GIF generation failed: {result.stderr[:300]}")
+
+        if not os.path.exists(gif_path):
+            raise RuntimeError("GIF file was not created")
+
+        return gif_path
+
+    except Exception:
+        # Clean up on failure
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
