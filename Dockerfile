@@ -11,6 +11,7 @@ RUN apt-get update && \
     ca-certificates \
     fonts-dejavu-core \
     fonts-liberation \
+    gifsicle \
     unrar-free && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*

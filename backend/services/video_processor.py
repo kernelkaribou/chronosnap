@@ -431,11 +431,11 @@ def generate_gif(video_path: str, loop: bool = True, fps: int = 10) -> str:
     vf_scale = f"fps={fps},scale={width}:-1:flags=lanczos"
 
     try:
-        # Pass 1: generate optimized palette
+        # Pass 1: generate optimized 128-color palette
         cmd_palette = [
             'ffmpeg', '-loglevel', 'error',
             '-i', video_path,
-            '-vf', f'{vf_scale},palettegen=stats_mode=diff',
+            '-vf', f'{vf_scale},palettegen=max_colors=128:stats_mode=diff',
             '-y', palette_path
         ]
         result = subprocess.run(cmd_palette, capture_output=True, text=True, timeout=120)
@@ -458,6 +458,18 @@ def generate_gif(video_path: str, loop: bool = True, fps: int = 10) -> str:
 
         if not os.path.exists(gif_path):
             raise RuntimeError("GIF file was not created")
+
+        # Pass 3: lossy optimization with gifsicle
+        optimized_path = os.path.join(tmp_dir, "optimized.gif")
+        cmd_opt = [
+            'gifsicle', '--optimize=3', '--lossy=80',
+            gif_path, '-o', optimized_path
+        ]
+        result = subprocess.run(cmd_opt, capture_output=True, text=True, timeout=120)
+        if result.returncode == 0 and os.path.exists(optimized_path):
+            os.replace(optimized_path, gif_path)
+        else:
+            logger.warning(f"gifsicle optimization skipped: {result.stderr[:200]}")
 
         return gif_path
 
