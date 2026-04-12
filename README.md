@@ -19,8 +19,6 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 
 ---
 
-## Table of Contents
-
 - [Features](#features)
 - [Installation](#installation)
   - [Quick Start](#quick-start)
