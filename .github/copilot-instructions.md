@@ -45,6 +45,18 @@ fix/xyz      ← bug fix branches
    ```
 10. **Before a release**, remind the maintainer to bump the `VERSION` file appropriately (semver: patch for fixes, minor for features, major for breaking changes)
 
+### Keeping dev in Sync with main
+
+After the maintainer merges dev → main for a release, merge main back into dev to pick up the merge commit. This prevents the branches from showing false divergence.
+
+```bash
+git checkout dev
+git pull origin dev
+git fetch origin main
+git merge origin/main   # fast-forward or merge commit — either is fine
+git push origin dev
+```
+
 ### Starting New Work
 
 ```bash
