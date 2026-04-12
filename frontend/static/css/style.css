@@ -424,7 +424,6 @@ body {
     background: var(--surface-color);
     border-bottom: 1px solid var(--border-color);
     padding: 0.75rem 2rem;
-    padding-top: calc(0.75rem + var(--safe-area-top, 0px));
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -438,9 +437,29 @@ body {
     transition: background var(--transition-base), border-color var(--transition-base);
 }
 
+/* iOS PWA: extend navbar behind status bar with safe area padding.
+   Workaround for iOS 26.1 WebKit bug #301994 where env() returns 0.
+   -webkit-touch-callout scopes this to Safari/iOS only (not Android).
+   max() guarantees a minimum inset even when env() is broken. */
+@supports (-webkit-touch-callout: none) {
+    @media (display-mode: standalone) {
+        .navbar {
+            padding-top: calc(0.75rem + max(env(safe-area-inset-top, 0px), 59px));
+        }
+    }
+}
+
 @media (max-width: 640px) {
     .navbar {
         padding: 0.75rem 1rem;
+    }
+}
+
+@supports (-webkit-touch-callout: none) {
+    @media (display-mode: standalone) and (max-width: 640px) {
+        .navbar {
+            padding-top: calc(0.75rem + max(env(safe-area-inset-top, 0px), 59px));
+        }
     }
 }
 

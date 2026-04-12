@@ -12,13 +12,6 @@
     <meta name="theme-color" content="#080510">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <script>
-    // iOS standalone PWA: set safe-area fallback immediately to prevent layout flash
-    // Workaround for iOS 26.1 WebKit bug where env(safe-area-inset-top) returns 0
-    if (window.navigator.standalone) {
-        document.documentElement.style.setProperty('--safe-area-top', '47px');
-    }
-    </script>
     <link rel="stylesheet" href="/static/css/style.css?v=__APP_VERSION__">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1173,22 +1166,6 @@
     <script>
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js');
-    }
-    // Refine iOS safe area: if env() actually works, remove the JS fallback
-    if (window.navigator.standalone) {
-        requestAnimationFrame(function() {
-            var t = document.createElement('div');
-            t.style.paddingTop = 'env(safe-area-inset-top, 0px)';
-            t.style.position = 'fixed';
-            t.style.visibility = 'hidden';
-            document.body.appendChild(t);
-            var inset = parseInt(getComputedStyle(t).paddingTop, 10) || 0;
-            t.remove();
-            if (inset > 0) {
-                // env() works — let CSS handle it natively
-                document.documentElement.style.setProperty('--safe-area-top', inset + 'px');
-            }
-        });
     }
     </script>
 </body>
