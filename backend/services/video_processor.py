@@ -393,11 +393,36 @@ def backfill_thumbnails():
         generate_thumbnail(row[0], resolve_video_path(row[1]))
 
 
-def generate_gif(video_path: str, loop: bool = True, fps: int = 10, width: int = 480) -> str:
+def _probe_video_width(video_path: str) -> Optional[int]:
+    """Get the width of a video file using ffprobe."""
+    try:
+        cmd = [
+            'ffprobe', '-v', 'error',
+            '-select_streams', 'v:0',
+            '-show_entries', 'stream=width',
+            '-of', 'csv=p=0',
+            video_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode == 0 and result.stdout.strip():
+            return int(result.stdout.strip())
+    except Exception:
+        pass
+    return None
+
+
+def generate_gif(video_path: str, loop: bool = True, fps: int = 10) -> str:
     """Convert a video to an optimized GIF using two-pass palette method.
+    Width is min(720, half the source resolution).
     Returns the path to the generated GIF file (caller must clean up)."""
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Video file not found: {video_path}")
+
+    source_width = _probe_video_width(video_path)
+    if source_width:
+        width = min(720, source_width // 2)
+    else:
+        width = 720
 
     tmp_dir = tempfile.mkdtemp(prefix="chronosnap_gif_")
     palette_path = os.path.join(tmp_dir, "palette.png")
