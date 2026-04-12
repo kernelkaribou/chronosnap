@@ -10,11 +10,11 @@ import logging
 
 from ..models import VideoCreate, VideoResponse
 from ..database import get_db, dict_from_row
-from ..services.video_processor import process_video, cancel_video
+from ..services.video_processor import process_video, cancel_video, generate_gif
 from ..utils import get_now, to_iso
 from ..helpers.db_helpers import get_or_404, normalize_favorite, fetch_tags_for_videos, fetch_tags_for_jobs, set_video_tags
 from ..helpers.template_vars import build_datetime_vars
-from ..helpers.file_helpers import delete_video_files, resolve_video_path, make_relative
+from ..helpers.file_helpers import delete_video_files, resolve_video_path, make_relative, cleanup_empty_parents
 from ..services.event_service import add_event
 
 router = APIRouter()
@@ -514,6 +514,47 @@ async def download_video(video_id: int):
         )
 
 
+@router.get("/{video_id}/gif")
+async def download_video_as_gif(
+    video_id: int,
+    loop: bool = Query(True, description="Loop the GIF infinitely"),
+):
+    """Generate and download a video as an optimized GIF"""
+    import shutil
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        vid = get_or_404(cursor,
+            "SELECT file_path, name, status FROM processed_videos WHERE id = ?",
+            (video_id,), "Video not found")
+
+        if vid['status'] != "completed":
+            raise HTTPException(status_code=400, detail="Video is not ready")
+
+        abs_path = resolve_video_path(vid['file_path'])
+        if not os.path.exists(abs_path):
+            raise HTTPException(status_code=404, detail="Video file not found on disk")
+
+    try:
+        gif_path = generate_gif(abs_path, loop=loop)
+    except Exception as e:
+        logger.error(f"GIF generation failed for video {video_id}: {e}")
+        raise HTTPException(status_code=500, detail="GIF generation failed")
+
+    tmp_dir = os.path.dirname(gif_path)
+
+    def cleanup():
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    from starlette.background import BackgroundTask
+    return FileResponse(
+        gif_path,
+        media_type="image/gif",
+        filename=f"{vid['name']}.gif",
+        background=BackgroundTask(cleanup),
+    )
+
+
 @router.post("/{video_id}/cancel")
 async def cancel_video_build(video_id: int):
     """Cancel an in-progress video build"""
@@ -545,8 +586,9 @@ async def delete_video(video_id: int):
         abs_thumb = resolve_video_path(vid['thumbnail_path']) if vid.get('thumbnail_path') else None
         delete_video_files(abs_fp, abs_thumb)
         
-        # Clean up empty parent folder
-        _cleanup_empty_folder(abs_fp)
+        # Clean up empty parent folders
+        from ..services.import_service import get_timelapses_path
+        cleanup_empty_parents(abs_fp, get_timelapses_path())
         
         # Delete record
         cursor.execute("DELETE FROM processed_videos WHERE id = ?", (video_id,))
@@ -580,7 +622,9 @@ async def delete_multiple_videos(request: BulkDeleteRequest):
                 resolve_video_path(vid['file_path']),
                 resolve_video_path(vid['thumbnail_path']) if vid.get('thumbnail_path') else None
             )
-            _cleanup_empty_folder(resolve_video_path(vid['file_path']))
+            _abs_fp = resolve_video_path(vid['file_path'])
+            from ..services.import_service import get_timelapses_path
+            cleanup_empty_parents(_abs_fp, get_timelapses_path())
             
             cursor.execute("DELETE FROM processed_videos WHERE id = ?", (video_id,))
             deleted += 1
@@ -643,13 +687,3 @@ async def update_video_tags(video_id: int, request: VideoTagsRequest):
         tags = fetch_tags_for_videos(cursor, [video_id]).get(video_id, [])
         return {"tags": tags}
 
-
-def _cleanup_empty_folder(file_path: str):
-    """Remove parent folder if empty after file deletion"""
-    folder = os.path.dirname(file_path)
-    try:
-        if folder and os.path.isdir(folder) and not os.listdir(folder):
-            os.rmdir(folder)
-            logger.info(f"Removed empty folder: {folder}")
-    except OSError:
-        pass

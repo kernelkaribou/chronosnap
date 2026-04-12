@@ -437,9 +437,29 @@ body {
     transition: background var(--transition-base), border-color var(--transition-base);
 }
 
+/* iOS PWA: extend navbar behind status bar with safe area padding.
+   Workaround for iOS 26.1 WebKit bug #301994 where env() returns 0.
+   -webkit-touch-callout scopes this to Safari/iOS only (not Android).
+   max() guarantees a minimum inset even when env() is broken. */
+@supports (-webkit-touch-callout: none) {
+    @media (display-mode: standalone) {
+        .navbar {
+            padding-top: calc(0.75rem + max(env(safe-area-inset-top, 0px), 59px));
+        }
+    }
+}
+
 @media (max-width: 640px) {
     .navbar {
         padding: 0.75rem 1rem;
+    }
+}
+
+@supports (-webkit-touch-callout: none) {
+    @media (display-mode: standalone) and (max-width: 640px) {
+        .navbar {
+            padding-top: calc(0.75rem + max(env(safe-area-inset-top, 0px), 59px));
+        }
     }
 }
 
@@ -1623,6 +1643,26 @@ body.detail-view-active .view.active {
     flex-shrink: 0;
 }
 
+@media (max-width: 640px) {
+    #video-detail-view .detail-view-header {
+        flex-wrap: wrap;
+    }
+
+    .video-detail-header-left {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .video-detail-actions {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .video-detail-meta {
+        grid-template-columns: auto 1fr;
+    }
+}
+
 .video-detail-meta .job-link {
     color: var(--primary-color);
     text-decoration: none;
@@ -1702,6 +1742,20 @@ body.detail-view-active .view.active {
     border-color: var(--primary-color);
 }
 
+.gallery-date-group {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.gallery-date-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    margin: 0;
+}
+
 .gallery-count {
     font-size: 0.8rem;
     color: var(--text-secondary);
@@ -1734,6 +1788,18 @@ body.detail-view-active .view.active {
     opacity: 0.35;
     pointer-events: none;
     user-select: none;
+}
+
+@media (max-width: 640px) {
+    .toggle-fields {
+        flex-wrap: wrap !important;
+        width: 100%;
+    }
+
+    .toggle-fields input[type="datetime-local"] {
+        flex: 1;
+        min-width: 0;
+    }
 }
 
 .form-group label {
@@ -3573,6 +3639,14 @@ body.detail-view-active .view.active {
     display: flex;
     gap: 0.5rem;
     align-items: center;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+    .source-row > input.form-control,
+    .source-row > select.form-control {
+        flex: 1 1 100%;
+    }
 }
 
 .compare-btn {
@@ -4150,6 +4224,29 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 }
 
 /* Share popover */
+.gif-popover-wrap {
+    position: relative;
+}
+.gif-popover {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.5rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    padding: 0.75rem;
+    min-width: 180px;
+    z-index: 100;
+}
+.gif-popover-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
 .share-popover-wrap {
     position: relative;
 }

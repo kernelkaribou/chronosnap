@@ -19,8 +19,6 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 
 ---
 
-## Table of Contents
-
 - [Features](#features)
 - [Installation](#installation)
   - [Quick Start](#quick-start)
@@ -55,75 +53,37 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 
 ## Features
 
-### Capture and Scheduling
+### Capture
 
-- Schedule captures at any interval from seconds to hours
-- Set a time window within each day (e.g., only capture between 8:00 AM and 6:00 PM)
-- Define start and end dates for the full capture period
-- Supports RTSP/RTSPS streams, HTTP/HTTPS image endpoints, and locally attached cameras
-- Adjustable capture quality and resolution per job
-- Configurable file naming patterns with variables for job name, count, and timestamp
+- Schedule captures from seconds to hours with optional daily time windows and date ranges
+- Supports RTSP/RTSPS streams, HTTP/HTTPS endpoints, and local USB/Raspberry Pi cameras
+- Configurable quality, resolution, and file naming patterns per job
 
 ### Video Building
 
-- Build timelapse videos from any range of captures within a job
-- Adjustable resolution, framerate, and quality levels
-- Text overlay support with customizable font, size, color, position, and opacity
-- Dynamic overlay variables including job name, date, time, frame count, and more
-- Live preview of text overlay before building
+- Build timelapse videos from any capture range with adjustable resolution, framerate, and quality
+- Text overlay with dynamic variables (job name, timestamp, frame count, etc.) and live preview
+- Automated builds on configurable intervals with webhook notifications
+- Download timelapses as GIF with loop/single-play options
 - Background processing with real-time progress tracking
-- Automatic video thumbnail generation
 
-### Automated Builds
+### Organization and Sharing
 
-- Enable per-job auto-build on a configurable interval (hourly to yearly)
-- Automatically compiles new captures since the last build into a video
-- Configurable FPS, quality, resolution, and text overlay for auto-built videos
-- Webhook notifications on build completion
-
-### Import and Export
-
-- Upload images, videos, or archives directly through the browser (drag and drop or file/folder picker)
-- Import from a server-mounted directory path
-- Archive support for ZIP, TAR, GZ, RAR, and 7Z formats with automatic extraction
-- Export jobs as ZIP archives containing all captures, videos, and job metadata
-- Re-import exported archives with automatic detection of job configuration, tags, and naming
-- Stream credentials are redacted from exports for safe sharing
-- Video duplicate detection prevents redundant imports
-
-### Organization and Review
-
-- Tag jobs and videos with custom labels and colors
-- Favorite individual captures and videos for quick access
-- Compare captures side-by-side or with an interactive slider overlay
-- Filter and sort captures by date, favorites, or tags
-- Full-screen image viewer with navigation
-- Responsive layout that works on desktop, tablet, and mobile
-
-### Sharing
-
-- Generate shareable links for completed videos (no authentication required for viewers)
-- Toggle sharing on or off per video
-- Shared links include security headers and content restrictions
-
-### Storage and Monitoring
-
-- Storage dashboard showing per-job breakdowns of capture and video usage
-- Disk usage summary with total, used, and available space
-- Event log tracking job activity, video builds, imports, and system events
-- Webhook integration for alerts on warnings, completions, recoveries, and auto-builds
-- Customizable webhook payload templates with variable substitution (compatible with Home Assistant and other automation platforms)
+- Tags, favorites, filtering, and side-by-side capture comparison
+- Shareable video links with no authentication required for viewers
+- Import/export jobs as archives (ZIP, TAR, GZ, RAR, 7Z) with full metadata preservation
+- Storage dashboard with per-job usage breakdowns and event logging
+- Webhook integration for alerts (compatible with Home Assistant and other platforms)
 
 ### Interface
 
-- Dark and light mode with five visual themes (Cosmic, Ocean, Forest, Sunset, Minimal)
-- Mobile-friendly responsive design
-- Built-in API documentation (Swagger UI) at `/docs`
-- Version check with update notifications
+- Dark and light mode with five visual themes
+- Installable as a Progressive Web App (PWA) on mobile and desktop
+- REST API with built-in Swagger UI at `/docs`
 
 ### Integrations
 
-- [Home Assistant custom integration](https://github.com/kernelkaribou/ha-chronosnap) for automating timelapses based on entity state changes
+- [Home Assistant custom integration](https://github.com/kernelkaribou/ha-chronosnap) for entity-based automation
 
 ---
 

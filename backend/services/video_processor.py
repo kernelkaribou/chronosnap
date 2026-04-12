@@ -3,6 +3,7 @@ Video processing service - builds timelapse videos from captured images
 """
 import subprocess
 import os
+import tempfile
 import threading
 from typing import Dict, Any, Optional
 import logging
@@ -257,7 +258,7 @@ def _update_progress(video_id: int, progress: float):
 
 def cancel_video(video_id: int) -> bool:
     """Cancel an in-progress video build. Kills the process, removes files and DB record."""
-    from ..helpers.file_helpers import resolve_video_path, delete_video_files
+    from ..helpers.file_helpers import resolve_video_path, delete_video_files, cleanup_empty_parents
     
     with _process_lock:
         process = _active_processes.get(video_id)
@@ -282,11 +283,10 @@ def cancel_video(video_id: int) -> bool:
                 abs_fp = resolve_video_path(file_path) if file_path else None
                 abs_thumb = resolve_video_path(thumb_path) if thumb_path else None
                 delete_video_files(abs_fp, abs_thumb)
-                # Delete empty parent folder
+                # Clean up empty parent folders
                 if abs_fp:
-                    parent = os.path.dirname(abs_fp)
-                    if parent and os.path.isdir(parent) and not os.listdir(parent):
-                        os.rmdir(parent)
+                    from .import_service import get_timelapses_path
+                    cleanup_empty_parents(abs_fp, get_timelapses_path())
                 # Remove DB record
                 cursor.execute("DELETE FROM processed_videos WHERE id = ?", (video_id,))
         
@@ -391,3 +391,78 @@ def backfill_thumbnails():
     from ..helpers.file_helpers import resolve_video_path
     for row in rows:
         generate_thumbnail(row[0], resolve_video_path(row[1]))
+
+
+def _probe_video_width(video_path: str) -> Optional[int]:
+    """Get the width of a video file using ffprobe."""
+    try:
+        cmd = [
+            'ffprobe', '-v', 'error',
+            '-select_streams', 'v:0',
+            '-show_entries', 'stream=width',
+            '-of', 'csv=p=0',
+            video_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode == 0 and result.stdout.strip():
+            return int(result.stdout.strip())
+    except Exception:
+        pass
+    return None
+
+
+def generate_gif(video_path: str, loop: bool = True, fps: int = 10) -> str:
+    """Convert a video to an optimized GIF using two-pass palette method.
+    Width is min(720, half the source resolution).
+    Returns the path to the generated GIF file (caller must clean up)."""
+    if not os.path.exists(video_path):
+        raise FileNotFoundError(f"Video file not found: {video_path}")
+
+    source_width = _probe_video_width(video_path)
+    if source_width:
+        width = min(720, source_width // 2)
+    else:
+        width = 720
+
+    tmp_dir = tempfile.mkdtemp(prefix="chronosnap_gif_")
+    palette_path = os.path.join(tmp_dir, "palette.png")
+    gif_path = os.path.join(tmp_dir, "output.gif")
+
+    vf_scale = f"fps={fps},scale={width}:-1:flags=lanczos"
+
+    try:
+        # Pass 1: generate optimized 128-color palette
+        cmd_palette = [
+            'ffmpeg', '-loglevel', 'error',
+            '-i', video_path,
+            '-vf', f'{vf_scale},palettegen=max_colors=128:stats_mode=diff',
+            '-y', palette_path
+        ]
+        result = subprocess.run(cmd_palette, capture_output=True, text=True, timeout=120)
+        if result.returncode != 0:
+            raise RuntimeError(f"Palette generation failed: {result.stderr[:300]}")
+
+        # Pass 2: create GIF using palette
+        loop_flag = '0' if loop else '-1'
+        cmd_gif = [
+            'ffmpeg', '-loglevel', 'error',
+            '-i', video_path,
+            '-i', palette_path,
+            '-filter_complex', f'[0:v]{vf_scale}[v];[v][1:v]paletteuse=dither=sierra2_4a',
+            '-loop', loop_flag,
+            '-y', gif_path
+        ]
+        result = subprocess.run(cmd_gif, capture_output=True, text=True, timeout=300)
+        if result.returncode != 0:
+            raise RuntimeError(f"GIF generation failed: {result.stderr[:300]}")
+
+        if not os.path.exists(gif_path):
+            raise RuntimeError("GIF file was not created")
+
+        return gif_path
+
+    except Exception:
+        # Clean up on failure
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise

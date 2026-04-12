@@ -63,3 +63,21 @@ def delete_video_files(file_path: str, thumbnail_path: str | None = None):
     if thumbnail_path and os.path.exists(thumbnail_path):
         os.remove(thumbnail_path)
         logger.info(f"Deleted video thumbnail: {thumbnail_path}")
+
+
+def cleanup_empty_parents(file_path: str, base_path: str):
+    """Remove empty parent directories between file_path and base_path.
+    Walks up from the file's directory, removing each empty folder,
+    stopping at (and never removing) base_path."""
+    base = os.path.realpath(base_path)
+    folder = os.path.dirname(os.path.realpath(file_path))
+    while folder and folder != base and folder.startswith(base):
+        try:
+            if os.path.isdir(folder) and not os.listdir(folder):
+                os.rmdir(folder)
+                logger.info(f"Removed empty folder: {folder}")
+                folder = os.path.dirname(folder)
+            else:
+                break
+        except OSError:
+            break
