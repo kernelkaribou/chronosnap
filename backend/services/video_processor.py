@@ -257,7 +257,7 @@ def _update_progress(video_id: int, progress: float):
 
 def cancel_video(video_id: int) -> bool:
     """Cancel an in-progress video build. Kills the process, removes files and DB record."""
-    from ..helpers.file_helpers import resolve_video_path, delete_video_files
+    from ..helpers.file_helpers import resolve_video_path, delete_video_files, cleanup_empty_parents
     
     with _process_lock:
         process = _active_processes.get(video_id)
@@ -282,11 +282,10 @@ def cancel_video(video_id: int) -> bool:
                 abs_fp = resolve_video_path(file_path) if file_path else None
                 abs_thumb = resolve_video_path(thumb_path) if thumb_path else None
                 delete_video_files(abs_fp, abs_thumb)
-                # Delete empty parent folder
+                # Clean up empty parent folders
                 if abs_fp:
-                    parent = os.path.dirname(abs_fp)
-                    if parent and os.path.isdir(parent) and not os.listdir(parent):
-                        os.rmdir(parent)
+                    from .import_service import get_timelapses_path
+                    cleanup_empty_parents(abs_fp, get_timelapses_path())
                 # Remove DB record
                 cursor.execute("DELETE FROM processed_videos WHERE id = ?", (video_id,))
         
