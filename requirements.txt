@@ -18,7 +18,7 @@ brotli==1.2.0
     # via py7zr
 click==8.3.2
     # via uvicorn
-fastapi==0.135.3
+fastapi==0.136.0
     # via -r requirements.in
 h11==0.16.0
     # via uvicorn
@@ -40,11 +40,11 @@ pybcj==1.0.7
     # via py7zr
 pycryptodomex==3.23.0
     # via py7zr
-pydantic==2.12.5
+pydantic==2.13.2
     # via
     #   -r requirements.in
     #   fastapi
-pydantic-core==2.41.5
+pydantic-core==2.46.2
     # via pydantic
 pyppmd==1.1.1
     # via py7zr
