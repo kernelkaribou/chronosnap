@@ -510,7 +510,7 @@ async def download_video(video_id: int):
         return FileResponse(
             abs_path,
             media_type="video/mp4",
-            filename=f"{vid['name']}.mp4"
+            filename=f"{vid['name'].replace(' ', '_')}.mp4"
         )
 
 
@@ -550,7 +550,7 @@ async def download_video_as_gif(
     return FileResponse(
         gif_path,
         media_type="image/gif",
-        filename=f"{vid['name']}.gif",
+        filename=f"{vid['name'].replace(' ', '_')}.gif",
         background=BackgroundTask(cleanup),
     )
 

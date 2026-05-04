@@ -1,4 +1,4 @@
-name: Update Dependencies
+name: Update Python Dependencies
 
 on:
   schedule:
@@ -11,50 +11,38 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
-    
+
     steps:
     - uses: actions/checkout@v4
       with:
         ref: dev
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-    
+
     - name: Install pip-tools
       run: pip install pip-tools
-    
+
     - name: Update dependencies
       run: |
-        pip-compile --upgrade --output-file requirements.txt requirements.in
-    
-    - name: Check for vulnerabilities
+        pip-compile --upgrade --output-file=requirements.txt requirements.in
+
+    - name: Check for changes
+      id: changes
       run: |
-        pip install safety
-        safety check -r requirements.txt --json || echo "Vulnerabilities found"
-    
-    - name: Create Pull Request
-      id: cpr
-      uses: peter-evans/create-pull-request@v6
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        commit-message: 'chore: update Python dependencies'
-        title: 'Update Python Dependencies'
-        body: |
-          This PR updates Python dependencies to their latest versions.
-          
-          Please review the changes and ensure all tests pass before merging.
-          
-          **Security Check:** Run `safety check` to verify no known vulnerabilities.
-        branch: update-dependencies
-        base: dev
-        delete-branch: true
-    
-    - name: Auto-merge Pull Request
-      if: steps.cpr.outputs.pull-request-number
+        if git diff --quiet requirements.txt; then
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Commit and push
+      if: steps.changes.outputs.changed == 'true'
       run: |
-        gh pr merge ${{ steps.cpr.outputs.pull-request-number }} --auto --squash
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add requirements.txt
+        git commit -m "chore: update Python dependencies"
+        git push origin dev

@@ -2505,7 +2505,7 @@ async function loadVideoDetail(videoId) {
                 actionsHtml += `<a href="${API_BASE}/videos/${video.id}/download" class="btn-icon" title="Download">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 </a>`;
-                actionsHtml += gifPopoverHTML(video.id);
+                actionsHtml += gifPopoverHTML(video.id, video.name);
                 actionsHtml += sharePopoverHTML(video.id, video.share_token || null);
             }
             actionsHtml += `<button class="btn-icon" title="Delete" onclick="deleteVideoFromDetail(${video.id}, '${escapeAttr(video.name)}')" style="color:var(--danger-color);">
@@ -2685,11 +2685,11 @@ async function cancelVideoBuild(videoId, videoName) {
 
 // ── Shared Links ──────────────────────────────────────────────────────────
 
-function gifPopoverHTML(videoId) {
+function gifPopoverHTML(videoId, videoName) {
     return `
         <div class="gif-popover-wrap" id="gif-popover-wrap">
             <button class="btn-icon" title="Download as GIF" onclick="toggleGifPopover(event)">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><text x="12" y="15.5" text-anchor="middle" font-size="8" font-weight="700" fill="currentColor" stroke="none">GIF</text></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><text x="12" y="15" text-anchor="middle" font-size="7" font-weight="600" fill="currentColor" stroke="none" font-family="system-ui, sans-serif">GIF</text></svg>
             </button>
             <div class="gif-popover" id="gif-popover" style="display:none;">
                 <div class="gif-popover-row">
@@ -2699,7 +2699,7 @@ function gifPopoverHTML(videoId) {
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
-                <button class="btn btn-accent btn-sm" id="gif-download-btn" onclick="downloadGif(${videoId})" style="width:100%;margin-top:0.5rem;">
+                <button class="btn btn-accent btn-sm" id="gif-download-btn" onclick="downloadGif(${videoId}, '${escapeAttr(videoName)}')" style="width:100%;margin-top:0.5rem;">
                     Download GIF
                 </button>
             </div>
@@ -2742,21 +2742,24 @@ function _attachGifPopoverCloseListener() {
     setTimeout(() => document.addEventListener('click', _gifPopoverCloseListener), 0);
 }
 
-async function downloadGif(videoId) {
+async function downloadGif(videoId, videoName) {
     const btn = document.getElementById('gif-download-btn');
     const loop = document.getElementById('gif-loop-toggle').checked;
-    setButtonState(btn, true, 'Generating...');
+    const safeName = videoName.replace(/\s+/g, '_');
+    btn.disabled = true;
+    btn.textContent = 'Generating…';
     try {
         const resp = await fetch(`${API_BASE}/videos/${videoId}/gif?loop=${loop}`);
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({ detail: 'GIF generation failed' }));
             throw new Error(err.detail || 'GIF generation failed');
         }
+        btn.textContent = 'Downloading…';
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = resp.headers.get('content-disposition')?.match(/filename="?(.+?)"?$/)?.[1] || 'timelapse.gif';
+        a.download = `${safeName}.gif`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -2765,7 +2768,8 @@ async function downloadGif(videoId) {
     } catch (err) {
         showNotification(err.message, 'error');
     } finally {
-        setButtonState(btn, false, 'Download GIF');
+        btn.disabled = false;
+        btn.textContent = 'Download GIF';
     }
 }
 

@@ -1,25 +1,9 @@
-name: Dependabot Configuration
 version: 2
 updates:
-  # Python dependencies
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 10
-    reviewers:
-      - "kernelkaribou"
-    labels:
-      - "dependencies"
-      - "python"
-    commit-message:
-      prefix: "chore"
-      include: "scope"
-    
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "dev"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -32,10 +16,11 @@ updates:
     commit-message:
       prefix: "chore"
       include: "scope"
-  
-  # Docker
+
+  # Docker base image
   - package-ecosystem: "docker"
     directory: "/"
+    target-branch: "dev"
     schedule:
       interval: "weekly"
       day: "monday"
