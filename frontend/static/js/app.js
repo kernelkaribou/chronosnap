@@ -2689,7 +2689,7 @@ function gifPopoverHTML(videoId) {
     return `
         <div class="gif-popover-wrap" id="gif-popover-wrap">
             <button class="btn-icon" title="Download as GIF" onclick="toggleGifPopover(event)">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><text x="12" y="15.5" text-anchor="middle" font-size="8" font-weight="700" fill="currentColor" stroke="none">GIF</text></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><text x="12" y="15" text-anchor="middle" font-size="7" font-weight="600" fill="currentColor" stroke="none" font-family="system-ui, sans-serif">GIF</text></svg>
             </button>
             <div class="gif-popover" id="gif-popover" style="display:none;">
                 <div class="gif-popover-row">
