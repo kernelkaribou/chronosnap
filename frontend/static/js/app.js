@@ -2505,7 +2505,7 @@ async function loadVideoDetail(videoId) {
                 actionsHtml += `<a href="${API_BASE}/videos/${video.id}/download" class="btn-icon" title="Download">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 </a>`;
-                actionsHtml += gifPopoverHTML(video.id);
+                actionsHtml += gifPopoverHTML(video.id, video.name);
                 actionsHtml += sharePopoverHTML(video.id, video.share_token || null);
             }
             actionsHtml += `<button class="btn-icon" title="Delete" onclick="deleteVideoFromDetail(${video.id}, '${escapeAttr(video.name)}')" style="color:var(--danger-color);">
@@ -2685,7 +2685,7 @@ async function cancelVideoBuild(videoId, videoName) {
 
 // ── Shared Links ──────────────────────────────────────────────────────────
 
-function gifPopoverHTML(videoId) {
+function gifPopoverHTML(videoId, videoName) {
     return `
         <div class="gif-popover-wrap" id="gif-popover-wrap">
             <button class="btn-icon" title="Download as GIF" onclick="toggleGifPopover(event)">
@@ -2699,7 +2699,7 @@ function gifPopoverHTML(videoId) {
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
-                <button class="btn btn-accent btn-sm" id="gif-download-btn" onclick="downloadGif(${videoId})" style="width:100%;margin-top:0.5rem;">
+                <button class="btn btn-accent btn-sm" id="gif-download-btn" onclick="downloadGif(${videoId}, '${escapeAttr(videoName)}')" style="width:100%;margin-top:0.5rem;">
                     Download GIF
                 </button>
             </div>
@@ -2742,9 +2742,10 @@ function _attachGifPopoverCloseListener() {
     setTimeout(() => document.addEventListener('click', _gifPopoverCloseListener), 0);
 }
 
-async function downloadGif(videoId) {
+async function downloadGif(videoId, videoName) {
     const btn = document.getElementById('gif-download-btn');
     const loop = document.getElementById('gif-loop-toggle').checked;
+    const safeName = videoName.replace(/\s+/g, '_');
     setButtonState(btn, true, 'Generating...');
     try {
         const resp = await fetch(`${API_BASE}/videos/${videoId}/gif?loop=${loop}`);
@@ -2756,7 +2757,7 @@ async function downloadGif(videoId) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = resp.headers.get('content-disposition')?.match(/filename="?(.+?)"?$/)?.[1] || 'timelapse.gif';
+        a.download = `${safeName}.gif`;
         document.body.appendChild(a);
         a.click();
         a.remove();
