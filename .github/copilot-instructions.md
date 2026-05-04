@@ -188,7 +188,15 @@ There is **no unit test suite** — testing is manual via Docker. For mobile tes
 - `build.yml` — Build + test on push/PR to main and dev (multi-arch: amd64, arm64)
 - `dev-release.yml` — Dev pre-release image on dev push
 - `release.yml` — Production release on version tag
-- `update-deps.yml` — Automated dependency updates
+- `update-deps.yml` — Weekly pip-compile update, pushes directly to dev (Dependabot can't handle pip-compile)
+- `auto-merge-dependabot.yml` — Auto-approves and merges minor/patch Dependabot PRs
+
+### Dependabot (`.github/dependabot.yml`)
+
+- **github-actions** — Weekly updates for workflow action versions, PRs to dev
+- **docker** — Weekly updates for Dockerfile base image, PRs to dev
+- **Python deps excluded** — Dependabot doesn't support pip-compile; handled by `update-deps.yml` instead
+- Requires "Allow auto-merge" enabled in repo settings for auto-merge workflow to function
 
 ---
 
