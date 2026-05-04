@@ -2746,13 +2746,15 @@ async function downloadGif(videoId, videoName) {
     const btn = document.getElementById('gif-download-btn');
     const loop = document.getElementById('gif-loop-toggle').checked;
     const safeName = videoName.replace(/\s+/g, '_');
-    setButtonState(btn, true, 'Generating...');
+    btn.disabled = true;
+    btn.textContent = 'Generating…';
     try {
         const resp = await fetch(`${API_BASE}/videos/${videoId}/gif?loop=${loop}`);
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({ detail: 'GIF generation failed' }));
             throw new Error(err.detail || 'GIF generation failed');
         }
+        btn.textContent = 'Downloading…';
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -2766,7 +2768,8 @@ async function downloadGif(videoId, videoName) {
     } catch (err) {
         showNotification(err.message, 'error');
     } finally {
-        setButtonState(btn, false, 'Download GIF');
+        btn.disabled = false;
+        btn.textContent = 'Download GIF';
     }
 }
 
