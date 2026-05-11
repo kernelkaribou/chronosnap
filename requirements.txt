@@ -24,7 +24,7 @@ h11==0.16.0
     # via uvicorn
 httptools==0.7.1
     # via uvicorn
-idna==3.13
+idna==3.14
     # via anyio
 inflate64==1.0.4
     # via py7zr
@@ -40,17 +40,17 @@ pybcj==1.0.7
     # via py7zr
 pycryptodomex==3.23.0
     # via py7zr
-pydantic==2.13.3
+pydantic==2.13.4
     # via
     #   -r requirements.in
     #   fastapi
-pydantic-core==2.46.3
+pydantic-core==2.46.4
     # via pydantic
 pyppmd==1.1.1
     # via py7zr
 python-dotenv==1.2.2
     # via uvicorn
-python-multipart==0.0.27
+python-multipart==0.0.28
     # via -r requirements.in
 pyyaml==6.0.3
     # via uvicorn
