@@ -12,11 +12,11 @@ anyio==4.13.0
     # via
     #   starlette
     #   watchfiles
-backports-zstd==1.4.0
+backports-zstd==1.5.0
     # via pyzstd
 brotli==1.2.0
     # via py7zr
-click==8.3.3
+click==8.4.0
     # via uvicorn
 fastapi==0.136.1
     # via -r requirements.in
@@ -24,7 +24,7 @@ h11==0.16.0
     # via uvicorn
 httptools==0.7.1
     # via uvicorn
-idna==3.14
+idna==3.15
     # via anyio
 inflate64==1.0.4
     # via py7zr
@@ -50,7 +50,7 @@ pyppmd==1.1.1
     # via py7zr
 python-dotenv==1.2.2
     # via uvicorn
-python-multipart==0.0.28
+python-multipart==0.0.29
     # via -r requirements.in
 pyyaml==6.0.3
     # via uvicorn
@@ -75,13 +75,13 @@ typing-inspection==0.4.2
     # via
     #   fastapi
     #   pydantic
-uvicorn[standard]==0.46.0
+uvicorn[standard]==0.47.0
     # via -r requirements.in
 uvloop==0.22.1
     # via uvicorn
-watchfiles==1.1.1
+watchfiles==1.2.0
     # via uvicorn
 websockets==16.0
     # via uvicorn
-zipstream-ng==1.9.0
+zipstream-ng==1.9.2
     # via -r requirements.in
