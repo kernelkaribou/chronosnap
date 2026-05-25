@@ -16,15 +16,15 @@ backports-zstd==1.5.0
     # via pyzstd
 brotli==1.2.0
     # via py7zr
-click==8.4.0
+click==8.4.1
     # via uvicorn
-fastapi==0.136.1
+fastapi==0.136.3
     # via -r requirements.in
 h11==0.16.0
     # via uvicorn
 httptools==0.7.1
     # via uvicorn
-idna==3.15
+idna==3.16
     # via anyio
 inflate64==1.0.4
     # via py7zr
@@ -58,7 +58,7 @@ pyzstd==0.19.1
     # via py7zr
 rarfile==4.2
     # via -r requirements.in
-starlette==1.0.0
+starlette==1.1.0
     # via fastapi
 texttable==1.7.0
     # via py7zr
@@ -75,7 +75,7 @@ typing-inspection==0.4.2
     # via
     #   fastapi
     #   pydantic
-uvicorn[standard]==0.47.0
+uvicorn[standard]==0.48.0
     # via -r requirements.in
 uvloop==0.22.1
     # via uvicorn
