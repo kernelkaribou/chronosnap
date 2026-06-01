@@ -22,9 +22,9 @@ fastapi==0.136.3
     # via -r requirements.in
 h11==0.16.0
     # via uvicorn
-httptools==0.7.1
+httptools==0.8.0
     # via uvicorn
-idna==3.16
+idna==3.17
     # via anyio
 inflate64==1.0.4
     # via py7zr
@@ -50,7 +50,7 @@ pyppmd==1.1.1
     # via py7zr
 python-dotenv==1.2.2
     # via uvicorn
-python-multipart==0.0.29
+python-multipart==0.0.30
     # via -r requirements.in
 pyyaml==6.0.3
     # via uvicorn
@@ -58,7 +58,7 @@ pyzstd==0.19.1
     # via py7zr
 rarfile==4.2
     # via -r requirements.in
-starlette==1.1.0
+starlette==1.2.1
     # via fastapi
 texttable==1.7.0
     # via py7zr
