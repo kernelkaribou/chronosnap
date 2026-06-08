@@ -24,7 +24,7 @@ h11==0.16.0
     # via uvicorn
 httptools==0.8.0
     # via uvicorn
-idna==3.17
+idna==3.18
     # via anyio
 inflate64==1.0.4
     # via py7zr
@@ -50,7 +50,7 @@ pyppmd==1.1.1
     # via py7zr
 python-dotenv==1.2.2
     # via uvicorn
-python-multipart==0.0.30
+python-multipart==0.0.32
     # via -r requirements.in
 pyyaml==6.0.3
     # via uvicorn
@@ -75,7 +75,7 @@ typing-inspection==0.4.2
     # via
     #   fastapi
     #   pydantic
-uvicorn[standard]==0.48.0
+uvicorn[standard]==0.49.0
     # via -r requirements.in
 uvloop==0.22.1
     # via uvicorn
