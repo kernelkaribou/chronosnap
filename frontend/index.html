@@ -437,6 +437,15 @@
                                 <button id="time-format-12" class="btn btn-sm" onclick="toggleTimeFormat('12')">12-hour</button>
                             </div>
                         </div>
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap;">
+                            <label style="color: var(--text-secondary); font-size: 0.9rem;">Date Format</label>
+                            <div class="time-format-toggle">
+                                <button id="date-format-auto" class="btn btn-sm" onclick="toggleDateFormat('auto')" title="Use your browser's regional format">Auto</button>
+                                <button id="date-format-us" class="btn btn-sm" onclick="toggleDateFormat('us')" title="Month/Day/Year">MM/DD/YYYY</button>
+                                <button id="date-format-eu" class="btn btn-sm" onclick="toggleDateFormat('eu')" title="Day/Month/Year">DD/MM/YYYY</button>
+                                <button id="date-format-iso" class="btn btn-sm" onclick="toggleDateFormat('iso')" title="Year-Month-Day">YYYY-MM-DD</button>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Tags Manager Section -->
