@@ -4,6 +4,6 @@ uvicorn[standard]>=0.32.0,<1.0.0
 pydantic>=2.9.0,<3.0.0
 python-multipart>=0.0.12,<1.0.0
 pillow>=10.0.0,<12.0.0
-py7zr>=0.22.0,<1.0.0
+py7zr>=0.22.0,<2.0.0
 rarfile>=4.2,<5.0.0
 zipstream-ng>=1.8.0,<2.0.0
