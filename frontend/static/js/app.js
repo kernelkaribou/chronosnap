@@ -135,6 +135,25 @@ function setTimeFormat(format) {
     localStorage.setItem('timeFormat', format);
 }
 
+function getDateFormat() {
+    return localStorage.getItem('dateFormat') || 'auto';
+}
+
+function setDateFormat(format) {
+    localStorage.setItem('dateFormat', format);
+}
+
+// Resolve the configured date format preference to a locale that controls
+// the date field order. 'auto' uses the browser's regional locale.
+function getDateLocale() {
+    switch (getDateFormat()) {
+        case 'us': return 'en-US';   // MM/DD/YYYY
+        case 'eu': return 'en-GB';   // DD/MM/YYYY
+        case 'iso': return 'en-CA';  // YYYY-MM-DD
+        default: return undefined;   // auto: browser locale
+    }
+}
+
 // Apply theme immediately (before DOMContentLoaded)
 initTheme();
 
@@ -352,7 +371,7 @@ function formatEventTime(isoStr) {
         if (diffMin < 60) return `${diffMin}m ago`;
         const diffHr = Math.floor(diffMin / 60);
         if (diffHr < 24) return `${diffHr}h ago`;
-        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return d.toLocaleDateString(getDateLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     } catch { return ''; }
 }
 
@@ -4904,7 +4923,7 @@ function formatDateTime(isoString, { showSeconds = true } = {}) {
         hour12: use12 
     };
     if (showSeconds) opts.second = '2-digit';
-    return date.toLocaleString(use12 ? 'en-US' : 'en-CA', opts);
+    return date.toLocaleString(getDateLocale(), opts);
 }
 
 function formatDateTimeNoSeconds(isoString) {
@@ -6000,6 +6019,8 @@ async function loadSettings() {
     
     // Sync time format toggle state
     updateTimeFormatButtons();
+    // Sync date format toggle state
+    updateDateFormatButtons();
 
     // Load theme presets
     renderThemePresets();
@@ -6043,6 +6064,32 @@ function toggleTimeFormat(format) {
     loadJobs();
     loadVideos();
     showNotification(`Time format set to ${format}-hour`, 'success');
+}
+
+const DATE_FORMAT_LABELS = {
+    auto: 'Automatic (region)',
+    us: 'US (MM/DD/YYYY)',
+    eu: 'European (DD/MM/YYYY)',
+    iso: 'ISO (YYYY-MM-DD)'
+};
+
+function updateDateFormatButtons() {
+    const current = getDateFormat();
+    ['auto', 'us', 'eu', 'iso'].forEach(fmt => {
+        const btn = document.getElementById(`date-format-${fmt}`);
+        if (btn) {
+            btn.className = current === fmt ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
+        }
+    });
+}
+
+function toggleDateFormat(format) {
+    setDateFormat(format);
+    updateDateFormatButtons();
+    // Refresh visible data to apply new format
+    loadJobs();
+    loadVideos();
+    showNotification(`Date format set to ${DATE_FORMAT_LABELS[format] || format}`, 'success');
 }
 
 async function copyApiKey() {
