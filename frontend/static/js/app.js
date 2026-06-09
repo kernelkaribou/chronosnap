@@ -136,7 +136,8 @@ function setTimeFormat(format) {
 }
 
 function getDateFormat() {
-    return localStorage.getItem('dateFormat') || 'auto';
+    const value = localStorage.getItem('dateFormat') || 'auto';
+    return ['auto', 'us', 'eu', 'iso'].includes(value) ? value : 'auto';
 }
 
 function setDateFormat(format) {
@@ -6054,6 +6055,8 @@ function updateTimeFormatButtons() {
     if (btn24 && btn12) {
         btn24.className = current === '24' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
         btn12.className = current === '12' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
+        btn24.setAttribute('aria-pressed', current === '24' ? 'true' : 'false');
+        btn12.setAttribute('aria-pressed', current === '12' ? 'true' : 'false');
     }
 }
 
@@ -6078,7 +6081,9 @@ function updateDateFormatButtons() {
     ['auto', 'us', 'eu', 'iso'].forEach(fmt => {
         const btn = document.getElementById(`date-format-${fmt}`);
         if (btn) {
-            btn.className = current === fmt ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
+            const active = current === fmt;
+            btn.className = active ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
         }
     });
 }
