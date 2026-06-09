@@ -7117,8 +7117,9 @@ function applyCaptureSortAndFilter() {
     
     capturesState.jobFilter = jobFilter || null;
     capturesState.tagFilter = selectedTags.length > 0 ? selectedTags.join(',') : null;
-    capturesState.startTime = startTime ? new Date(startTime).toISOString() : null;
-    capturesState.endTime = endTime ? new Date(endTime).toISOString() : null;
+    capturesState.startTime = startTime ? datetimeLocalToISO(startTime) : null;
+    // Advance end time to the next minute so the entire selected minute is inclusive
+    capturesState.endTime = endTime ? datetimeLocalToISO(new Date(new Date(endTime).getTime() + 60000)) : null;
     capturesState.sortOrder = sortOrder || 'desc';
     capturesState.pageSize = parseInt(pageSize) || 16;
     capturesState.currentPage = 1;
