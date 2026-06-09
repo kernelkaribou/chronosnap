@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # Install ffmpeg, tzdata, gosu, curl, and archive tools
 RUN apt-get update && \
