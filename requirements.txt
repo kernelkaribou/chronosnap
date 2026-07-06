@@ -18,7 +18,7 @@ brotli==1.2.0
     # via py7zr
 click==8.4.2
     # via uvicorn
-fastapi==0.138.2
+fastapi==0.139.0
     # via -r requirements.in
 h11==0.16.0
     # via uvicorn
@@ -60,7 +60,7 @@ starlette==1.3.1
     # via fastapi
 texttable==1.7.0
     # via py7zr
-typing-extensions==4.15.0
+typing-extensions==4.16.0
     # via
     #   fastapi
     #   pydantic
@@ -70,7 +70,7 @@ typing-inspection==0.4.2
     # via
     #   fastapi
     #   pydantic
-uvicorn[standard]==0.49.0
+uvicorn[standard]==0.50.2
     # via -r requirements.in
 uvloop==0.22.1
     # via uvicorn
