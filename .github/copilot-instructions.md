@@ -93,11 +93,10 @@ backend/
 ├── routers/
 │   ├── jobs.py             # Job CRUD, scheduling config
 │   ├── captures.py         # Capture listing, preview, metadata
-│   ├── videos.py           # Video listing, build, share links, GIF download
+│   ├── videos.py           # Video listing, build, GIF download
 │   ├── settings.py         # App settings
 │   ├── storage.py          # Storage dashboard data
 │   ├── tags.py             # Tag CRUD, assignment
-│   ├── shared.py           # Share link endpoints
 │   ├── devices.py          # Local camera device detection
 │   ├── event_router.py     # Event log endpoints
 │   └── import_router.py    # Import/export endpoints
@@ -226,7 +225,7 @@ Version is managed via the `VERSION` file at repo root.
 - **Subtext inline** with labels (flex baseline alignment), not below as separate blocks
 - **No parentheses** around hint subtext
 - **Prefer colors over emojis** for status indicators
-- **Popover pattern** — reusable across features (share links, GIF options): absolute-positioned panel below trigger button with card background, border, shadow
+- **Popover pattern** — reusable across features (e.g., GIF options): absolute-positioned panel below trigger button with card background, border, shadow
 
 ---
 

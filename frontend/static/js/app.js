@@ -2221,9 +2221,6 @@ function resetVideoFilters() {
     videoFavoritesOnly = false;
     const favBtn = document.getElementById('video-fav-filter');
     if (favBtn) favBtn.classList.remove('active');
-    videoSharedOnly = false;
-    const shareBtn = document.getElementById('video-share-filter');
-    if (shareBtn) shareBtn.classList.remove('active');
     videoImportedOnly = false;
     const importBtn = document.getElementById('video-imported-filter');
     if (importBtn) importBtn.classList.remove('active');
@@ -2276,10 +2273,6 @@ function filterVideos(opts = {}) {
         filtered = filtered.filter(v => v.is_favorite);
     }
     
-    if (videoSharedOnly) {
-        filtered = filtered.filter(v => !!v.share_token);
-    }
-    
     if (selectedTags.length > 0) {
         filtered = filtered.filter(v => v.tags && selectedTags.every(tid => v.tags.some(t => t.id === tid)));
     }
@@ -2297,7 +2290,7 @@ function filterVideos(opts = {}) {
     }
     
     // Illuminate reset button when any filters are active
-    const hasFilters = search || yearFilter || monthFilter !== '' || jobFilter || videoImportedOnly || videoAutoOnly || videoFavoritesOnly || videoSharedOnly || selectedTags.length > 0;
+    const hasFilters = search || yearFilter || monthFilter !== '' || jobFilter || videoImportedOnly || videoAutoOnly || videoFavoritesOnly || selectedTags.length > 0;
     document.getElementById('video-filter-reset').classList.toggle('active', hasFilters);
     
     const countEl = document.getElementById('video-count');
@@ -2383,7 +2376,6 @@ function renderVideos(videos, isEmpty) {
                     `<div class="thumb-placeholder">${filmIcon}</div>`
                 }
                 ${isCompleted ? `<div class="video-gallery-duration">${formatDuration(video.duration_seconds)}</div>` : ''}
-                ${video.share_token ? '<div class="video-gallery-shared" title="Shared"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg></div>' : ''}
                 ${isProcessing ? `<div class="video-gallery-status"><span class="job-status processing">Processing</span></div>` : ''}
                 ${video.status === 'failed' ? `<div class="video-gallery-status"><span class="job-status completed" style="background:var(--danger-color)">Failed</span></div>` : ''}
                 ${isCompleted ? `<div class="video-gallery-play">${playIcon}</div>` : ''}
@@ -2516,7 +2508,7 @@ async function loadVideoDetail(videoId) {
             });
         }
         
-        // Build actions (header icons: download, share, delete)
+        // Build actions (header icons: download, GIF, delete)
         let actionsHtml = '';
         if (video.status === 'processing') {
             actionsHtml += `<button class="btn btn-danger btn-sm" onclick="cancelVideoBuild(${video.id}, '${escapeAttr(video.name)}')">Cancel</button>`;
@@ -2526,7 +2518,6 @@ async function loadVideoDetail(videoId) {
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 </a>`;
                 actionsHtml += gifPopoverHTML(video.id, video.name);
-                actionsHtml += sharePopoverHTML(video.id, video.share_token || null);
             }
             actionsHtml += `<button class="btn-icon" title="Delete" onclick="deleteVideoFromDetail(${video.id}, '${escapeAttr(video.name)}')" style="color:var(--danger-color);">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
@@ -2703,7 +2694,7 @@ async function cancelVideoBuild(videoId, videoName) {
     );
 }
 
-// ── Shared Links ──────────────────────────────────────────────────────────
+// ── GIF Download ────────────────────────────────────────────────────────────
 
 function gifPopoverHTML(videoId, videoName) {
     return `
@@ -2790,147 +2781,6 @@ async function downloadGif(videoId, videoName) {
     } finally {
         btn.disabled = false;
         btn.textContent = 'Download GIF';
-    }
-}
-
-function sharePopoverHTML(videoId, shareToken) {
-    const isShared = !!shareToken;
-    const url = shareToken ? `${window.location.origin}/shared/${shareToken}` : '';
-    return `
-        <div class="share-popover-wrap" id="share-toggle-wrap">
-            <button class="btn-icon${isShared ? ' share-active' : ''}" title="Share" onclick="toggleSharePopover(event)">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-            </button>
-            <div class="share-popover" id="share-popover" style="display:none;">
-                <div class="share-popover-row">
-                    <span style="font-size:0.8rem;font-weight:500;">Share link</span>
-                    <label class="toggle-switch">
-                        <input type="checkbox" ${isShared ? 'checked' : ''} onchange="toggleShare(${videoId}, this.checked)">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-                ${isShared ? `
-                <div class="share-popover-url">
-                    <input type="text" value="${url}" readonly onclick="this.select()">
-                    <button class="btn-icon" onclick="copyShareLink(this, '${url}')" title="Copy">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                    </button>
-                </div>` : ''}
-            </div>
-        </div>
-    `;
-}
-
-let _popoverCloseListener = null;
-
-function _removePopoverCloseListener() {
-    if (_popoverCloseListener) {
-        document.removeEventListener('click', _popoverCloseListener);
-        _popoverCloseListener = null;
-    }
-}
-
-function _attachPopoverCloseListener() {
-    _removePopoverCloseListener();
-    const popover = document.getElementById('share-popover');
-    if (!popover) return;
-    _popoverCloseListener = (ev) => {
-        if (!popover.contains(ev.target) && !ev.target.closest('.share-popover-wrap')) {
-            popover.style.display = 'none';
-            _removePopoverCloseListener();
-        }
-    };
-    setTimeout(() => document.addEventListener('click', _popoverCloseListener), 0);
-}
-
-function toggleSharePopover(e) {
-    e.stopPropagation();
-    const popover = document.getElementById('share-popover');
-    if (!popover) return;
-    const isOpen = popover.style.display !== 'none';
-    popover.style.display = isOpen ? 'none' : '';
-    if (isOpen) {
-        _removePopoverCloseListener();
-    } else {
-        _attachPopoverCloseListener();
-    }
-}
-
-function shareToggleHTML(videoId, shareToken) {
-    return sharePopoverHTML(videoId, shareToken);
-}
-
-async function toggleShare(videoId, enabled) {
-    try {
-        const result = await apiRequest('/shared/toggle', {
-            method: 'POST',
-            body: { video_id: videoId, enabled }
-        });
-        const wrap = document.getElementById('share-toggle-wrap');
-        if (wrap) {
-            wrap.outerHTML = sharePopoverHTML(videoId, result.token).trim();
-            const popover = document.getElementById('share-popover');
-            if (popover) {
-                popover.style.display = '';
-                _attachPopoverCloseListener();
-            }
-        }
-        loadVideos();
-        showNotification(enabled ? 'Sharing enabled' : 'Sharing disabled');
-    } catch (error) {
-        showNotification(error.message || 'Failed to toggle sharing', 'error');
-    }
-}
-
-function copyShareLink(btn, url) {
-    navigator.clipboard.writeText(url).then(() => {
-        const orig = btn.innerHTML;
-        btn.innerHTML = '✓';
-        setTimeout(() => { btn.innerHTML = orig; }, 1500);
-    });
-}
-
-async function loadSharedVideosList() {
-    const container = document.getElementById('shared-videos-list');
-    if (!container) return;
-    try {
-        const links = await apiRequest('/shared/');
-        if (links.length === 0) {
-            container.innerHTML = '<span style="color:var(--text-secondary);font-size:0.85rem;">No shared videos</span>';
-            return;
-        }
-        container.innerHTML = links.map(link => {
-            const url = `${window.location.origin}/shared/${link.token}`;
-            return `
-                <div class="shared-video-item">
-                    <span class="shared-video-name">${escapeHtml(link.video_name || 'Unknown')}</span>
-                    <div class="share-link-url">
-                        <input type="text" value="${url}" readonly onclick="this.select()">
-                        <button class="btn-icon" onclick="copyShareLink(this, '${url}')" title="Copy">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                        </button>
-                    </div>
-                    <button class="tag-action-btn tag-action-delete" onclick="disableShareFromSettings(${link.video_id})" title="Disable sharing">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
-                    </button>
-                </div>
-            `;
-        }).join('');
-    } catch (error) {
-        container.innerHTML = '<span class="text-danger text-sm">Failed to load shared videos</span>';
-    }
-}
-
-async function disableShareFromSettings(videoId) {
-    try {
-        await apiRequest('/shared/toggle', {
-            method: 'POST',
-            body: { video_id: videoId, enabled: false }
-        });
-        await loadSharedVideosList();
-        showNotification('Sharing disabled');
-    } catch (error) {
-        showNotification('Failed to disable sharing', 'error');
     }
 }
 
@@ -6029,7 +5879,6 @@ async function loadSettings() {
     // Load webhook settings
     loadWebhookSettings();
     loadTagManager();
-    loadSharedVideosList();
     loadNamingPattern();
     
     // Load version and check for updates
@@ -7322,19 +7171,12 @@ function toggleCaptureFavoritesFilter() {
 }
 
 let videoFavoritesOnly = false;
-let videoSharedOnly = false;
 let videoImportedOnly = false;
 let videoAutoOnly = false;
 
 function toggleVideoFavoritesFilter() {
     videoFavoritesOnly = !videoFavoritesOnly;
     document.getElementById('video-fav-filter').classList.toggle('active', videoFavoritesOnly);
-    loadVideos();
-}
-
-function toggleVideoSharedFilter() {
-    videoSharedOnly = !videoSharedOnly;
-    document.getElementById('video-share-filter').classList.toggle('active', videoSharedOnly);
     loadVideos();
 }
 
