@@ -67,10 +67,9 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 - Download timelapses as GIF with loop/single-play options
 - Background processing with real-time progress tracking
 
-### Organization and Sharing
+### Organization
 
 - Tags, favorites, filtering, and side-by-side capture comparison
-- Shareable video links with no authentication required for viewers
 - Import/export jobs as archives (ZIP, TAR, GZ, RAR, 7Z) with full metadata preservation
 - Storage dashboard with per-job usage breakdowns and event logging
 - Webhook integration for alerts (compatible with Home Assistant and other platforms)
@@ -417,18 +416,17 @@ The scheduler runs as a background thread, managing capture timing for all activ
 
 All captured images are stored on disk in a hierarchical directory structure organized by job, year, month, day, and hour. File paths are stored as relative references in the database, making the capture directory portable. Built videos and their thumbnails are stored in the timelapses volume with a similar per-job structure.
 
-The SQLite database holds job configuration, capture metadata, video records, tags, shared links, and application settings. It is stored in the `/app/data` volume.
+The SQLite database holds job configuration, capture metadata, video records, tags, and application settings. It is stored in the `/app/data` volume.
 
 **Storage recommendation:** Keep the database on local storage (SSD preferred). SQLite relies on filesystem locking, which does not work reliably over network mounts (NFS, SMB). Capture and video volumes can be on network storage if needed, though local storage will provide better performance during video builds.
 
 ### Security and Privacy
 
-ChronoSnap is designed for self-hosted use. No data leaves your network unless you explicitly configure webhooks or share a video link.
+ChronoSnap is designed for self-hosted use. No data leaves your network unless you explicitly configure webhooks.
 
 **Authentication:**
 - All API endpoints require an API key (auto-generated, visible in Settings)
 - The web interface is exempt from key requirements when accessed from the same origin
-- Shared video links are the only public-facing routes
 
 **Network hardening:**
 - Security response headers on all requests (content type enforcement, frame embedding prevention, referrer restrictions, permission restrictions)
@@ -444,7 +442,6 @@ ChronoSnap is designed for self-hosted use. No data leaves your network unless y
 
 **Data privacy:**
 - Stream URLs (which may contain camera credentials) are redacted from all exports
-- Shared video links serve only the video file with restricted content security policies
 - No telemetry, analytics, or external calls (aside from an optional GitHub version check)
 
 ### API
