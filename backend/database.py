@@ -172,16 +172,6 @@ def init_db():
             )
         """)
         
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS shared_links (
-                token TEXT PRIMARY KEY NOT NULL,
-                video_id INTEGER NOT NULL UNIQUE,
-                created_at TEXT NOT NULL,
-                FOREIGN KEY (video_id) REFERENCES processed_videos(id) ON DELETE CASCADE
-            )
-        """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_shared_links_token ON shared_links(token)")
-        
         # Seed default tags on fresh database
         default_tags = [
             ('Daily',        '#6366f1'),  # indigo
@@ -210,7 +200,10 @@ def init_db():
                 "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
                 ('api_key', api_key, now)
             )
-        
+
+        # Drop legacy shared_links table (share feature removed)
+        cursor.execute("DROP TABLE IF EXISTS shared_links")
+
         conn.commit()
 
 

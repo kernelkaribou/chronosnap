@@ -1451,17 +1451,6 @@ body.detail-view-active .view.active {
     letter-spacing: 0.02em;
 }
 
-.video-gallery-shared {
-    position: absolute;
-    bottom: 6px;
-    left: 6px;
-    background: rgba(0, 0, 0, 0.75);
-    color: var(--primary-color);
-    padding: 3px 5px;
-    border-radius: 4px;
-    line-height: 0;
-}
-
 .video-gallery-status {
     position: absolute;
     top: 50%;
@@ -3006,29 +2995,6 @@ body.detail-view-active .view.active {
     background: var(--gradient-accent);
 }
 
-.share-filter-btn {
-    background: var(--surface-color);
-    border: 1px solid var(--border-color);
-    font-size: 1rem;
-    padding: 0.4rem 0.6rem;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    line-height: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--primary-color);
-}
-.share-filter-btn:hover {
-    border-color: var(--primary-color);
-}
-.share-filter-btn.active {
-    background: var(--primary-color);
-    border-color: transparent;
-    color: var(--primary-text-on);
-}
-
 .gallery-toggle-row {
     margin-top: -0.5rem;
     gap: 0.5rem;
@@ -4209,21 +4175,10 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .tag-picker-inline .tag-color-picker { width: 24px; height: 24px; }
 
 /* =============================================================================
-   Shared Links
+   GIF Download
    ============================================================================= */
 
-.share-toggle-inline {
-    display: flex; align-items: center; gap: 0.4rem;
-    margin-left: auto;
-    color: var(--text-secondary); font-weight: 500;
-}
-.share-toggle-inline .share-link-url {
-    margin-left: 0.5rem;
-    flex: 1;
-    min-width: min(500px, 60vw);
-}
-
-/* Share popover */
+/* GIF popover */
 .gif-popover-wrap {
     position: relative;
 }
@@ -4247,51 +4202,6 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     gap: 0.75rem;
 }
 
-.share-popover-wrap {
-    position: relative;
-}
-.share-popover-wrap .btn-icon.share-active {
-    color: var(--primary-color);
-}
-.share-popover {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    margin-top: 0.5rem;
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    padding: 0.75rem;
-    min-width: 280px;
-    z-index: 100;
-}
-.share-popover-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-}
-.share-popover-url {
-    display: flex;
-    gap: 0.3rem;
-    align-items: center;
-    margin-top: 0.5rem;
-}
-.share-popover-url input {
-    flex: 1;
-    font-size: 0.75rem;
-    padding: 0.3rem 0.5rem;
-    background: var(--input-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    color: var(--text-primary);
-    outline: none;
-    font-family: monospace;
-}
-.share-popover-url input:focus {
-    border-color: var(--primary-color);
-}
 .toggle-switch {
     position: relative; display: inline-block; width: 40px; height: 22px;
 }
@@ -4309,34 +4219,6 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 }
 .toggle-switch input:checked + .toggle-slider { background: var(--primary-color); }
 .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
-.share-link-url {
-    display: flex; gap: 0.3rem; align-items: center;
-}
-.share-link-url input {
-    flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem;
-    background: var(--input-bg); border: 1px solid var(--border-color);
-    border-radius: 4px; color: var(--text-primary); outline: none;
-    font-family: monospace;
-}
-.share-link-url input:focus { border-color: var(--primary-color); }
-
-/* Settings shared list */
-.shared-videos-list {
-    display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;
-}
-.shared-video-item {
-    display: flex; align-items: center; gap: 0.75rem;
-    padding: 0.5rem 0.75rem;
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-}
-.shared-video-item .shared-video-name {
-    font-weight: 500; font-size: 0.85rem; min-width: 0;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.shared-video-item .share-link-url { flex: 1; }
-.shared-video-item .tag-action-btn { flex-shrink: 0; }
 
 /* =============================================================================
    Video Comparison
