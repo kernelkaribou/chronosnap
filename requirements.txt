@@ -12,7 +12,7 @@ anyio==4.14.2
     # via
     #   starlette
     #   watchfiles
-backports-zstd==1.6.0
+backports-zstd==1.7.0
     # via py7zr
 brotli==1.2.0
     # via py7zr
@@ -48,7 +48,7 @@ pydantic-core==2.46.4
     # via pydantic
 pyppmd==1.3.1
     # via py7zr
-python-dotenv==1.2.2
+python-dotenv==1.2.3
     # via uvicorn
 python-multipart==0.0.32
     # via -r requirements.in
@@ -66,11 +66,11 @@ typing-extensions==4.16.0
     #   pydantic
     #   pydantic-core
     #   typing-inspection
-typing-inspection==0.4.3
+typing-inspection==0.4.4
     # via
     #   fastapi
     #   pydantic
-uvicorn[standard]==0.52.1
+uvicorn[standard]==0.52.3
     # via -r requirements.in
 uvloop==0.22.1
     # via uvicorn
