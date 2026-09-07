@@ -8,7 +8,7 @@ annotated-doc==0.0.5
     # via fastapi
 annotated-types==0.8.0
     # via pydantic
-anyio==4.14.2
+anyio==4.15.1
     # via
     #   starlette
     #   watchfiles
@@ -62,6 +62,7 @@ texttable==1.7.0
     # via py7zr
 typing-extensions==4.16.0
     # via
+    #   anyio
     #   fastapi
     #   pydantic
     #   pydantic-core
