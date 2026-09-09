@@ -185,7 +185,7 @@ The included compose file sets resource limits of 2 CPU cores and 2 GB of RAM vi
           memory: 4G
 ```
 
-**Note:** `deploy.resources.limits` is only enforced outside of Swarm mode when using the Compose v2 CLI (`docker compose`, included with current Docker Desktop and Docker Engine installs). The legacy standalone `docker-compose` (v1) and plain `docker run` ignore this block silently. Run `docker compose version` to confirm you have v2 before relying on these limits.
+**Note:** `deploy.resources.limits` is applied outside of Swarm mode by the Compose v2 CLI (`docker compose`). The legacy standalone `docker-compose` (v1) ignores this block by default unless run with `--compatibility`. Run `docker compose version` to confirm the plugin is installed and which version you have before relying on these limits; it ships with Docker Desktop but may need to be installed separately on some Linux Docker Engine setups.
 
 ---
 
