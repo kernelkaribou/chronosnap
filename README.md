@@ -131,6 +131,11 @@ services:
       - ./timelapses:/timelapses
       - ./data:/app/data
       # - ./imports:/imports  # Optional: enable server-path imports
+    deploy:
+      resources:
+        limits:
+          cpus: '2'    # Limit to 2 CPU cores, adjust as needed
+          memory: 2G   # Limit to 2GB RAM, adjust as needed
     cap_drop:
       - ALL
     cap_add:
@@ -170,7 +175,17 @@ services:
 
 ### Resource Limits
 
-The included compose file sets resource limits of 2 CPU cores and 2 GB of RAM. These are reasonable defaults. Video encoding is the most resource-intensive operation. Adjust based on your hardware and how frequently you build videos.
+The included compose file sets resource limits of 2 CPU cores and 2 GB of RAM via the `deploy.resources.limits` block shown above. These are reasonable defaults. Video encoding is the most resource-intensive operation. Adjust the `cpus` and `memory` values based on your hardware and how frequently you build videos:
+
+```yaml
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+```
+
+**Note:** `deploy.resources.limits` is only enforced outside of Swarm mode when using the Compose v2 CLI (`docker compose`, included with current Docker Desktop and Docker Engine installs). The legacy standalone `docker-compose` (v1) and plain `docker run` ignore this block silently. Run `docker compose version` to confirm you have v2 before relying on these limits.
 
 ---
 
