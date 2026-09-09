@@ -1,0 +1,3 @@
+# Dev/test-only dependencies — never installed into the production image.
+# Installed transiently inside the app image by tests/unit/run.sh.
+pytest>=8.0.0,<9.0.0

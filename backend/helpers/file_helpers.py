@@ -1,10 +1,39 @@
 """Reusable file operation helpers."""
 
 import os
+import re
 import logging
 from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
+
+
+def sanitize_directory_name(name: str) -> str:
+    """Strip characters that are unsafe in a filesystem path segment
+    (path separators, traversal sequences, quotes, control characters, etc.),
+    keeping only word characters, whitespace, and hyphens.
+
+    Used to derive on-disk directory/file names from user-supplied display
+    names (job names, video names) — never use the raw name directly when
+    building a filesystem path.
+    """
+    return re.sub(r'[^\w\s-]', '', name or '').strip()
+
+
+def validate_path_within(path: str, allowed_prefix: str) -> str:
+    """Canonicalize a path and verify it's within the allowed prefix.
+
+    Returns the canonicalized (realpath'd) path.
+    Raises ValueError if the path escapes the allowed prefix.
+    """
+    real_path = os.path.realpath(path)
+    real_prefix = os.path.realpath(allowed_prefix)
+
+    # Must be the prefix itself or a child of it
+    if real_path != real_prefix and not real_path.startswith(real_prefix + os.sep):
+        raise ValueError(f"Path escapes allowed boundary: {path}")
+
+    return real_path
 
 
 # ---------------------------------------------------------------------------
@@ -71,7 +100,11 @@ def cleanup_empty_parents(file_path: str, base_path: str):
     stopping at (and never removing) base_path."""
     base = os.path.realpath(base_path)
     folder = os.path.dirname(os.path.realpath(file_path))
-    while folder and folder != base and folder.startswith(base):
+    # Boundary check must require an exact match or a path *under* base
+    # (base + os.sep prefix) — a plain startswith(base) would also match an
+    # unrelated sibling directory that happens to share a string prefix,
+    # e.g. "/timelapses-old" starting with "/timelapses".
+    while folder and folder != base and folder.startswith(base + os.sep):
         try:
             if os.path.isdir(folder) and not os.listdir(folder):
                 os.rmdir(folder)

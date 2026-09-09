@@ -23,7 +23,10 @@ from ..services.job_state import calculate_job_state
 from ..services.auto_builder import get_next_auto_build_at
 from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware
 from ..helpers.db_helpers import get_or_404, fetch_tags_for_jobs, set_job_tags
-from ..helpers.file_helpers import validate_writable_directory, resolve_capture_path
+from ..helpers.file_helpers import (
+    validate_writable_directory, resolve_capture_path,
+    sanitize_directory_name, validate_path_within,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -102,8 +105,18 @@ async def create_job(job: JobCreate):
         
         job_id = cursor.lastrowid
         
-        # Create job directory with ID prefix
-        rel_job_dir = f"{job_id}_{job.name}"
+        # Create job directory with ID prefix. job.name is free-form
+        # user input (only length-constrained) — sanitize it down to a safe
+        # path segment before using it in a filesystem path. Never build a
+        # path from the raw name (see videos.py for the same pattern).
+        sanitized_name = sanitize_directory_name(job.name)
+        if not sanitized_name:
+            cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+            raise HTTPException(
+                status_code=400,
+                detail="Job name contains only invalid characters"
+            )
+        rel_job_dir = f"{job_id}_{sanitized_name}"
         abs_job_dir = os.path.join(captures_base, rel_job_dir)
         try:
             os.makedirs(abs_job_dir, exist_ok=True)
@@ -484,10 +497,18 @@ async def delete_job(job_id: int):
         # Delete the entire job folder from disk
         if job_info['capture_path']:
             try:
+                from ..services.import_service import get_captures_path
                 abs_job_dir = resolve_capture_path(job_info['capture_path'])
-                if os.path.exists(abs_job_dir) and os.path.isdir(abs_job_dir):
-                    shutil.rmtree(abs_job_dir)
-                    logger.info(f"Deleted job folder: {abs_job_dir}")
+                # Defense in depth: never recursively delete anything outside
+                # the captures root, even if an unsafe capture_path somehow
+                # ended up in the DB (e.g. a legacy row from before name
+                # sanitization was enforced at creation).
+                validated_job_dir = validate_path_within(abs_job_dir, get_captures_path())
+                if os.path.exists(validated_job_dir) and os.path.isdir(validated_job_dir):
+                    shutil.rmtree(validated_job_dir)
+                    logger.info(f"Deleted job folder: {validated_job_dir}")
+            except ValueError as e:
+                logger.warning(f"Refused to delete job folder outside captures root for job {job_id}: {e}")
             except Exception as e:
                 logger.warning(f"Failed to delete job folder {job_info['capture_path']}: {e}")
         
