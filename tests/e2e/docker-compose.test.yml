@@ -1,0 +1,64 @@
+# Isolated E2E test environment. Named volumes only (no host bind mounts) so
+# test runs leave zero residue on disk. Published only on loopback, on the
+# fixed test port (see .github/instructions/testing.instructions.md).
+#
+# Usage: ./run.sh (handles build, run, teardown, and exit-code propagation)
+
+services:
+  chronosnap:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: chronosnap:e2e-test
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - LOG_LEVEL=INFO
+    ports:
+      - "127.0.0.1:28080:8080"
+    volumes:
+      - e2e_data:/app/data
+      - e2e_captures:/captures
+      - e2e_timelapses:/timelapses
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  test-runner:
+    image: chronosnap:e2e-test
+    depends_on:
+      chronosnap:
+        condition: service_healthy
+    entrypoint: ["python3"]
+    command: ["/tests/runner.py"]
+    environment:
+      - CHRONOSNAP_BASE_URL=http://chronosnap:8080
+      - CHRONOSNAP_DB_PATH=/app/data/chronosnap.db
+    volumes:
+      - ./:/tests:ro
+      # Not :ro: SQLite's WAL mode needs to open the -shm index file in
+      # read-write mode even for a connection that only reads (unless the
+      # DB is declared `immutable=1`, which is unsafe here since the app is
+      # actively writing to it). The sqlite3 connection itself is opened
+      # with mode=ro (SQLITE_OPEN_READONLY) in lib.py, so no application
+      # data can be written from here regardless of mount permissions.
+      - e2e_data:/app/data
+      - e2e_captures:/captures:ro
+      - e2e_timelapses:/timelapses:ro
+
+volumes:
+  e2e_data:
+  e2e_captures:
+  e2e_timelapses:
