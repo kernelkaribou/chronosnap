@@ -167,6 +167,7 @@ services:
 | `LOG_LEVEL` | `INFO` | No | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
 | `PORT` | `8080` | No | Port the application listens on inside the container. |
 | `FFMPEG_TIMEOUT` | `10` | No | Timeout in seconds for ffmpeg frame capture operations. |
+| `VERSION_CHECK` | `true` | No | Set to `false` to disable the outbound GitHub release check made when the Settings page loads. |
 
 ### Resource Limits
 
@@ -442,7 +443,7 @@ ChronoSnap is designed for self-hosted use. No data leaves your network unless y
 
 **Data privacy:**
 - Stream URLs (which may contain camera credentials) are redacted from all exports
-- No telemetry, analytics, or external calls (aside from an optional GitHub version check)
+- No telemetry or analytics. The only external call is a check against the GitHub releases API for update notifications, made only when the Settings page loads. Set `VERSION_CHECK=false` to disable it entirely
 
 ### API
 

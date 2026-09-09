@@ -7,6 +7,7 @@ from typing import List
 from urllib.parse import urlparse
 import logging
 
+from .. import config
 from ..database import get_db, generate_api_key
 from ..utils import get_now, to_iso
 from ..services.webhook import send_test_webhook, DEFAULT_PAYLOAD_TEMPLATE
@@ -65,6 +66,9 @@ async def get_version(request: Request):
     """Get the application version and check for updates."""
     current = request.app.version
     result = {"version": current, "latest": None, "update_available": False}
+
+    if not config.VERSION_CHECK_ENABLED:
+        return result
 
     # Check GitHub for latest release (non-blocking, best-effort)
     try:
