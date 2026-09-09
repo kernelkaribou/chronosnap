@@ -37,7 +37,7 @@ FFMPEG_TIMEOUT = int(os.getenv("FFMPEG_TIMEOUT", 30))
 # Version check settings
 # Controls the outbound call to the GitHub releases API made when the Settings
 # page loads. Set VERSION_CHECK=false to disable it entirely (no network call).
-VERSION_CHECK_ENABLED = os.getenv("VERSION_CHECK", "true").strip().lower() not in ("false", "0", "no")
+VERSION_CHECK_ENABLED = os.getenv("VERSION_CHECK", "true").strip().lower() not in ("false", "0", "no", "off")
 
 # Timezone Configuration
 # The TZ environment variable determines the timezone for all datetime operations

@@ -443,7 +443,7 @@ ChronoSnap is designed for self-hosted use. No data leaves your network unless y
 
 **Data privacy:**
 - Stream URLs (which may contain camera credentials) are redacted from all exports
-- No telemetry or analytics. The only external call is a check against the GitHub releases API for update notifications, made only when the Settings page loads. Set `VERSION_CHECK=false` to disable it entirely
+- No telemetry or analytics calls. The only automatic outbound request the app makes on its own is a check against the GitHub releases API for update notifications, triggered when the Settings page loads. Set `VERSION_CHECK=false` to disable it entirely
 
 ### API
 
