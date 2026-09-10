@@ -34,6 +34,14 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 # FFMPEG settings
 FFMPEG_TIMEOUT = int(os.getenv("FFMPEG_TIMEOUT", 30))
 
+# Video build watchdog: if a video-build ffmpeg process produces no stderr
+# output at all for this many seconds, it's considered hung (e.g. deadlocked
+# on a corrupted frame) and is killed so it can't block a background-task
+# worker thread forever. This is an idle/staleness timeout, not a total
+# build-duration timeout -- a legitimately long build that's still steadily
+# producing progress output is never affected by it.
+VIDEO_BUILD_STALL_TIMEOUT = int(os.getenv("VIDEO_BUILD_STALL_TIMEOUT", 120))
+
 # Version check settings
 # Controls the outbound call to the GitHub releases API made when the Settings
 # page loads. Set VERSION_CHECK=false to disable it entirely (no network call).
