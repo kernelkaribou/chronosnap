@@ -1,12 +1,14 @@
 """
 Settings API endpoints
 """
+import asyncio
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import List
 from urllib.parse import urlparse
 import logging
 
+from .. import config
 from ..database import get_db, generate_api_key
 from ..utils import get_now, to_iso
 from ..services.webhook import send_test_webhook, DEFAULT_PAYLOAD_TEMPLATE
@@ -65,6 +67,9 @@ async def get_version(request: Request):
     """Get the application version and check for updates."""
     current = request.app.version
     result = {"version": current, "latest": None, "update_available": False}
+
+    if not config.VERSION_CHECK_ENABLED:
+        return result
 
     # Check GitHub for latest release (non-blocking, best-effort)
     try:
@@ -244,6 +249,9 @@ async def test_webhook(request: WebhookTestRequest):
     if not _validate_webhook_url(request.url):
         return WebhookTestResponse(success=False, message="Webhook URL must be a valid http:// or https:// URL")
 
-    success, message = send_test_webhook(request.url, request.payload_template)
+    # send_test_webhook() makes a blocking HTTP call (up to a 10s timeout).
+    # Offload to a worker thread so it can't stall the asyncio event loop
+    # for every other request while a webhook test is in flight.
+    success, message = await asyncio.to_thread(send_test_webhook, request.url, request.payload_template)
     return WebhookTestResponse(success=success, message=message)
 

@@ -9,9 +9,7 @@ import re
 import json
 import logging
 import time
-from urllib.parse import urlparse, urlunparse
-
-from ..models import JobCreate, JobUpdate, JobResponse, TestUrlResponse, DurationEstimate, MaintenanceResult, MaintenanceCleanup, MaintenanceImport
+from ..models import JobCreate, JobUpdate, JobResponse, TestUrlRequest, TestUrlResponse, DurationEstimate, MaintenanceResult, MaintenanceCleanup, MaintenanceImport
 from ..database import get_db, dict_from_row
 from ..services.url_tester import test_stream_url
 from ..services.duration_calculator import calculate_duration
@@ -23,7 +21,11 @@ from ..services.job_state import calculate_job_state
 from ..services.auto_builder import get_next_auto_build_at
 from ..utils import get_now, to_iso, parse_iso, ensure_timezone_aware
 from ..helpers.db_helpers import get_or_404, fetch_tags_for_jobs, set_job_tags
-from ..helpers.file_helpers import validate_writable_directory, resolve_capture_path
+from ..helpers.file_helpers import (
+    validate_writable_directory, resolve_capture_path,
+    sanitize_directory_name, validate_path_within,
+)
+from ..helpers.url_helpers import redact_url_credentials
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -102,8 +104,18 @@ async def create_job(job: JobCreate):
         
         job_id = cursor.lastrowid
         
-        # Create job directory with ID prefix
-        rel_job_dir = f"{job_id}_{job.name}"
+        # Create job directory with ID prefix. job.name is free-form
+        # user input (only length-constrained) — sanitize it down to a safe
+        # path segment before using it in a filesystem path. Never build a
+        # path from the raw name (see videos.py for the same pattern).
+        sanitized_name = sanitize_directory_name(job.name)
+        if not sanitized_name:
+            cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+            raise HTTPException(
+                status_code=400,
+                detail="Job name contains only invalid characters"
+            )
+        rel_job_dir = f"{job_id}_{sanitized_name}"
         abs_job_dir = os.path.join(captures_base, rel_job_dir)
         try:
             os.makedirs(abs_job_dir, exist_ok=True)
@@ -484,10 +496,18 @@ async def delete_job(job_id: int):
         # Delete the entire job folder from disk
         if job_info['capture_path']:
             try:
+                from ..services.import_service import get_captures_path
                 abs_job_dir = resolve_capture_path(job_info['capture_path'])
-                if os.path.exists(abs_job_dir) and os.path.isdir(abs_job_dir):
-                    shutil.rmtree(abs_job_dir)
-                    logger.info(f"Deleted job folder: {abs_job_dir}")
+                # Defense in depth: never recursively delete anything outside
+                # the captures root, even if an unsafe capture_path somehow
+                # ended up in the DB (e.g. a legacy row from before name
+                # sanitization was enforced at creation).
+                validated_job_dir = validate_path_within(abs_job_dir, get_captures_path())
+                if os.path.exists(validated_job_dir) and os.path.isdir(validated_job_dir):
+                    shutil.rmtree(validated_job_dir)
+                    logger.info(f"Deleted job folder: {validated_job_dir}")
+            except ValueError as e:
+                logger.warning(f"Refused to delete job folder outside captures root for job {job_id}: {e}")
             except Exception as e:
                 logger.warning(f"Failed to delete job folder {job_info['capture_path']}: {e}")
         
@@ -499,16 +519,20 @@ async def delete_job(job_id: int):
 
 
 @router.post("/test-url", response_model=TestUrlResponse)
-async def test_url(url: str, stream_type: str = Query(None, pattern=r"^(http|rtsp|device)$"),
-                   quality: str = Query('maximum', pattern=r"^(maximum|high|medium|low)$"),
-                   resolution: str = Query('native', pattern=r"^(native|\d+x\d+)$")):
-    """Test a URL or device path and capture a sample image with optional quality/resolution settings"""
+async def test_url(request: TestUrlRequest):
+    """Test a URL or device path and capture a sample image with optional quality/resolution settings.
+
+    Accepts a JSON request body rather than query params — a stream URL may
+    embed RTSP credentials (rtsp://user:pass@host/...), which must never
+    land in the request line/query string (and therefore never in access
+    logs or any URL-logging proxy in front of the app)."""
+    url = request.url
     # Validate device paths
     if url.startswith('/dev/'):
         import re
         if not re.match(r'^/dev/video\d+$', url):
             raise HTTPException(status_code=400, detail="Invalid device path. Must be /dev/videoN")
-    result = await test_stream_url(url, stream_type, quality, resolution)
+    result = await test_stream_url(url, request.stream_type, request.quality, request.resolution)
     return result
 
 
@@ -758,14 +782,7 @@ async def export_job(job_id: int):
     
     # Redact credentials from stream URL for export metadata
     raw_url = job_dict.get('stream_url', '')
-    try:
-        parsed = urlparse(raw_url)
-        if parsed.username or parsed.password:
-            safe_url = urlunparse(parsed._replace(netloc=f"***@{parsed.hostname}" + (f":{parsed.port}" if parsed.port else "")))
-        else:
-            safe_url = raw_url
-    except Exception:
-        safe_url = '(redacted)'
+    safe_url = redact_url_credentials(raw_url)
     
     metadata = {
         'job_id': job_dict['id'],

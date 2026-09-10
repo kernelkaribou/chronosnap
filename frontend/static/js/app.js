@@ -351,7 +351,7 @@ function renderEvents(events) {
         const validCats = ['job', 'video', 'import', 'export', 'system'];
         const cat = validCats.includes(ev.category) ? ev.category : 'system';
         const time = formatEventTime(ev.timestamp);
-        const ts = escapeHtml(ev.timestamp || '');
+        const ts = escapeAttr(ev.timestamp || '');
         return `<div class="event-item" data-timestamp="${ts}">
             <span class="event-item-dot cat-${cat}"></span>
             <div class="event-item-content">
@@ -1273,9 +1273,9 @@ function renderJobSourceSection(job) {
         <label>Camera Device</label>
         <div class="source-row">
             <select id="edit_device_path" class="form-control" style="flex: 1; min-width: 0;">
-                <option value="${escapeHtml(job.url)}" selected>${escapeHtml(job.url)}</option>
+                <option value="${escapeAttr(job.url)}" selected>${escapeHtml(job.url)}</option>
             </select>
-            <input type="hidden" id="edit_url" value="${escapeHtml(job.url)}">
+            <input type="hidden" id="edit_url" value="${escapeAttr(job.url)}">
             <button type="button" class="compare-btn" onclick="refreshDevices('edit_device_path')" title="Refresh devices" style="padding: 0.625rem 0.5rem;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="23 4 23 10 17 10"></polyline>
@@ -1297,7 +1297,7 @@ function renderJobSourceSection(job) {
     ` : `
         <label>Stream URL *</label>
         <div class="source-row">
-            <input type="text" id="edit_url" class="form-control" value="${escapeHtml(job.url)}" required style="flex: 1; min-width: 0;">
+            <input type="text" id="edit_url" class="form-control" value="${escapeAttr(job.url)}" required style="flex: 1; min-width: 0;">
             <button type="button" class="compare-btn" onclick="previewStream('edit_url', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -1333,7 +1333,7 @@ function renderJobSourceSection(job) {
                     <label>Capture Resolution</label>
                     <select id="edit_capture_resolution" class="form-control">
                         <option value="native" selected>Native</option>
-                        ${job.capture_resolution && job.capture_resolution !== 'native' ? `<option value="${escapeHtml(job.capture_resolution)}" selected>${escapeHtml(job.capture_resolution)}</option>` : ''}
+                        ${job.capture_resolution && job.capture_resolution !== 'native' ? `<option value="${escapeAttr(job.capture_resolution)}" selected>${escapeHtml(job.capture_resolution)}</option>` : ''}
                     </select>
                 </div>
                 <div class="form-group" id="edit-source-info" style="flex: 0 0 auto; display: none; align-self: flex-end; padding-bottom: 0.35rem; margin-bottom: 0;">
@@ -2061,17 +2061,20 @@ async function previewStream(urlInputId, resultDivId, qualityId, resolutionId, i
     resultDiv.className = 'test-result';
     
     try {
-        const query = { url, stream_type: streamType };
+        // Sent as a JSON body (not query params) so the stream URL --
+        // which may embed credentials -- never lands in the request
+        // URL/query string (and therefore never in access logs).
+        const body = { url, stream_type: streamType };
         if (qualityId) {
             const qEl = document.getElementById(qualityId);
-            if (qEl) query.quality = qEl.value;
+            if (qEl) body.quality = qEl.value;
         }
         if (resolutionId) {
             const rEl = document.getElementById(resolutionId);
-            if (rEl) query.resolution = rEl.value;
+            if (rEl) body.resolution = rEl.value;
         }
         
-        const result = await apiRequest('/jobs/test-url', { method: 'POST', query });
+        const result = await apiRequest('/jobs/test-url', { method: 'POST', body });
         
         if (result.success) {
             const sizeStr = result.image_size ? ` (${formatBytes(result.image_size)})` : '';
@@ -2361,7 +2364,7 @@ function renderVideos(videos, isEmpty) {
         return `
         <div class="video-gallery-card ${isSelected ? 'selected' : ''}" style="--i:${globalIdx}" 
              data-video-id="${video.id}"
-             onclick="videoSelection.handleCardClick(${video.id}, event, openVideoDetail)" title="${escapeHtml(video.name)}">
+             onclick="videoSelection.handleCardClick(${video.id}, event, openVideoDetail)" title="${escapeAttr(video.name)}">
             <input type="checkbox" class="capture-checkbox"
                    ${isSelected ? 'checked' : ''}
                    onclick="event.stopPropagation(); videoSelection.toggle(${video.id}, event)">
@@ -3708,7 +3711,7 @@ async function fetchOverlayPreviewFromUrl(prefix) {
     if (placeholder) placeholder.innerHTML = '<div style="font-size:0.8rem; color:var(--text-secondary);">Loading preview…</div>';
 
     try {
-        const result = await apiRequest('/jobs/test-url', { method: 'POST', query: { url } });
+        const result = await apiRequest('/jobs/test-url', { method: 'POST', body: { url } });
         if (result.success && result.image_data) {
             img._base64 = result.image_data;
             img._originalSrc = result.image_data;
@@ -4204,7 +4207,7 @@ async function showImportPreview() {
             details.push(`Window: ${m.time_window_start} - ${m.time_window_end}`);
         if (m.exported_at) details.push(`Exported: ${formatDateTimeNoSeconds(m.exported_at)}`);
         const tagHtml = m.tags && m.tags.length
-            ? '<br>' + m.tags.map(t => `<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:0.75rem;background:${escapeHtml(t.color)}22;color:${escapeHtml(t.color)};border:1px solid ${escapeHtml(t.color)}44;margin:2px 2px 0 0;">${escapeHtml(t.name)}</span>`).join('')
+            ? '<br>' + m.tags.map(t => `<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:0.75rem;background:${escapeAttr(t.color)}22;color:${escapeAttr(t.color)};border:1px solid ${escapeAttr(t.color)}44;margin:2px 2px 0 0;">${escapeHtml(t.name)}</span>`).join('')
             : '';
         metaBanner.innerHTML = `
             <div class="info-box" style="margin-bottom:0.75rem;border-left:3px solid var(--primary);">
@@ -4268,7 +4271,7 @@ async function showImportPreview() {
                     : '';
                 if (dupe) {
                     const matchLabel = dupe.match_type === 'hash' ? 'Exact match' : 'Size + duration match';
-                    return `<div class="import-video-card" data-filename="${escapeHtml(v.file_name)}" data-duplicate="true" style="opacity:0.5;pointer-events:none;">
+                    return `<div class="import-video-card" data-filename="${escapeAttr(v.file_name)}" data-duplicate="true" style="opacity:0.5;pointer-events:none;">
                         ${thumbUrl
                             ? `<img src="${thumbUrl}" alt="" style="width:60px;height:44px;object-fit:cover;border-radius:4px;flex-shrink:0;">`
                             : '<span style="font-size:1.5rem;flex-shrink:0;">🎬</span>'}
@@ -4276,16 +4279,16 @@ async function showImportPreview() {
                             <div style="font-size:0.85rem;padding:0.25rem 0;font-weight:500;">${escapeHtml(baseName)}</div>
                             <small>${[res, dur, formatBytes(v.file_size), v.codec].filter(Boolean).join(' · ')}</small>
                         </div>
-                        <span class="duplicate-badge" title="${matchLabel}: '${escapeHtml(dupe.existing_name)}'">Duplicate</span>
+                        <span class="duplicate-badge" title="${matchLabel}: '${escapeAttr(dupe.existing_name)}'">Duplicate</span>
                     </div>`;
                 }
-                return `<div class="import-video-card" data-filename="${escapeHtml(v.file_name)}">
+                return `<div class="import-video-card" data-filename="${escapeAttr(v.file_name)}">
                     ${thumbUrl
                         ? `<img src="${thumbUrl}" alt="" style="width:60px;height:44px;object-fit:cover;border-radius:4px;flex-shrink:0;">`
                         : '<span style="font-size:1.5rem;flex-shrink:0;">🎬</span>'}
                     <div class="video-meta" style="flex:1;min-width:0;">
-                        <input type="text" class="form-control" value="${escapeHtml(baseName)}" data-file="${escapeHtml(v.file_name)}" style="font-size:0.85rem;padding:0.25rem 0.5rem;margin-bottom:0.25rem;">
-                        <select class="form-control import-video-job" data-file="${escapeHtml(v.file_name)}" style="font-size:0.75rem;padding:0.15rem 0.3rem;margin-bottom:0.25rem;">
+                        <input type="text" class="form-control" value="${escapeAttr(baseName)}" data-file="${escapeAttr(v.file_name)}" style="font-size:0.85rem;padding:0.25rem 0.5rem;margin-bottom:0.25rem;">
+                        <select class="form-control import-video-job" data-file="${escapeAttr(v.file_name)}" style="font-size:0.75rem;padding:0.15rem 0.3rem;margin-bottom:0.25rem;">
                             <option value="">No job (Imported)</option>
                             ${_importJobs.map(j => `<option value="${j.id}">${escapeHtml(j.name)}</option>`).join('')}
                         </select>
@@ -4595,7 +4598,7 @@ async function duplicateJob(jobId) {
         if (job.stream_type === 'device') {
             setSourceType('device');
             const deviceSelect = document.getElementById('device_path');
-            deviceSelect.innerHTML = `<option value="${escapeHtml(job.url)}" selected>${escapeHtml(job.url)}</option>`;
+            deviceSelect.innerHTML = `<option value="${escapeAttr(job.url)}" selected>${escapeHtml(job.url)}</option>`;
             refreshDevices('device_path').then(() => {
                 deviceSelect.value = job.url;
             });
@@ -6224,7 +6227,7 @@ function editTagInline(tagId) {
     if (!item) return;
 
     item.innerHTML = `
-        <input type="text" class="form-control" value="${escapeHtml(tag.name)}" id="tag-edit-name-${tagId}" style="flex:1;max-width:150px;font-size:0.85rem;padding:0.25rem 0.5rem;">
+        <input type="text" class="form-control" value="${escapeAttr(tag.name)}" id="tag-edit-name-${tagId}" style="flex:1;max-width:150px;font-size:0.85rem;padding:0.25rem 0.5rem;">
         ${colorSwatchHTML(`tag-edit-swatches-${tagId}`, tag.color)}
         <button class="btn btn-sm btn-accent" onclick="saveTagEdit(${tagId})">Save</button>
         <button class="btn btn-sm btn-secondary" onclick="renderTagList()">Cancel</button>
@@ -6437,7 +6440,7 @@ function populateTagFilterList(wrapId) {
     const selected = wrap?._tagFilterSelected || new Set();
 
     list.innerHTML = allTags.map(tag => `
-        <div class="tag-filter-item ${selected.has(tag.id) ? 'selected' : ''}" data-tag-id="${tag.id}" data-name="${escapeHtml(tag.name.toLowerCase())}"
+        <div class="tag-filter-item ${selected.has(tag.id) ? 'selected' : ''}" data-tag-id="${tag.id}" data-name="${escapeAttr(tag.name.toLowerCase())}"
              onclick="toggleTagFilter('${wrapId}', ${tag.id})">
             <span class="tag-filter-check"></span>
             <span class="tag-filter-dot" style="background:${tag.color};"></span>
@@ -7319,7 +7322,7 @@ const VIDEO_PLACEHOLDER_SVG = '<svg width="32" height="32" viewBox="0 0 24 24" f
 
 function buildCaptureCardHtml(c, extraClass) {
     return `
-        <div class="homepage-capture-card${extraClass ? ' ' + extraClass : ''}" onclick="navigateTo('/captures'); setTimeout(() => showCapturePreview(${c.id}), 300)" title="${escapeHtml(c.job_name || 'Capture')} · ${formatDateTime(c.captured_at)}">
+        <div class="homepage-capture-card${extraClass ? ' ' + extraClass : ''}" onclick="navigateTo('/captures'); setTimeout(() => showCapturePreview(${c.id}), 300)" title="${escapeAttr(c.job_name || 'Capture')} · ${formatDateTime(c.captured_at)}">
             <img src="${API_BASE}/captures/${c.id}/thumbnail" alt="" loading="lazy" onerror="this.src='${PLACEHOLDER_IMG_SVG}'">
             <div class="homepage-card-overlay">
                 <div class="homepage-card-title">${escapeHtml(c.job_name || 'Unknown')}</div>
@@ -7331,7 +7334,7 @@ function buildCaptureCardHtml(c, extraClass) {
 function buildVideoCardHtml(v, extraClass) {
     const thumbSrc = v.thumbnail_path ? `${API_BASE}/videos/${v.id}/thumbnail` : '';
     return `
-        <div class="homepage-capture-card${extraClass ? ' ' + extraClass : ''}" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeHtml(v.name)}">
+        <div class="homepage-capture-card${extraClass ? ' ' + extraClass : ''}" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeAttr(v.name)}">
             ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy">` :
                 `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-muted);position:absolute;inset:0;">
                     ${VIDEO_PLACEHOLDER_SVG}
@@ -7466,7 +7469,7 @@ function renderHomepageSpotlight(captureData, allVideos) {
     if (hasCaptures) {
         const c = captures[Math.floor(Math.random() * captures.length)];
         captureCard = `
-            <div class="homepage-spotlight-card" onclick="navigateTo('/captures'); setTimeout(() => showCapturePreview(${c.id}), 300)" title="${escapeHtml(c.job_name || 'Capture')} · ${formatDateTime(c.captured_at)}">
+            <div class="homepage-spotlight-card" onclick="navigateTo('/captures'); setTimeout(() => showCapturePreview(${c.id}), 300)" title="${escapeAttr(c.job_name || 'Capture')} · ${formatDateTime(c.captured_at)}">
                 <div class="homepage-spotlight-badge">Capture</div>
                 <img src="${API_BASE}/captures/${c.id}/thumbnail" alt="" loading="lazy" onerror="this.src='${PLACEHOLDER_IMG_SVG}'">
                 <div class="homepage-card-overlay">
@@ -7490,7 +7493,7 @@ function renderHomepageSpotlight(captureData, allVideos) {
         const v = completedVideos[Math.floor(Math.random() * completedVideos.length)];
         const thumbSrc = v.thumbnail_path ? `${API_BASE}/videos/${v.id}/thumbnail` : '';
         videoCard = `
-            <div class="homepage-spotlight-card" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeHtml(v.name)}">
+            <div class="homepage-spotlight-card" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeAttr(v.name)}">
                 <div class="homepage-spotlight-badge">Timelapse</div>
                 ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy">` :
                     `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-muted);position:absolute;inset:0;">

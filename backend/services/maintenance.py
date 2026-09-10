@@ -9,7 +9,7 @@ from typing import Dict, List, Any
 from PIL import Image
 from ..database import get_db, dict_from_row
 from ..utils import get_now, to_iso, ensure_timezone_aware
-from ..helpers.file_helpers import resolve_capture_path, make_relative
+from ..helpers.file_helpers import resolve_capture_path, make_relative, validate_path_within
 
 logger = logging.getLogger(__name__)
 
@@ -237,8 +237,16 @@ def cleanup_missing_captures(job_id: int, capture_ids: List[int]) -> Dict[str, A
 
 def import_orphaned_files(job_id: int, orphaned_files: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Import orphaned files found on disk into the database
-    
+    Import orphaned files found on disk into the database.
+
+    orphaned_files is client-supplied (round-tripped from a prior /scan
+    response, but never trust that it wasn't tampered with) — every
+    file_path is validated to be a real file that lives within *this job's
+    own* capture directory before it's registered. Anything else (absolute
+    paths elsewhere on disk, traversal sequences, non-string values) is
+    rejected and skipped rather than raising, so one bad entry doesn't
+    abort the whole batch.
+
     Args:
         job_id: The ID of the job
         orphaned_files: List of orphaned file dictionaries with file_path, file_size, captured_at
@@ -249,20 +257,41 @@ def import_orphaned_files(job_id: int, orphaned_files: List[Dict[str, Any]]) -> 
     with get_db() as conn:
         cursor = conn.cursor()
         
-        # Verify job exists
-        cursor.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
-        if not cursor.fetchone():
+        # Verify job exists and get its own capture directory — the
+        # containment boundary for this import is the job's folder, not
+        # just the shared captures root, since that's the only place
+        # scan_job_files() ever looks for orphaned files in the first place.
+        cursor.execute("SELECT id, capture_path FROM jobs WHERE id = ?", (job_id,))
+        job_row = cursor.fetchone()
+        if not job_row:
             raise ValueError(f"Job {job_id} not found")
+        job_dict = dict_from_row(job_row)
+        abs_job_capture_path = resolve_capture_path(job_dict['capture_path'])
         
         imported_count = 0
+        skipped_count = 0
         total_size = 0
         
         for file_info in orphaned_files:
+            raw_fp = file_info.get('file_path') if isinstance(file_info, dict) else None
             try:
-                # file_path from scan is already absolute
-                abs_fp = file_info['file_path']
-                if not os.path.exists(abs_fp):
+                if not isinstance(raw_fp, str) or not raw_fp:
+                    logger.warning(f"Rejected orphaned-file import with invalid file_path: {file_info!r}")
+                    skipped_count += 1
+                    continue
+
+                try:
+                    abs_fp = validate_path_within(raw_fp, abs_job_capture_path)
+                except ValueError:
+                    logger.warning(
+                        f"Rejected orphaned-file import outside job {job_id}'s capture directory: {raw_fp}"
+                    )
+                    skipped_count += 1
+                    continue
+
+                if not os.path.isfile(abs_fp):
                     logger.warning(f"Orphaned file no longer exists: {abs_fp}")
+                    skipped_count += 1
                     continue
                 
                 # Store relative path in DB
@@ -279,7 +308,8 @@ def import_orphaned_files(job_id: int, orphaned_files: List[Dict[str, Any]]) -> 
                 total_size += file_info['file_size']
                 
             except Exception as e:
-                logger.error(f"Failed to import {file_info['file_path']}: {e}")
+                logger.error(f"Failed to import {raw_fp!r}: {e}")
+                skipped_count += 1
         
         # Update job statistics
         cursor.execute("""
@@ -298,11 +328,13 @@ def import_orphaned_files(job_id: int, orphaned_files: List[Dict[str, Any]]) -> 
             WHERE id = ?
         """, (new_count, new_size, to_iso(get_now()), job_id))
         
-        logger.info(f"Imported {imported_count} orphaned files for job {job_id}, "
+        logger.info(f"Imported {imported_count} orphaned files for job {job_id} "
+                   f"(skipped {skipped_count} invalid/out-of-bounds entries), "
                    f"added {total_size} bytes to database")
         
         return {
             'imported_count': imported_count,
+            'skipped_count': skipped_count,
             'total_size_imported': total_size,
             'new_capture_count': new_count,
             'new_storage_size': new_size

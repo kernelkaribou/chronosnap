@@ -131,6 +131,11 @@ services:
       - ./timelapses:/timelapses
       - ./data:/app/data
       # - ./imports:/imports  # Optional: enable server-path imports
+    deploy:
+      resources:
+        limits:
+          cpus: '2'    # Limit to 2 CPU cores, adjust as needed
+          memory: 2G   # Limit to 2GB RAM, adjust as needed
     cap_drop:
       - ALL
     cap_add:
@@ -167,10 +172,22 @@ services:
 | `LOG_LEVEL` | `INFO` | No | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
 | `PORT` | `8080` | No | Port the application listens on inside the container. |
 | `FFMPEG_TIMEOUT` | `10` | No | Timeout in seconds for ffmpeg frame capture operations. |
+| `VIDEO_BUILD_STALL_TIMEOUT` | `120` | No | Kill a video build if ffmpeg produces no output for this many seconds (detects a hung/stalled build, not total build duration). |
+| `VERSION_CHECK` | `true` | No | Set to `false` to disable the outbound GitHub release check made when the Settings page loads. |
 
 ### Resource Limits
 
-The included compose file sets resource limits of 2 CPU cores and 2 GB of RAM. These are reasonable defaults. Video encoding is the most resource-intensive operation. Adjust based on your hardware and how frequently you build videos.
+The included compose file sets resource limits of 2 CPU cores and 2 GB of RAM via the `deploy.resources.limits` block shown above. These are reasonable defaults. Video encoding is the most resource-intensive operation. Adjust the `cpus` and `memory` values based on your hardware and how frequently you build videos:
+
+```yaml
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+```
+
+**Note:** `deploy.resources.limits` is applied outside of Swarm mode by the Compose v2 CLI (`docker compose`). The legacy standalone `docker-compose` (v1) ignores this block by default unless run with `--compatibility`. Run `docker compose version` to confirm the plugin is installed and which version you have before relying on these limits; it ships with Docker Desktop but may need to be installed separately on some Linux Docker Engine setups.
 
 ---
 
@@ -442,7 +459,7 @@ ChronoSnap is designed for self-hosted use. No data leaves your network unless y
 
 **Data privacy:**
 - Stream URLs (which may contain camera credentials) are redacted from all exports
-- No telemetry, analytics, or external calls (aside from an optional GitHub version check)
+- No telemetry or analytics calls. The only automatic outbound request the app makes on its own is a check against the GitHub releases API for update notifications, triggered when the Settings page loads. Set `VERSION_CHECK=false` to disable it entirely
 
 ### API
 

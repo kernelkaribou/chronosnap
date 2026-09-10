@@ -1,273 +1,228 @@
 # ChronoSnap — Copilot Instructions
 
-> Project context and conventions for AI-assisted development.
-> This is the source of truth for workflow, architecture, and preferences.
+> Repo-wide context for AI-assisted development. Trust this file. Only search the
+> codebase further when something here is missing, ambiguous, or looks stale —
+> and if you find it's stale, fix this file as part of your change.
+>
+> Path-specific conventions live in `.github/instructions/*.instructions.md` and are
+> loaded automatically when you touch matching files. This file holds only the
+> facts that apply regardless of which files a task touches.
 
 ---
 
 ## Project Overview
 
-**ChronoSnap** (formerly timelapse-manager) is a self-hosted, Docker-based timelapse capture management application. It captures images from RTSP streams, USB webcams, and Raspberry Pi camera modules on configurable schedules, then builds timelapse videos from those captures.
+**ChronoSnap** is a self-hosted, Docker-based timelapse capture management
+application. It captures images from RTSP streams, USB webcams, and Raspberry Pi
+camera modules on configurable schedules, then builds timelapse videos from those
+captures.
 
 - **Repository:** `kernelkaribou/chronosnap`
-- **Current version:** Read from `VERSION` file at repo root (currently 3.4.0)
-- **Stack:** FastAPI (Python 3.11) backend, vanilla JS frontend, SQLite (WAL mode), Docker
-- **Single container** serving on port 8080
+- **Current version:** read from the `VERSION` file at repo root — do not hardcode
+  a version number anywhere else (grep before assuming a version is current)
+- **Stack:** FastAPI (Python 3.13) backend, vanilla JS frontend, SQLite (WAL mode),
+  single Docker container
+- **App port:** the container serves on `8080` by default. This is unrelated to the
+  fixed test port below — never confuse the two.
 
 ---
 
 ## Git Workflow
 
-### Branching Model
-
 ```
 main  ← production releases (tagged with version)
-  ↑ PR (manual, created by maintainer ONLY — never Copilot)
+  ↑ PR (manual, created by the maintainer ONLY — never Copilot)
 dev   ← integration branch, ALL work merges here first
   ↑ merge (after testing)
 feature/xyz  ← individual feature branches
 fix/xyz      ← bug fix branches
 ```
 
-### Rules
-
-1. **All work happens on branches off `dev`** — never commit directly to dev or main
-2. **Always branch from the latest `dev`**: `git checkout dev && git pull origin dev`
-3. **Feature branches** use `feature/<name>` prefix, bug fixes use `fix/<name>`
-4. **Merge to dev** when feature is tested — delete the feature branch after merge
-5. **Never create PRs** — the maintainer will manually create PRs from dev → main when ready. Do not create PRs or suggest PR creation until the maintainer explicitly asks.
-6. **Never push directly to main**
-7. **Delete feature branches** after merging to dev (both local and remote)
-8. **Commit messages** follow conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`
-9. **Co-author trailer** required on all commits:
+1. **All work happens on branches off `dev`** — never commit directly to `dev` or `main`.
+2. **Always branch from the latest `dev`**: `git checkout dev && git pull origin dev`.
+3. **Branch names:** `feature/<name>` for features, `fix/<name>` for bug fixes.
+4. **Merge to `dev`** once a change is tested — delete the branch (local + remote) after merging.
+5. **Never create PRs.** The maintainer creates PRs from `dev` → `main` manually when ready. Do not suggest opening one until explicitly asked.
+6. **Never push directly to `main`.**
+7. **Commit messages** follow conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`.
+8. **Every commit** includes:
    ```
    Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
    ```
-10. **Before a release**, remind the maintainer to bump the `VERSION` file appropriately (semver: patch for fixes, minor for features, major for breaking changes)
+9. **Before a release**, remind the maintainer to bump `VERSION` (semver: patch/minor/major).
 
-### Keeping dev in Sync with main
-
-After the maintainer merges dev → main for a release, merge main back into dev to pick up the merge commit. This prevents the branches from showing false divergence.
-
+After the maintainer merges `dev` → `main`, sync the merge commit back:
 ```bash
-git checkout dev
-git pull origin dev
-git fetch origin main
-git merge origin/main   # fast-forward or merge commit — either is fine
+git checkout dev && git pull origin dev
+git fetch origin main && git merge origin/main
 git push origin dev
-```
-
-### Starting New Work
-
-```bash
-git checkout dev
-git pull origin dev
-git checkout -b feature/<descriptive-name>
-# ... do work, commit ...
-# When done and tested:
-git checkout dev
-git merge feature/<descriptive-name>
-git push origin dev
-git branch -d feature/<descriptive-name>
-git push origin --delete feature/<descriptive-name>
 ```
 
 ---
 
-## Architecture
-
-### Backend (`backend/`)
+## Architecture Map
 
 ```
 backend/
-├── app.py                  # FastAPI app setup, lifespan, middleware
-├── auth.py                 # API key + Referer auth, localhost bypass
+├── app.py                  # FastAPI app setup, lifespan, middleware, router registration
+├── auth.py                 # API key auth + same-origin/localhost bypass (see Security section)
 ├── config.py               # Environment variable configuration
-├── database.py             # SQLite init, WAL mode, migrations
-├── models.py               # Pydantic models (JobCreate, JobUpdate, etc.)
-├── utils.py                # Module (get_now, to_iso, parse_iso) — do NOT convert to a package
-├── helpers/
-│   ├── db_helpers.py       # get_or_404, ensure_column, enrich_capture, normalize_favorite
-│   ├── file_helpers.py     # validate_writable_directory, delete_capture_file, delete_video_files, cleanup_empty_parents
-│   └── template_vars.py    # Shared template variable definitions
-├── routers/
-│   ├── jobs.py             # Job CRUD, scheduling config
-│   ├── captures.py         # Capture listing, preview, metadata
-│   ├── videos.py           # Video listing, build, GIF download
-│   ├── settings.py         # App settings
-│   ├── storage.py          # Storage dashboard data
-│   ├── tags.py             # Tag CRUD, assignment
-│   ├── devices.py          # Local camera device detection
-│   ├── event_router.py     # Event log endpoints
-│   └── import_router.py    # Import/export endpoints
-└── services/
-    ├── capture_scheduler.py    # Main scheduler loop (10s cycle)
-    ├── capture_backends/       # V4L2, libcamera backends
-    ├── image_capture.py        # RTSP/HTTP capture logic
-    ├── video_processor.py      # FFmpeg timelapse builder + GIF generation
-    ├── auto_builder.py         # Auto-build after capture sessions
-    ├── text_overlay.py         # Text overlay on videos
-    ├── job_state.py            # Job state machine logic
-    ├── state_manager.py        # State persistence
-    ├── event_service.py        # Event logging
-    ├── import_service.py       # Import/export logic
-    ├── maintenance.py          # Orphan cleanup, maintenance tasks
-    ├── webhook.py              # Webhook notifications
-    ├── url_tester.py           # Stream URL validation
-    ├── duration_calculator.py  # Video duration math
-    └── thumbnail_generator.py  # Capture thumbnails
-```
+├── database.py             # SQLite init, WAL mode, ensure_column() migrations
+├── models.py                # Pydantic request/response models
+├── utils.py                 # Module (get_now, to_iso, parse_iso) — do NOT convert to a package
+├── helpers/                 # get_or_404, file/path helpers, template variable helpers
+├── routers/                  # jobs, captures, videos, settings, storage, tags, devices, events, import
+└── services/                 # scheduler, capture backends, video processing, webhooks, etc.
 
-### Frontend (`frontend/`)
-
-```
 frontend/
-├── index.html              # Single-page app shell (~1,172 lines)
-├── manifest.json           # PWA manifest (app name, icons, standalone display)
-├── sw.js                   # Service worker (network-first caching)
-└── static/
-    ├── css/
-    │   └── style.css       # All styles (~4,533 lines), CSS variables, dark/light themes
-    └── js/
-        └── app.js          # All client-side logic (~8,020 lines), global scope
+├── index.html               # Single-page app shell
+├── manifest.json / sw.js    # PWA manifest + service worker
+└── static/{css,js}/         # style.css and app.js — all global scope, no build step
+
+tests/e2e/                    # Reusable Docker-based end-to-end test suite (see Testing section)
 ```
 
-- **Client-side routing** via History API (`_routeMap`, `_viewToPath`)
-- **All JS functions are global scope** — no ES modules (onclick handlers reference globals)
-- **CSS variables** for theming (dark/light mode), cosmic nebula default theme
-- **No build tools** — vanilla JS/CSS served directly
-- **PWA support** — manifest.json, service worker, iOS safe area handling
+See `.github/instructions/backend.instructions.md` and
+`.github/instructions/frontend.instructions.md` for conventions specific to those trees.
 
-### Key Frontend Utilities
-
-- `apiRequest(url, options)` — centralized fetch wrapper with auth
-- `showNotification(message, type)` — toast notifications
-- `confirmAction(message)` — confirmation dialogs
-- `toggleFieldGroup(id)` / `setButtonState(btn, loading)` — UI helpers
-- `escapeAttr(str)` — XSS-safe string escaping for onclick attributes
-- `formatDateTime(iso, { showSeconds })` — date formatting
-- `detectStreamType(url)` — RTSP/HTTP/device detection
-- `buildCaptureCardHtml()` / `buildVideoCardHtml()` — shared card templates
-
-### Database
-
-- **SQLite** with WAL mode, stored at `/app/data/chronosnap.db` inside container
-- Schema managed via `database.py` init + `ensure_column()` migrations
-- No ORM — raw SQL via `sqlite3` module
+**Database:** SQLite (WAL mode) at `/app/data/chronosnap.db` inside the container. No
+ORM — raw SQL via the stdlib `sqlite3` module. Schema changes go through
+`database.py`'s `ensure_column()` migration helper, not destructive alters.
 
 ---
 
-## Docker
+## Development Principles
 
-### Development Build & Test
+- **Minimize dependencies.** Prefer what's already available (e.g., FFmpeg, stdlib)
+  over adding a package. Only add a dependency when the benefit clearly justifies
+  the ongoing maintenance cost.
+- **Keep it simple.** Straightforward solutions over clever ones — this is a
+  self-hosted timelapse app, not enterprise software.
+- **No backwards-compatibility burden.** No legacy migrations to preserve.
+- **High-quality reviews are mandatory.** Every non-trivial change should be
+  reviewed as if by a careful senior engineer before it's considered done — check
+  for correctness, security, and unnecessary complexity, not just "does it run."
+- **Thorough testing is mandatory for feature additions.** New backend
+  functionality needs a corresponding scenario in `tests/e2e/` (see Testing below)
+  in addition to manual verification. Don't consider a feature done until both
+  exist.
+- **Pace changes.** Don't rush through implementation. Check in with the
+  maintainer before merging feature branches to `dev`; let them test before
+  moving on to the next thing.
+- **Docker for everything.** All *building, running, and testing* of the
+  application happens through Docker (`docker compose`) — never install/run
+  the app directly with a host Python/Node interpreter. (Test-harness
+  *orchestration* scripts that only shell out to `docker`/`docker compose` are
+  fine — see Testing.) This does **not** extend to local editor/IDE tooling: a
+  local `.venv` with `requirements.txt` installed is expected and used for
+  real development (autocomplete, go-to-definition, type checking, linting) —
+  it's not a stray artifact and should not be deleted or flagged as unused.
 
-```bash
-# Build and run locally
-docker compose -f docker-compose.dev.yml up -d --build
+---
 
-# View logs
-docker compose -f docker-compose.dev.yml logs -f
+## Security & Privacy
 
-# For JS/CSS-only changes: Ctrl+Shift+R in browser (hard refresh)
-```
+Privacy and security are paramount for this project — it manages users' private
+camera footage.
 
-There is **no unit test suite** — testing is manual via Docker. For mobile testing, push to dev so GHCR builds the `dev` tag, then deploy on a network-accessible machine.
+- **Auth model:** `backend/auth.py`'s `verify_api_key` dependency guards all
+  `/api/*` routes except a few static/health endpoints. External callers must
+  supply the `X-API-Key` header or `api_key` query param. Same-origin browser
+  requests (and literal localhost connections with no `Referer`) bypass the key.
+  **Known limitation:** this bypass trusts the client-supplied `Referer`/`Host`
+  headers, which a non-browser caller can forge — treat it as a UX convenience
+  for the bundled web UI, not as a hardened security boundary, when reasoning
+  about what's actually protected.
+- **Network posture:** CORS is same-origin only (`allow_origins=[]`).
+  `SecurityHeadersMiddleware` sets `X-Content-Type-Options`, `X-Frame-Options: DENY`,
+  a `Referrer-Policy`, and a `Permissions-Policy` blocking camera/mic/geolocation.
+- **Container hardening:** runs non-root via `PUID`/`PGID`, `cap_drop: ALL` +
+  minimal `cap_add` (CHOWN/SETUID/SETGID), `no-new-privileges:true`.
+- **Data minimization:** don't log API keys, full stream URLs with embedded
+  credentials, or capture image contents. Don't add telemetry or outbound calls
+  beyond what's documented (the optional, opt-out-able GitHub release version
+  check) without calling it out explicitly in the README's data-privacy section.
+- **Test data must never be real footage.** The e2e suite (see Testing) uses only
+  `https://picsum.photos` (public placeholder images) as its capture source —
+  never point automated tests at a real camera, RTSP stream, or any data that
+  isn't disposable/public.
 
-### Production Notes
+---
 
-- Image: `ghcr.io/kernelkaribou/chronosnap:latest`
-- Dev image: `ghcr.io/kernelkaribou/chronosnap:dev` (built automatically on push to dev)
-- Runs as non-root with PUID/PGID
-- `cap_drop: ALL` + only CHOWN/SETUID/SETGID
-- Health check: `GET /health`
-- Production host uses **NFSv3 mounts** — avoid `chmod` in Dockerfile on volume-mounted dirs
+## Testing
 
-### CI/CD (`.github/workflows/`)
+There is no unit test suite for backend logic — validation is:
+1. **Manual, interactive testing via Docker** for UI/UX, mobile, RTSP/V4L2/libcamera
+   device behavior, and anything the e2e suite doesn't cover.
+2. **The reusable Docker-based end-to-end suite** in `tests/e2e/` for the backend
+   HTTP-capture-to-video pipeline (job creation → capture → video build → GIF →
+   tags/favorites → storage/events → webhook delivery → cleanup). Run it with:
+   ```bash
+   ./tests/e2e/run.sh
+   ```
+   See `.github/instructions/testing.instructions.md` for what it covers, its
+   scope boundaries, and how to add a new scenario.
 
-- `build.yml` — Build + test on push/PR to main and dev (multi-arch: amd64, arm64)
-- `dev-release.yml` — Dev pre-release image on dev push
-- `release.yml` — Production release on version tag
-- `update-deps.yml` — Weekly pip-compile update, pushes directly to dev (Dependabot can't handle pip-compile)
-- `auto-merge-dependabot.yml` — Auto-approves and merges minor/patch Dependabot PRs
+**Fixed test port:** all ad hoc/manual container testing (`docker run`,
+one-off `docker compose` files, etc.) must publish on **`127.0.0.1:28080`**,
+always the same port, never an auto-assigned or incrementing one
+(`-p 0:8080`, `18080`, `18081`, ... are not acceptable). This keeps test
+instances unambiguous and never exposed beyond the local host. `28080` is
+unrelated to the app's real default port (`8080`) — don't reuse `8080` for test
+containers, to avoid confusing a test instance with a real dev instance.
 
-### Dependabot (`.github/dependabot.yml`)
+For JS/CSS-only changes to a running dev container, a hard refresh
+(Ctrl+Shift+R) is enough — no rebuild needed.
 
-- **github-actions** — Weekly updates for workflow action versions, PRs to dev
-- **docker** — Weekly updates for Dockerfile base image, PRs to dev
-- **Python deps excluded** — Dependabot doesn't support pip-compile; handled by `update-deps.yml` instead
-- Requires "Allow auto-merge" enabled in repo settings for auto-merge workflow to function
+---
+
+## Docker & CI/CD
+
+- Production image: `ghcr.io/kernelkaribou/chronosnap:latest`; dev pre-release:
+  `ghcr.io/kernelkaribou/chronosnap:dev` (built automatically on push to `dev`).
+- Health check: `GET /health`.
+- Production hosts use **NFSv3 mounts** — avoid `chmod` in the image on
+  volume-mounted directories.
+- See `.github/instructions/docker.instructions.md` for Dockerfile/Compose
+  conventions and `.github/instructions/github-automation.instructions.md` for
+  CI workflows and Dependabot policy.
 
 ---
 
 ## Version Management
 
 Version is managed via the `VERSION` file at repo root.
-- Backend reads it via `get_app_version()` in `app.py`
-- Frontend cache-busts using `__APP_VERSION__` placeholder in `index.html`, replaced at serve time
-- To bump version: edit `VERSION` file only
-- **Reminder:** Before the maintainer merges dev → main for a release, prompt them to bump VERSION appropriately (semver)
+- Backend reads it via `get_app_version()` in `app.py`.
+- Frontend cache-busts using the `__APP_VERSION__` placeholder in `index.html`,
+  replaced at serve time.
+- To bump: edit `VERSION` only.
+- **Reminder:** before the maintainer merges `dev` → `main` for a release, prompt
+  them to bump `VERSION` appropriately (semver).
 
 ---
 
-## Development Preferences
+## Recent Releases
 
-- **Minimize dependencies** — prefer using what's already available (e.g., FFmpeg) over adding new packages. Only add a dependency if the benefit clearly justifies the maintenance cost.
-- **Keep it simple** — straightforward solutions over clever ones. This is a self-hosted timelapse app, not enterprise software.
-- **No backwards compatibility concerns** — this is a new application, no legacy migration needed.
-- **Pace changes** — don't rush through implementation. Check in with the maintainer before merging feature branches to dev. Let them test before moving on.
-- **Docker for everything** — all building, testing, and validation happens through Docker. Do not use local tooling (node, python, etc.) outside the container.
+Full history is in git tags/release notes, not here — this section only tracks
+the current and immediately prior release so past work isn't accidentally
+re-suggested as new. Trim to the last 2 entries when adding a new one.
 
----
-
-## UI/UX Conventions
-
-- **No emojis in UI** — use CSS colors for status/concern indicators
-- **Subtext inline** with labels (flex baseline alignment), not below as separate blocks
-- **No parentheses** around hint subtext
-- **Prefer colors over emojis** for status indicators
-- **Popover pattern** — reusable across features (e.g., GIF options): absolute-positioned panel below trigger button with card background, border, shadow
-
----
-
-## Development History
-
-### v3.0.0 (major rebrand from timelapse-manager)
-- DST scheduling bug fix, security audit (XSS, auth bypass)
-- Full UI redesign with cosmic nebula theme
-- Homepage with live polling, animated stats, spotlight
-- Local camera support (V4L2, Raspberry Pi)
-- Capture comparison, text overlay, tag system, favorites
-- Share links, event log, webhooks, import/export
-- Storage dashboard, auto-build, streaming export
-- DRY refactor (helpers/ package, frontend utilities)
-- loadJobDetail decomposed into 9 composable functions
-
-### v3.1.0
-- Template variables (`{month}`, `{day}`, `{hour}`, `{minute}`, `{second}`)
-- Naming pattern validation with inline feedback
-
-### v3.2.0
-- Selection ribbon refactor (icon-based toolbar)
-- Timelapse detail header redesign + batch download
-- Detail view scroll fix
-
-### v3.3.0
-- `{year}` and `{full_month}` template variables
-- Share popover cleanup, import button in nav bar
-
-### v3.4.0
-- Version file fix (VERSION now matches release tags)
-- Empty folder cleanup on timelapse delete (cleanup_empty_parents helper)
-- Mobile viewport fixes for captures date filter and timelapse detail views
-- PWA support (manifest.json, service worker, iOS safe area handling)
-- GIF download from timelapse detail page (FFmpeg two-pass palette, 128-color, min(720, half-source) width)
-- README features section condensed
+- **v3.8.0** — `VERSION_CHECK` env var to opt out of the GitHub release check,
+  resource-limits documentation, security hardening (path traversal, ffmpeg
+  concat escaping, frontend XSS, stream credential log leaks, 7z import
+  crash/decompression-bomb fix), async offload for blocking routes, ffmpeg
+  build stall watchdog.
+- **v3.7.0** — Removed the share-link feature.
 
 ---
 
 ## Pending / In-Progress Ideas
 
-- **Split app.js into module files** — natural section boundaries identified; planned approach is split source files + concatenation build script (no behavior change)
-- **UI theming standardization** — CSS token system, button semantics, inline style extraction, mobile responsiveness, theme presets
-- **Home Assistant integration** — full plan exists for HACS-installable custom integration (`ha-chronosnap`)
-- **Animated WebP export** — as an alternative to GIF for significantly smaller file sizes (same FFmpeg pipeline, different output format)
+- **Split `app.js` into module files** — split source files + concatenation build
+  script, no behavior change.
+- **UI theming standardization** — CSS token system, button semantics, inline
+  style extraction, mobile responsiveness, theme presets.
+- **Home Assistant integration** — plan exists for a HACS-installable custom
+  integration (`ha-chronosnap`).
+- **Animated WebP export** — alternative to GIF for smaller file sizes (same
+  FFmpeg pipeline, different output format).

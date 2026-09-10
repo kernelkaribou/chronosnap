@@ -289,6 +289,17 @@ class VideoResponse(BaseModel):
     tags: List[TagBrief] = []
 
 
+class TestUrlRequest(BaseModel):
+    # Sent as a JSON request body (not query params) so the stream URL —
+    # which may embed RTSP credentials (rtsp://user:pass@host/...) — never
+    # lands in the URL/query string, and therefore never lands in access
+    # logs or any URL-logging middleware/proxy in front of the app.
+    url: str
+    stream_type: Optional[str] = Field(None, pattern=r"^(http|rtsp|device)$")
+    quality: str = Field('maximum', pattern=r"^(maximum|high|medium|low)$")
+    resolution: str = Field('native', pattern=r"^(native|\d+x\d+)$")
+
+
 class TestUrlResponse(BaseModel):
     success: bool
     message: str
