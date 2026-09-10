@@ -11,6 +11,7 @@ import hashlib
 import logging
 import zipfile
 import tarfile
+import tempfile
 import subprocess
 from pathlib import Path
 from datetime import datetime
@@ -644,43 +645,73 @@ def _extract_rar(archive_path: str, dest_dir: str, stats: ExtractionStats,
 
 def _extract_7z(archive_path: str, dest_dir: str, stats: ExtractionStats,
                  errors: List[str], nested_archives: List[str]):
-    """Extract a 7z archive safely."""
+    """Extract a 7z archive safely.
+
+    Unlike zip/tar/rar -- which stream entries one at a time, so each
+    entry's declared size can be checked against extraction limits *before*
+    it's decompressed -- py7zr only exposes per-entry size metadata via
+    list() (a pure header read, no decompression) and only decompresses
+    what's explicitly requested via extract(targets=...). So: list()
+    first, apply the same per-entry name/limit validation as the other
+    formats to build an allow-list, then extract() only the allowed
+    entries. Anything that would blow the extraction-ratio/count/size
+    limits is filtered out and therefore never decompressed at all.
+    """
     try:
         import py7zr
     except ImportError:
         errors.append("7z support not available (py7zr package missing)")
         return
-    
+
     with py7zr.SevenZipFile(archive_path, 'r') as sz:
-        for name, bio in sz.read().items():
+        allowed_targets = []
+        dest_paths = {}  # archive-internal name -> validated/sanitized dest path
+
+        for info in sz.list():
+            if info.is_directory:
+                continue
             if stats.check_timeout():
                 errors.append("Extraction timeout reached")
                 break
-            
-            if bio is None:
-                continue
-            
-            dest_path = _validate_archive_entry(name, dest_dir)
+
+            dest_path = _validate_archive_entry(info.filename, dest_dir)
             if not dest_path:
                 continue
-            
-            data = bio.read()
-            file_size = len(data)
-            
-            if not stats.check_file(file_size):
-                errors.append(f"Skipped {name}: exceeds extraction limits")
+
+            if not stats.check_file(info.uncompressed):
+                errors.append(f"Skipped {info.filename}: exceeds extraction limits")
                 continue
-            
-            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-            
-            with open(dest_path, 'wb') as dst:
-                dst.write(data)
-            
-            os.chmod(dest_path, 0o644)
-            stats.record_file(file_size)
-            
-            if classify_extension(os.path.splitext(dest_path)[1]) == 'archive':
-                nested_archives.append(dest_path)
+
+            stats.record_file(info.uncompressed)
+            allowed_targets.append(info.filename)
+            dest_paths[info.filename] = dest_path
+
+        if not allowed_targets:
+            return
+
+        # Extract only the allow-listed entries into a scratch directory
+        # (matching the archive's internal layout), then move each into its
+        # validated destination path.
+        os.makedirs(dest_dir, exist_ok=True)
+        scratch_dir = tempfile.mkdtemp(prefix='.7z-extract-', dir=dest_dir)
+        try:
+            sz.reset()
+            sz.extract(path=scratch_dir, targets=allowed_targets)
+
+            for original_name, dest_path in dest_paths.items():
+                extracted_path = os.path.join(scratch_dir, original_name)
+                if not os.path.isfile(extracted_path):
+                    errors.append(f"Skipped {original_name}: not found after extraction")
+                    continue
+
+                os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                shutil.move(extracted_path, dest_path)
+                os.chmod(dest_path, 0o644)
+
+                if classify_extension(os.path.splitext(dest_path)[1]) == 'archive':
+                    nested_archives.append(dest_path)
+        finally:
+            shutil.rmtree(scratch_dir, ignore_errors=True)
 
 
 # ===========================================================================

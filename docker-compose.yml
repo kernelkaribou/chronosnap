@@ -11,6 +11,7 @@ services:
       # - LOG_LEVEL=INFO # Logging level: DEBUG, INFO, WARNING, ERROR. Default: INFO
       # - PORT=8080 # Set custom port
       # - FFMPEG_TIMEOUT=10 # Set custom ffmpeg timeout in seconds
+      # - VIDEO_BUILD_STALL_TIMEOUT=120 # Kill a video build if ffmpeg produces no output for this many seconds (hung/stalled process)
     ports:
       - "8080:8080"
     volumes:

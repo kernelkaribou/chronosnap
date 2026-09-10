@@ -3,11 +3,13 @@ Video processing service - builds timelapse videos from captured images
 """
 import subprocess
 import os
+import selectors
 import tempfile
 import threading
 from typing import Dict, Any, Optional
 import logging
 
+from .. import config
 from ..database import get_db
 from .event_service import add_event
 
@@ -199,33 +201,62 @@ def process_video(
                 _active_processes[video_id] = process
             
             try:
-                # Monitor progress, collecting stderr for error reporting
+                # Monitor progress, collecting stderr for error reporting.
+                # Wait on the stderr fd with a timeout (instead of a plain
+                # blocking readline()) so a hung ffmpeg process -- one that
+                # produces no output at all for VIDEO_BUILD_STALL_TIMEOUT
+                # seconds, e.g. deadlocked on a corrupted frame -- is
+                # detected and killed instead of blocking this worker
+                # thread (and its BackgroundTasks thread-pool slot) forever.
                 stderr_lines = []
-                while True:
-                    line = process.stderr.readline()
-                    if not line:
-                        break
-                    stderr_lines.append(line)
-                    
-                    # Parse progress from ffmpeg output
-                    if 'frame=' in line:
-                        try:
-                            frame_str = line.split('frame=')[1].split()[0]
-                            current_frame = int(frame_str)
-                            if use_overlay:
-                                # Overlay used 40%, encoding uses remaining 60%
-                                progress = 40 + (current_frame / total_frames) * 60
-                            else:
-                                progress = (current_frame / total_frames) * 100
-                            _update_progress(video_id, progress)
-                        except (ValueError, IndexError):
-                            pass
-                
+                stalled = False
+                sel = selectors.DefaultSelector()
+                sel.register(process.stderr, selectors.EVENT_READ)
+                try:
+                    while True:
+                        if not sel.select(timeout=config.VIDEO_BUILD_STALL_TIMEOUT):
+                            stalled = True
+                            logger.error(
+                                f"Video build stalled (no ffmpeg output for "
+                                f"{config.VIDEO_BUILD_STALL_TIMEOUT}s), killing: video_id={video_id}"
+                            )
+                            process.kill()
+                            break
+
+                        line = process.stderr.readline()
+                        if not line:
+                            break
+                        stderr_lines.append(line)
+
+                        # Parse progress from ffmpeg output
+                        if 'frame=' in line:
+                            try:
+                                frame_str = line.split('frame=')[1].split()[0]
+                                current_frame = int(frame_str)
+                                if use_overlay:
+                                    # Overlay used 40%, encoding uses remaining 60%
+                                    progress = 40 + (current_frame / total_frames) * 60
+                                else:
+                                    progress = (current_frame / total_frames) * 100
+                                _update_progress(video_id, progress)
+                            except (ValueError, IndexError):
+                                pass
+                finally:
+                    sel.close()
+
                 process.wait()
             finally:
                 with _process_lock:
                     _active_processes.pop(video_id, None)
-            
+
+            if stalled:
+                _update_video_status(
+                    video_id, 'failed', 0,
+                    f"FFMPEG build stalled (no output for over {config.VIDEO_BUILD_STALL_TIMEOUT}s) "
+                    "and was terminated"
+                )
+                return
+
             if process.returncode == 0 and os.path.exists(output_path):
                 file_size = os.path.getsize(output_path)
                 duration = total_frames / framerate

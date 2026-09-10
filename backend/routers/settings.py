@@ -1,6 +1,7 @@
 """
 Settings API endpoints
 """
+import asyncio
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import List
@@ -248,6 +249,9 @@ async def test_webhook(request: WebhookTestRequest):
     if not _validate_webhook_url(request.url):
         return WebhookTestResponse(success=False, message="Webhook URL must be a valid http:// or https:// URL")
 
-    success, message = send_test_webhook(request.url, request.payload_template)
+    # send_test_webhook() makes a blocking HTTP call (up to a 10s timeout).
+    # Offload to a worker thread so it can't stall the asyncio event loop
+    # for every other request while a webhook test is in flight.
+    success, message = await asyncio.to_thread(send_test_webhook, request.url, request.payload_template)
     return WebhookTestResponse(success=success, message=message)
 

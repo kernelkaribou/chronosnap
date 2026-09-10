@@ -172,6 +172,7 @@ services:
 | `LOG_LEVEL` | `INFO` | No | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
 | `PORT` | `8080` | No | Port the application listens on inside the container. |
 | `FFMPEG_TIMEOUT` | `10` | No | Timeout in seconds for ffmpeg frame capture operations. |
+| `VIDEO_BUILD_STALL_TIMEOUT` | `120` | No | Kill a video build if ffmpeg produces no output for this many seconds (detects a hung/stalled build, not total build duration). |
 | `VERSION_CHECK` | `true` | No | Set to `false` to disable the outbound GitHub release check made when the Settings page loads. |
 
 ### Resource Limits
