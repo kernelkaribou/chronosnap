@@ -9,9 +9,7 @@ import re
 import json
 import logging
 import time
-from urllib.parse import urlparse, urlunparse
-
-from ..models import JobCreate, JobUpdate, JobResponse, TestUrlResponse, DurationEstimate, MaintenanceResult, MaintenanceCleanup, MaintenanceImport
+from ..models import JobCreate, JobUpdate, JobResponse, TestUrlRequest, TestUrlResponse, DurationEstimate, MaintenanceResult, MaintenanceCleanup, MaintenanceImport
 from ..database import get_db, dict_from_row
 from ..services.url_tester import test_stream_url
 from ..services.duration_calculator import calculate_duration
@@ -27,6 +25,7 @@ from ..helpers.file_helpers import (
     validate_writable_directory, resolve_capture_path,
     sanitize_directory_name, validate_path_within,
 )
+from ..helpers.url_helpers import redact_url_credentials
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -520,16 +519,20 @@ async def delete_job(job_id: int):
 
 
 @router.post("/test-url", response_model=TestUrlResponse)
-async def test_url(url: str, stream_type: str = Query(None, pattern=r"^(http|rtsp|device)$"),
-                   quality: str = Query('maximum', pattern=r"^(maximum|high|medium|low)$"),
-                   resolution: str = Query('native', pattern=r"^(native|\d+x\d+)$")):
-    """Test a URL or device path and capture a sample image with optional quality/resolution settings"""
+async def test_url(request: TestUrlRequest):
+    """Test a URL or device path and capture a sample image with optional quality/resolution settings.
+
+    Accepts a JSON request body rather than query params — a stream URL may
+    embed RTSP credentials (rtsp://user:pass@host/...), which must never
+    land in the request line/query string (and therefore never in access
+    logs or any URL-logging proxy in front of the app)."""
+    url = request.url
     # Validate device paths
     if url.startswith('/dev/'):
         import re
         if not re.match(r'^/dev/video\d+$', url):
             raise HTTPException(status_code=400, detail="Invalid device path. Must be /dev/videoN")
-    result = await test_stream_url(url, stream_type, quality, resolution)
+    result = await test_stream_url(url, request.stream_type, request.quality, request.resolution)
     return result
 
 
@@ -779,14 +782,7 @@ async def export_job(job_id: int):
     
     # Redact credentials from stream URL for export metadata
     raw_url = job_dict.get('stream_url', '')
-    try:
-        parsed = urlparse(raw_url)
-        if parsed.username or parsed.password:
-            safe_url = urlunparse(parsed._replace(netloc=f"***@{parsed.hostname}" + (f":{parsed.port}" if parsed.port else "")))
-        else:
-            safe_url = raw_url
-    except Exception:
-        safe_url = '(redacted)'
+    safe_url = redact_url_credentials(raw_url)
     
     metadata = {
         'job_id': job_dict['id'],

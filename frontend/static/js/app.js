@@ -2061,17 +2061,20 @@ async function previewStream(urlInputId, resultDivId, qualityId, resolutionId, i
     resultDiv.className = 'test-result';
     
     try {
-        const query = { url, stream_type: streamType };
+        // Sent as a JSON body (not query params) so the stream URL --
+        // which may embed credentials -- never lands in the request
+        // URL/query string (and therefore never in access logs).
+        const body = { url, stream_type: streamType };
         if (qualityId) {
             const qEl = document.getElementById(qualityId);
-            if (qEl) query.quality = qEl.value;
+            if (qEl) body.quality = qEl.value;
         }
         if (resolutionId) {
             const rEl = document.getElementById(resolutionId);
-            if (rEl) query.resolution = rEl.value;
+            if (rEl) body.resolution = rEl.value;
         }
         
-        const result = await apiRequest('/jobs/test-url', { method: 'POST', query });
+        const result = await apiRequest('/jobs/test-url', { method: 'POST', body });
         
         if (result.success) {
             const sizeStr = result.image_size ? ` (${formatBytes(result.image_size)})` : '';
@@ -3708,7 +3711,7 @@ async function fetchOverlayPreviewFromUrl(prefix) {
     if (placeholder) placeholder.innerHTML = '<div style="font-size:0.8rem; color:var(--text-secondary);">Loading preview…</div>';
 
     try {
-        const result = await apiRequest('/jobs/test-url', { method: 'POST', query: { url } });
+        const result = await apiRequest('/jobs/test-url', { method: 'POST', body: { url } });
         if (result.success && result.image_data) {
             img._base64 = result.image_data;
             img._originalSrc = result.image_data;

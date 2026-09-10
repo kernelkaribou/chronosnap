@@ -13,6 +13,7 @@ from ..utils import get_now, to_iso
 from .thumbnail_generator import generate_thumbnail
 from ..helpers.file_helpers import resolve_capture_path, make_relative
 from ..helpers.template_vars import build_datetime_vars
+from ..helpers.url_helpers import redact_url_credentials, scrub_credentials_from_text
 
 logger = logging.getLogger(__name__)
 
@@ -183,14 +184,17 @@ def _capture_rtsp(url: str, output_path: str, quality: str = 'maximum', resoluti
             return True, None
         else:
             error_msg = result.stderr.decode('utf-8').strip() if result.stderr else "RTSP capture failed"
-            logger.error(f"RTSP capture failed: {error_msg}")
+            # RTSP URLs commonly embed credentials (rtsp://user:pass@host/...)
+            # and ffmpeg's stderr sometimes echoes the input URL verbatim on
+            # connection failure -- redact before logging either.
+            logger.error(f"RTSP capture failed: {scrub_credentials_from_text(error_msg, url)}")
             return False, f"RTSP Error: Stream unreachable or invalid"
         
     except subprocess.TimeoutExpired:
-        logger.error(f"RTSP capture timed out: {url}")
+        logger.error(f"RTSP capture timed out: {redact_url_credentials(url)}")
         return False, "RTSP Error: Connection timeout"
     except Exception as e:
-        logger.error(f"RTSP capture error: {e}")
+        logger.error(f"RTSP capture error: {scrub_credentials_from_text(str(e), url)}")
         return False, f"RTSP Error: {str(e)}"
 
 
@@ -218,14 +222,16 @@ def _capture_http(url: str, output_path: str, quality: str = 'maximum', resoluti
             return True, None
         else:
             error_msg = result.stderr.decode('utf-8').strip() if result.stderr else "HTTP capture failed"
-            logger.error(f"HTTP capture failed: {error_msg}")
+            # HTTP(S) URLs can also embed basic-auth credentials
+            # (http://user:pass@host/...) -- redact before logging.
+            logger.error(f"HTTP capture failed: {scrub_credentials_from_text(error_msg, url)}")
             return False, "HTTP Error: Stream unreachable or invalid"
         
     except subprocess.TimeoutExpired:
-        logger.error(f"HTTP capture timed out: {url}")
+        logger.error(f"HTTP capture timed out: {redact_url_credentials(url)}")
         return False, "HTTP Error: Connection timeout"
     except Exception as e:
-        logger.error(f"HTTP capture error: {e}")
+        logger.error(f"HTTP capture error: {scrub_credentials_from_text(str(e), url)}")
         return False, f"HTTP Error: {str(e)}"
 
 
