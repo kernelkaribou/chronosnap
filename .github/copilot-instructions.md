@@ -207,11 +207,12 @@ Full history is in git tags/release notes, not here — this section only tracks
 the current and immediately prior release so past work isn't accidentally
 re-suggested as new. Trim to the last 2 entries when adding a new one.
 
-- **v3.4.0** — Version file fix, empty-folder cleanup on timelapse delete, mobile
-  viewport fixes, PWA support (manifest/service worker), GIF download from the
-  timelapse detail page.
-- **v3.3.0** — `{year}`/`{full_month}` template variables, share popover cleanup,
-  import button in nav bar.
+- **v3.8.0** — `VERSION_CHECK` env var to opt out of the GitHub release check,
+  resource-limits documentation, security hardening (path traversal, ffmpeg
+  concat escaping, frontend XSS, stream credential log leaks, 7z import
+  crash/decompression-bomb fix), async offload for blocking routes, ffmpeg
+  build stall watchdog.
+- **v3.7.0** — Removed the share-link feature.
 
 ---
 
