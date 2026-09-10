@@ -76,3 +76,77 @@ principle — this suite is meant to grow, not stay frozen at its initial scope.
 Always `127.0.0.1:28080` for anything under `tests/e2e/` — bound to loopback
 only, never exposed on all interfaces, and never a different/incrementing
 port per run. See the root `copilot-instructions.md` Testing section.
+
+# Backend Unit Test Suite (`tests/unit/`)
+
+## What this suite is for
+
+Fast, isolated `pytest` coverage for backend logic that's impractical to
+exercise meaningfully through the full E2E suite — path/containment
+validation, sanitization helpers, and other pure-ish functions where you want
+to assert exact edge-case behavior (traversal sequences, malformed input,
+boundary strings) rather than a single happy-path HTTP call. It complements
+the E2E suite; it does not replace it. Prefer E2E scenarios for "does the
+real feature work end-to-end," and unit tests for "does this specific
+function handle every edge case I can think of."
+
+## Architecture
+
+- `run.sh` — rebuilds the real `Dockerfile` (same image as production/E2E,
+  no second Dockerfile), then runs pytest inside an ephemeral container with
+  `pytest` installed **transiently** from `requirements-dev.txt` (repo root).
+  `requirements-dev.txt` is never referenced by the Dockerfile and is never
+  baked into the shipped image — it only exists for this test run.
+- `conftest.py` — shared fixtures (`isolated_db`, `captures_base`,
+  `videos_base`, `insert_job()`) providing a throwaway SQLite DB and
+  temp-directory filesystem roots per test, via monkeypatching. Never touches
+  real `/app/data`, `/captures`, or `/timelapses`.
+- `pytest.ini` — redirects the pytest cache to `/tmp/.pytest_cache` since
+  `tests/unit` is bind-mounted **read-only** into the container.
+- Must run via `./tests/unit/run.sh` (not bare `pytest`) — `backend/config.py`
+  creates its data directory at import time relative to a hardcoded `/app`
+  path, so backend modules can only be imported successfully inside the
+  container.
+
+## Adding a new unit test
+
+Add a new `test_*.py` file (or extend an existing one) under `tests/unit/`,
+reuse the `conftest.py` fixtures, and import backend modules directly (e.g.
+`from backend.helpers.file_helpers import validate_path_within`). When fixing
+a bug (especially a security-relevant one), prove the test is meaningful:
+confirm it fails against the pre-fix code before considering it done.
+
+# Frontend Unit Test Suite (`tests/unit-js/`)
+
+## What this suite is for
+
+Targeted Node-based tests for specific `frontend/static/js/app.js` logic that
+benefits from precise, automated verification — e.g. HTML-escaping
+correctness for attribute vs. text-node contexts. This does **not** introduce
+a build step, bundler, or dependency into the shipped frontend, which remains
+plain vanilla JS/CSS with no build tools; it only tests the existing global
+functions from the outside.
+
+## Architecture
+
+- `run.sh` — runs the tests inside an ephemeral, official `node:20-alpine`
+  container (no Dockerfile change, no new frontend dependency). It mounts
+  `tests/unit-js/` and `frontend/` read-only.
+- Test files load the real `frontend/static/js/app.js` source into a Node
+  `vm` context with a minimal hand-written DOM shim (just enough for
+  `document.createElement`/`addEventListener`/`localStorage`/etc. to not
+  throw when the script's top-level bootstrapping code runs), then call the
+  actual global functions (e.g. `escapeAttr`, `buildCaptureCardHtml`) with
+  adversarial input and assert on the real output. This proves the *actual*
+  shipped code is safe, not a reimplementation of it.
+- Prefer this "load the real file into a shim" approach over hand-copying
+  logic into the test — it stays honest as the real source evolves and would
+  fail loudly (a sandbox load error) if the DOM surface it depends on grows.
+
+## Adding a new frontend unit test
+
+If the DOM shim doesn't yet stub something a newly-tested function needs,
+extend the shim in the test file rather than adding a real DOM dependency
+(jsdom, etc.) — keep it dependency-free per the project's "no build tools"
+frontend convention. As with backend fixes, confirm a new regression test
+actually fails against the pre-fix code before considering it done.

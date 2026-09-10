@@ -18,6 +18,16 @@ _active_processes: Dict[int, subprocess.Popen] = {}
 _process_lock = threading.Lock()
 
 
+def _ffmpeg_concat_escape(path: str) -> str:
+    """Escape a path for safe use inside an ffmpeg concat demuxer file entry
+    (`file '...'`). The concat demuxer treats a single-quoted value like a
+    POSIX shell single-quoted string — an embedded literal quote must be
+    written as close-quote, escaped-quote, reopen-quote (`'\\''`), otherwise
+    ffmpeg silently truncates the path at the first embedded quote and fails
+    to find the file. Verified against real ffmpeg behavior."""
+    return path.replace("'", "'\\''")
+
+
 def process_video(
     video_id: int,
     job_dict: Dict[str, Any],
@@ -136,13 +146,13 @@ def process_video(
             list_file = f.name
             if use_overlay:
                 for path in overlay_paths:
-                    f.write(f"file '{path}'\n")
+                    f.write(f"file '{_ffmpeg_concat_escape(path)}'\n")
                     f.write(f"duration {1/framerate}\n")
             else:
                 from ..helpers.file_helpers import resolve_capture_path
                 for capture in captures:
                     abs_fp = resolve_capture_path(capture[2])  # capture[2] is file_path
-                    f.write(f"file '{abs_fp}'\n")
+                    f.write(f"file '{_ffmpeg_concat_escape(abs_fp)}'\n")
                     f.write(f"duration {1/framerate}\n")
         
         try:

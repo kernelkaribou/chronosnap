@@ -14,7 +14,7 @@ from ..services.video_processor import process_video, cancel_video, generate_gif
 from ..utils import get_now, to_iso
 from ..helpers.db_helpers import get_or_404, normalize_favorite, fetch_tags_for_videos, fetch_tags_for_jobs, set_video_tags
 from ..helpers.template_vars import build_datetime_vars
-from ..helpers.file_helpers import delete_video_files, resolve_video_path, make_relative, cleanup_empty_parents
+from ..helpers.file_helpers import delete_video_files, resolve_video_path, make_relative, cleanup_empty_parents, sanitize_directory_name
 from ..services.event_service import add_event
 
 router = APIRouter()
@@ -36,9 +36,8 @@ async def create_video(video: VideoCreate, background_tasks: BackgroundTasks):
         from ..services.import_service import get_timelapses_path
         videos_path = get_timelapses_path()
         
-        import re
-        sanitized_job = re.sub(r'[^\w\s-]', '', job_dict['name']).strip()
-        sanitized_video = re.sub(r'[^\w\s-]', '', video.name).strip()
+        sanitized_job = sanitize_directory_name(job_dict['name'])
+        sanitized_video = sanitize_directory_name(video.name)
         if not sanitized_video:
             raise HTTPException(status_code=400, detail="Video name contains only invalid characters")
         
