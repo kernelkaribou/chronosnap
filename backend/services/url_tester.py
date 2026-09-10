@@ -1,6 +1,7 @@
 """
 URL testing service - validates stream URLs and captures test images
 """
+import asyncio
 import subprocess
 import os
 import base64
@@ -10,6 +11,7 @@ import logging
 from ..models import TestUrlResponse
 from .. import config
 from .image_capture import _build_ffmpeg_filters
+from ..helpers.url_helpers import scrub_credentials_from_text
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +57,13 @@ def _probe_source_dimensions(url: str, stream_type: str = 'http') -> tuple[int, 
 async def test_stream_url(url: str, stream_type: str = None,
                           quality: str = 'maximum', resolution: str = 'native') -> TestUrlResponse:
     """
-    Test a stream URL by attempting to capture a single frame
-    
+    Test a stream URL by attempting to capture a single frame.
+
+    Runs the actual (blocking) ffmpeg/ffprobe subprocess calls in a worker
+    thread via asyncio.to_thread — this is invoked interactively from the UI
+    and can take up to FFMPEG_TIMEOUT seconds, so it must never stall the
+    asyncio event loop for other concurrent requests.
+
     Args:
         url: The stream URL to test
         stream_type: Either 'http' or 'rtsp' (auto-detected if not provided)
@@ -66,6 +73,13 @@ async def test_stream_url(url: str, stream_type: str = None,
     Returns:
         TestUrlResponse with success status, test image info, and source dimensions
     """
+    return await asyncio.to_thread(_test_stream_url_sync, url, stream_type, quality, resolution)
+
+
+def _test_stream_url_sync(url: str, stream_type: str = None,
+                          quality: str = 'maximum', resolution: str = 'native') -> TestUrlResponse:
+    """Blocking implementation of test_stream_url(); always call via the
+    async wrapper above so this runs off the event loop thread."""
     try:
         # Auto-detect stream type if not provided
         if stream_type is None:
@@ -169,7 +183,7 @@ async def test_stream_url(url: str, stream_type: str = None,
             message="Error: Connection timed out. Please check the URL."
         )
     except Exception as e:
-        logger.error(f"Error testing URL: {e}")
+        logger.error(f"Error testing URL: {scrub_credentials_from_text(str(e), url)}")
         return TestUrlResponse(
             success=False,
             message=f"Error: {str(e)}"
