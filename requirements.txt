@@ -56,7 +56,7 @@ pyyaml==6.0.3
     # via uvicorn
 rarfile==4.5
     # via -r requirements.in
-starlette==1.6.0
+starlette==1.7.0
     # via fastapi
 texttable==1.7.0
     # via py7zr
@@ -71,7 +71,7 @@ typing-inspection==0.4.4
     # via
     #   fastapi
     #   pydantic
-uvicorn[standard]==0.53.0
+uvicorn[standard]==0.54.0
     # via -r requirements.in
 uvloop==0.22.1
     # via uvicorn
