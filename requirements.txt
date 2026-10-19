@@ -18,7 +18,7 @@ brotli==1.2.0
     # via py7zr
 click==8.5.0
     # via uvicorn
-fastapi==0.143.0
+fastapi==0.148.0
     # via -r requirements.in
 h11==0.16.0
     # via uvicorn
@@ -58,9 +58,9 @@ pyyaml==6.0.3
     # via uvicorn
 rarfile==4.5
     # via -r requirements.in
-starlette==1.7.0
+starlette==1.9.0
     # via fastapi
-texttable==1.7.1
+texttable==1.7.2
     # via py7zr
 typing-extensions==4.16.0
     # via
