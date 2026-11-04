@@ -237,8 +237,12 @@ async function apiRequest(endpoint, options = {}) {
             ? error.detail 
             : Array.isArray(error.detail) 
                 ? error.detail.map(e => e.msg || e.message || JSON.stringify(e)).join('; ')
-                : `Request failed: ${response.status}`;
-        throw new Error(message);
+                : (error.detail && typeof error.detail.message === 'string')
+                    ? error.detail.message : `Request failed: ${response.status}`;
+        const requestError = new Error(message);
+        requestError.status = response.status;
+        requestError.detail = error.detail;
+        throw requestError;
     }
     
     // Return parsed JSON or null for 204 responses
@@ -616,8 +620,8 @@ class SelectionManager {
 
     clear() {
         this.selected.clear();
-        document.querySelectorAll(`${this.cardSelector}.selected`).forEach(c => c.classList.remove('selected'));
-        document.querySelectorAll(`${this.cardSelector} .capture-checkbox`).forEach(cb => cb.checked = false);
+        document.querySelectorAll(`${this.cardSelector}[${this.dataAttr}].selected`).forEach(c => c.classList.remove('selected'));
+        document.querySelectorAll(`${this.cardSelector}[${this.dataAttr}] .capture-checkbox`).forEach(cb => cb.checked = false);
         this.updateControls();
     }
 
@@ -1188,7 +1192,7 @@ function renderJobSidebar(job, capturesData) {
             </button>
             <button class="btn btn-accent btn-sm" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeAttr(job.name)}')" style="width: 100%;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                Build Timelapse
+                Build
             </button>
             ${renderJobActionButtons(job)}
         </div>
@@ -2136,6 +2140,640 @@ function downloadSelectedVideos() {
     window.location.href = `${API_BASE}/videos/download-multiple?ids=${ids.join(',')}`;
 }
 
+let _joinState = null;
+let _joinSearchTimer = null;
+
+async function showJoinVideoModal() {
+    const ids = [...videoSelection.selected];
+    if (ids.length > 100) {
+        showNotification('Choose at most 100 entries for one join', 'error');
+        return;
+    }
+    const state = {
+        entries: [], candidates: [], offset: 0, more: false, query: '',
+        version: 0, searchVersion: 0, validation: null, review: null, busy: true,
+        creating: false, pickerOpen: false, pickerSelection: null, outputFps: null, drag: null,
+        outputResolution: null, resolutionChosen: false,
+        returnFocus: document.activeElement
+    };
+    _joinState = state;
+    document.addEventListener('keydown', handleJoinModalKeydown, true);
+    const timestamp = isoToDatetimeLocal(new Date().toISOString()).replace(/[-:]/g, '').replace('T', '_');
+    document.getElementById('join-video-name').value = `Joined_Timelapse_${timestamp}`;
+    document.getElementById('join-video-search').value = '';
+    document.getElementById('join-video-errors').textContent = '';
+    document.getElementById('join-review-announcement').textContent = '';
+    document.getElementById('join-video-picker').hidden = true;
+    document.getElementById('join-video-ordering').hidden = false;
+    document.getElementById('join-video-output').inert = false;
+    document.getElementById('join-video-actions').hidden = false;
+    document.getElementById('join-video-add').setAttribute('aria-expanded', 'false');
+    document.getElementById('join-video-status').textContent = 'Loading timelapses...';
+    showModal('join-video-modal');
+    renderJoinOrder();
+    renderJoinCandidates();
+    document.getElementById('join-video-name').focus();
+    try {
+        const entries = await Promise.all(ids.map(id => apiRequest(`/videos/${id}`)));
+        if (_joinState !== state) return;
+        state.entries = entries;
+        state.busy = false;
+        document.getElementById('join-video-status').textContent = '';
+        renderJoinOrder();
+        await loadJoinCandidates();
+    } catch (error) {
+        if (_joinState !== state) return;
+        state.busy = false;
+        document.getElementById('join-video-errors').textContent = error.message;
+        renderJoinOrder();
+        await loadJoinCandidates();
+    }
+}
+
+function invalidateJoinCheck(message = '') {
+    _joinState.version++;
+    _joinState.validation = null;
+    _joinState.review = null;
+    document.getElementById('join-review-announcement').textContent = '';
+    document.getElementById('join-video-errors').textContent = '';
+    document.getElementById('join-video-status').textContent = message;
+}
+
+function openJoinPicker() {
+    const state = _joinState;
+    if (!state || state.busy || state.drag || state.pickerOpen) return;
+    state.pickerOpen = true;
+    state.pickerSelection = new Map(state.entries.map(clip => [clip.id, clip]));
+    document.getElementById('join-picker-errors').textContent = '';
+    document.getElementById('join-video-picker').hidden = false;
+    document.getElementById('join-video-ordering').hidden = true;
+    document.getElementById('join-video-output').inert = true;
+    document.getElementById('join-video-actions').hidden = true;
+    document.getElementById('join-video-add').setAttribute('aria-expanded', 'true');
+    document.getElementById('join-video-submit').disabled = true;
+    renderJoinCandidates();
+    document.getElementById('join-video-search').focus();
+    if (!state.candidates.length &&
+        document.getElementById('join-video-candidates').getAttribute('aria-busy') !== 'true') {
+        loadJoinCandidates();
+    }
+}
+
+function closeJoinPicker() {
+    if (!_joinState || !_joinState.pickerOpen) return;
+    _joinState.pickerOpen = false;
+    _joinState.pickerSelection = null;
+    document.getElementById('join-picker-errors').textContent = '';
+    document.getElementById('join-video-picker').hidden = true;
+    document.getElementById('join-video-ordering').hidden = false;
+    document.getElementById('join-video-output').inert = false;
+    document.getElementById('join-video-actions').hidden = false;
+    document.getElementById('join-video-add').setAttribute('aria-expanded', 'false');
+    renderJoinOrder();
+    renderJoinCandidates();
+    document.getElementById('join-video-add').focus();
+}
+
+function getJoinPickerEntries() {
+    const state = _joinState;
+    if (!state?.pickerSelection) return [];
+    const originalIds = new Set(state.entries.map(clip => clip.id));
+    const entries = state.entries.filter(clip => state.pickerSelection.has(clip.id));
+    for (const clip of state.pickerSelection.values()) {
+        if (!originalIds.has(clip.id)) entries.push(clip);
+    }
+    return entries;
+}
+
+function toggleJoinCandidate(id) {
+    const state = _joinState;
+    if (!state?.pickerOpen || state.busy || state.drag) return;
+    const error = document.getElementById('join-picker-errors');
+    error.textContent = '';
+    if (state.pickerSelection.has(id)) {
+        state.pickerSelection.delete(id);
+    } else {
+        const clip = state.candidates.find(video => video.id === id);
+        if (!clip) {
+            error.textContent = 'This timelapse is no longer available. Refresh the clip search.';
+            updateJoinPickerControls();
+            return;
+        }
+        state.pickerSelection.set(id, clip);
+        if (getJoinPickerEntries().length > 100) {
+            state.pickerSelection.delete(id);
+            error.textContent = 'A join can contain at most 100 entries.';
+        }
+    }
+    updateJoinPickerControls();
+    const toggle = document.getElementById(`join-select-${id}`);
+    (toggle && !toggle.disabled ? toggle : document.getElementById('join-video-search')).focus({ preventScroll: true });
+}
+
+function applyJoinPicker() {
+    const state = _joinState;
+    if (!state?.pickerOpen || state.busy || state.drag) return;
+    const entries = getJoinPickerEntries();
+    if (entries.length > 100) {
+        document.getElementById('join-picker-errors').textContent = 'A join can contain at most 100 entries.';
+        return;
+    }
+    if (entries.length !== state.entries.length ||
+        entries.some((clip, index) => clip.id !== state.entries[index].id)) {
+        state.entries = entries;
+        invalidateJoinCheck();
+    }
+    closeJoinPicker();
+}
+
+function joinMoveClip(index, delta) {
+    joinReorderClip(index, index + delta);
+}
+
+function joinReorderClip(index, target) {
+    const state = _joinState;
+    if (!state || state.busy || state.drag || index === target || index < 0 ||
+        index >= state.entries.length || target < 0 || target >= state.entries.length) return;
+    const [clip] = state.entries.splice(index, 1);
+    state.entries.splice(target, 0, clip);
+    invalidateJoinCheck();
+    renderJoinOrder();
+    document.getElementById('join-video-status').textContent = `${clip.name} moved to position ${target + 1}.`;
+    document.getElementById(`join-grip-${target}`).focus({ preventScroll: true });
+}
+
+function joinGripKeydown(event, index) {
+    const targets = { ArrowUp: index - 1, ArrowDown: index + 1, Home: 0, End: (_joinState?.entries.length || 1) - 1 };
+    if (!(event.key in targets)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    joinReorderClip(index, targets[event.key]);
+}
+
+function beginJoinDrag(event, index) {
+    const state = _joinState;
+    if (!state || state.busy || state.pickerOpen || state.drag || state.entries.length < 2 ||
+        !event.isPrimary || event.button !== 0) return;
+    event.preventDefault();
+    const handle = event.currentTarget;
+    handle.focus({ preventScroll: true });
+    const row = handle.closest('.join-order-item');
+    const scroller = handle.closest('.modal-content');
+    state.drag = {
+        handle, row, scroller, pointerId: event.pointerId, from: index, to: index,
+        startY: event.clientY, clientY: event.clientY, scrollTop: scroller.scrollTop,
+        active: false, frame: null
+    };
+    handle.setPointerCapture(event.pointerId);
+    handle.addEventListener('pointermove', moveJoinDrag);
+    handle.addEventListener('pointerup', finishJoinDrag);
+    handle.addEventListener('pointercancel', cancelJoinDrag);
+    handle.addEventListener('lostpointercapture', cancelJoinDrag);
+    document.getElementById('join-video-submit').disabled = true;
+}
+
+function moveJoinDrag(event) {
+    const drag = _joinState?.drag;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    drag.clientY = event.clientY;
+    if (!drag.active && Math.abs(event.clientY - drag.startY) >= 5) {
+        drag.active = true;
+        drag.row.classList.add('join-dragging');
+        document.getElementById('join-video-modal').classList.add('join-sorting');
+        updateJoinDrag();
+    }
+}
+
+function updateJoinDrag() {
+    const drag = _joinState?.drag;
+    if (!drag || !drag.active) return;
+    const bounds = drag.scroller.getBoundingClientRect();
+    if (drag.clientY < bounds.top + 48) drag.scroller.scrollTop -= 12;
+    else if (drag.clientY > bounds.bottom - 48) drag.scroller.scrollTop += 12;
+    drag.row.style.transform = `translateY(${drag.clientY - drag.startY + drag.scroller.scrollTop - drag.scrollTop}px)`;
+    const rows = [...document.querySelectorAll('#join-video-order .join-order-item')];
+    rows.forEach(row => row.classList.remove('join-drop-before', 'join-drop-after'));
+    const others = rows.filter(row => row !== drag.row);
+    const target = others.findIndex(row => {
+        const rect = row.getBoundingClientRect();
+        return drag.clientY < rect.top + rect.height / 2;
+    });
+    drag.to = target < 0 ? others.length : target;
+    if (drag.to !== drag.from) {
+        if (target < 0) others[others.length - 1].classList.add('join-drop-after');
+        else others[target].classList.add('join-drop-before');
+    }
+    drag.frame = requestAnimationFrame(updateJoinDrag);
+}
+
+function clearJoinDrag() {
+    const state = _joinState;
+    const drag = state?.drag;
+    if (!drag) return null;
+    state.drag = null;
+    cancelAnimationFrame(drag.frame);
+    drag.handle.removeEventListener('pointermove', moveJoinDrag);
+    drag.handle.removeEventListener('pointerup', finishJoinDrag);
+    drag.handle.removeEventListener('pointercancel', cancelJoinDrag);
+    drag.handle.removeEventListener('lostpointercapture', cancelJoinDrag);
+    if (drag.handle.hasPointerCapture(drag.pointerId)) drag.handle.releasePointerCapture(drag.pointerId);
+    drag.row.style.transform = '';
+    drag.row.classList.remove('join-dragging');
+    document.getElementById('join-video-modal').classList.remove('join-sorting');
+    document.querySelectorAll('#join-video-order .join-order-item')
+        .forEach(row => row.classList.remove('join-drop-before', 'join-drop-after'));
+    document.getElementById('join-video-submit').disabled = state.busy || state.entries.length < 2 || !state.outputFps || !state.outputResolution;
+    return drag;
+}
+
+function finishJoinDrag(event) {
+    const drag = _joinState?.drag;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    if (drag.active) {
+        cancelAnimationFrame(drag.frame);
+        drag.clientY = event.clientY;
+        updateJoinDrag();
+    }
+    const finished = clearJoinDrag();
+    if (finished.active) joinReorderClip(finished.from, finished.to);
+}
+
+function cancelJoinDrag() {
+    clearJoinDrag();
+}
+
+function joinRemoveClip(index) {
+    const state = _joinState;
+    if (!state || state.busy || state.drag || index < 0 || index >= state.entries.length) return;
+    state.entries.splice(index, 1);
+    invalidateJoinCheck();
+    renderJoinOrder();
+    renderJoinCandidates();
+    const focusTarget = state.entries.length ?
+        document.getElementById(`join-grip-${Math.min(index, state.entries.length - 1)}`) :
+        document.getElementById('join-video-add');
+    focusTarget.focus();
+}
+
+function changeJoinFps() {
+    if (!_joinState || _joinState.busy || _joinState.drag) return;
+    _joinState.outputFps = Number(document.getElementById('join-video-fps').value);
+    invalidateJoinCheck();
+    renderJoinOrder();
+}
+
+function changeJoinResolution() {
+    if (!_joinState || _joinState.busy || _joinState.drag) return;
+    _joinState.outputResolution = document.getElementById('join-video-resolution').value;
+    _joinState.resolutionChosen = true;
+    invalidateJoinCheck();
+    renderJoinOrder();
+}
+
+function formatJoinDuration(seconds) {
+    return seconds < 60 ? `${Number(seconds.toFixed(2))}s` : formatDuration(seconds);
+}
+
+function joinOutputDuration(clip) {
+    if (!_joinState.outputFps) return clip.duration_seconds;
+    return clip.total_frames > 0 ? clip.total_frames / _joinState.outputFps :
+        clip.duration_seconds * clip.framerate / _joinState.outputFps;
+}
+
+function applyJoinTimings(clips) {
+    clips.forEach((clip, index) => {
+        const entry = _joinState.entries[index];
+        if (entry && clip.video_id === entry.id && clip.source_fps && clip.total_frames) {
+            Object.assign(entry, {
+                framerate: clip.source_fps, total_frames: clip.total_frames, duration_seconds: clip.duration_seconds
+            });
+            if (clip.resolution) entry.resolution = clip.resolution;
+        }
+    });
+}
+
+function joinProcessingHint(clip, index) {
+    const state = _joinState;
+    const review = state.review || state.validation;
+    const plan = review?.clips[index];
+    if (plan?.error) return `Cannot join · ${plan.error}`;
+    if (plan && review.compatible === false) return 'Checked';
+    const changes = [];
+    const resolutionChanged = clip.resolution && state.outputResolution && clip.resolution !== state.outputResolution;
+    if (resolutionChanged) {
+        const [sourceWidth, sourceHeight] = clip.resolution.split('x').map(Number);
+        const [targetWidth, targetHeight] = state.outputResolution.split('x').map(Number);
+        const valid = [sourceWidth, sourceHeight, targetWidth, targetHeight]
+            .every(value => Number.isSafeInteger(value) && value > 0);
+        const direction = valid && targetWidth >= sourceWidth && targetHeight >= sourceHeight ? 'increased' :
+            valid && targetWidth <= sourceWidth && targetHeight <= sourceHeight ? 'decreased' : 'changed';
+        changes.push(`Resolution ${direction} to ${state.outputResolution}`);
+    }
+    if (state.outputFps && state.outputFps !== clip.framerate) {
+        changes.push(`Frame rate changed to ${state.outputFps} FPS`);
+    }
+    const reencode = plan ? plan.action === 'reencode' || review.mode === 'all' : resolutionChanged;
+    if (reencode) {
+        if (plan?.padding) changes.push('Padding');
+        if (plan?.codec && plan.codec !== 'h264') changes.push('Codec changed to H.264');
+        changes.push('Lossy re-encode');
+    }
+    return changes.join(' · ') || (plan ? 'No changes needed' : '');
+}
+
+function joinReviewKind(index) {
+    const state = _joinState;
+    const review = state.review || state.validation;
+    const plan = review?.clips[index];
+    if (!plan) return '';
+    if (plan.error) return 'error';
+    if (review.compatible !== true) return '';
+    if (plan.action === 'reencode' || review.mode === 'all') return 'reencode';
+    if (plan.action !== 'copy' && plan.action !== 'retime') return '';
+    // Timestamp normalization alone does not change the playback settings.
+    const clip = state.entries[index];
+    return clip.framerate === state.outputFps && clip.resolution === state.outputResolution ? 'preserved' : 'adjusted';
+}
+
+function renderJoinOrder() {
+    const state = _joinState;
+    if (!state) return;
+    const rates = [...new Set(state.entries.map(clip => clip.framerate).filter(Number.isInteger))].sort((a, b) => a - b);
+    const resolutions = [...new Set(state.entries.map(clip => clip.resolution)
+        .filter(resolution => typeof resolution === 'string' && /^[1-9]\d*x[1-9]\d*$/.test(resolution)))];
+    const area = resolution => resolution.split('x').reduce((product, value) => product * Number(value), 1);
+    resolutions.sort((a, b) => area(b) - area(a));
+    if (!state.resolutionChosen || !resolutions.includes(state.outputResolution)) {
+        state.outputResolution = resolutions[0] || null;
+    }
+    const resolutionSelect = document.getElementById('join-video-resolution');
+    resolutionSelect.innerHTML = resolutions.length ?
+        resolutions.map(resolution => `<option value="${resolution}">${resolution}</option>`).join('') :
+        '<option value="">Add clips first</option>';
+    resolutionSelect.value = state.outputResolution || '';
+    resolutionSelect.disabled = state.busy || !resolutions.length;
+    if (!rates.includes(state.outputFps)) state.outputFps = rates[0] || null;
+    const fpsSelect = document.getElementById('join-video-fps');
+    fpsSelect.innerHTML = rates.length ? rates.map(fps => `<option value="${fps}">${fps} FPS</option>`).join('') :
+        '<option value="">Add clips first</option>';
+    fpsSelect.value = state.outputFps || '';
+    fpsSelect.disabled = state.busy || !rates.length;
+    document.getElementById('join-video-add').disabled = state.busy;
+    const disabled = state.busy ? ' disabled' : '';
+    document.getElementById('join-video-order').innerHTML = state.entries.map((clip, index) => {
+        const resolutionChanged = state.outputResolution && clip.resolution && clip.resolution !== state.outputResolution;
+        const processingHint = joinProcessingHint(clip, index);
+        const reviewKind = joinReviewKind(index);
+        const reencode = reviewKind === 'reencode' || (!reviewKind && resolutionChanged);
+        const review = state.review || state.validation;
+        const warning = [
+            review?.warning,
+            index === 0 && review?.mode === 'all' ? review.fallback_reason : '',
+        ].filter(Boolean).join(' ');
+        const indicator = reviewKind ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${reviewKind === 'preserved' ?
+            '<path d="m5 12 4 4L19 6"/>' : reviewKind === 'adjusted' ?
+                '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>' :
+                '<path d="M12 3 2 21h20L12 3ZM12 9v5M12 17v1"/>'}</svg>` : '';
+        return `
+        <li class="join-item join-order-item${reviewKind ? ` join-reviewed-${reviewKind}` : ''}">
+            <button id="join-grip-${index}" type="button" class="btn-icon join-grip" onpointerdown="beginJoinDrag(event, ${index})" onkeydown="joinGripKeydown(event, ${index})" aria-label="Reorder ${escapeAttr(clip.name)}" aria-describedby="join-order-help"${disabled}>
+                <svg width="18" height="22" viewBox="0 0 20 24" fill="currentColor" aria-hidden="true"><rect x="4" y="3" width="4" height="4" rx="1"/><rect x="12" y="3" width="4" height="4" rx="1"/><rect x="4" y="10" width="4" height="4" rx="1"/><rect x="12" y="10" width="4" height="4" rx="1"/><rect x="4" y="17" width="4" height="4" rx="1"/><rect x="12" y="17" width="4" height="4" rx="1"/></svg>
+            </button>
+            ${clip.thumbnail_path ? `<img src="${API_BASE}/videos/${clip.id}/thumbnail" alt="" loading="lazy" draggable="false">` : '<span></span>'}
+            <div class="join-clip-label">
+                <strong>${index + 1}. ${escapeHtml(clip.name)}</strong>
+                <span class="join-hint">${clip.resolution ? escapeHtml(clip.resolution) + ' · ' : ''}${clip.framerate} fps · ${formatJoinDuration(clip.duration_seconds)}</span>
+                ${processingHint ? `<span class="join-hint${reviewKind ? ' join-clip-status' : ''}"${reencode ? ' title="Re-encoding may reduce quality"' : ''}>${indicator}<span>${escapeHtml(processingHint)}</span></span>` : ''}
+                ${warning ? `<span class="join-hint join-clip-warning">${escapeHtml(warning)}</span>` : ''}
+            </div>
+            <button type="button" class="btn-icon join-remove" onclick="joinRemoveClip(${index})" aria-label="Remove entry ${index + 1}" title="Remove clip"${disabled}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+            </button>
+        </li>`;
+    }).join('') || '<li class="join-empty">Add at least two clips to get started.</li>';
+    const duration = state.validation ? state.validation.duration_seconds :
+        state.entries.reduce((sum, clip) => sum + joinOutputDuration(clip), 0);
+    document.getElementById('join-video-total').textContent =
+        `${state.entries.length} clips${state.outputFps ? ` · ${state.outputFps} FPS` : ''} · ${formatJoinDuration(duration)}${state.validation ? '' : ' estimated'}`;
+    const submit = document.getElementById('join-video-submit');
+    submit.disabled = state.busy || state.pickerOpen || state.entries.length < 2 || !state.outputFps || !state.outputResolution || !!state.drag;
+    submit.textContent = state.busy ? (state.creating ? 'Starting join...' : 'Reviewing...') :
+        state.validation ? 'Join' : 'Review';
+}
+
+function renderJoinCandidates() {
+    const state = _joinState;
+    if (!state) return;
+    const selection = state.pickerSelection || new Map(state.entries.map(clip => [clip.id, clip]));
+    document.getElementById('join-video-candidates').innerHTML = state.candidates.map(clip => {
+        const selected = selection.has(clip.id);
+        return `
+        <label id="join-candidate-${clip.id}" class="video-gallery-card join-candidate${selected ? ' selected' : ''}">
+            <input id="join-select-${clip.id}" type="checkbox" class="capture-checkbox" aria-label="Select ${escapeAttr(clip.name)}" onchange="toggleJoinCandidate(${clip.id})"${selected ? ' checked' : ''}>
+            <span class="gallery-checkbox-indicator" aria-hidden="true"></span>
+            <span class="join-candidate-preview">
+                ${clip.thumbnail_path ? `<img src="${API_BASE}/videos/${clip.id}/thumbnail" alt="" loading="lazy">` : '<span class="join-hint">No preview</span>'}
+            </span>
+            <span class="join-candidate-details">
+                <span class="join-clip-label"><strong>${escapeHtml(clip.name)}</strong><span class="join-hint">${escapeHtml(clip.resolution)} · ${clip.framerate} fps · ${formatJoinDuration(clip.duration_seconds)}</span></span>
+            </span>
+        </label>`;
+    }).join('') || '<div class="join-empty">No matching completed timelapses.</div>';
+    document.getElementById('join-video-more').hidden = !state.more;
+    updateJoinPickerControls();
+}
+
+function updateJoinPickerControls() {
+    const state = _joinState;
+    if (!state) return;
+    const selection = state.pickerSelection || new Map(state.entries.map(clip => [clip.id, clip]));
+    const entryCount = state.pickerOpen ? getJoinPickerEntries().length : state.entries.length;
+    const originalCounts = new Map();
+    for (const clip of state.entries) {
+        originalCounts.set(clip.id, (originalCounts.get(clip.id) || 0) + 1);
+    }
+    for (const clip of state.candidates) {
+        const toggle = document.getElementById(`join-select-${clip.id}`);
+        if (!toggle) continue;
+        toggle.checked = selection.has(clip.id);
+        toggle.disabled = state.busy || !!state.drag || !state.pickerOpen ||
+            (!toggle.checked && entryCount + (originalCounts.get(clip.id) || 1) > 100);
+        toggle.closest('.join-candidate')?.classList.toggle('selected', toggle.checked);
+    }
+    document.getElementById('join-video-picker-count').textContent = `${selection.size} selected`;
+    document.getElementById('join-video-picker-apply').disabled = state.busy || !!state.drag || !state.pickerOpen;
+}
+
+function searchJoinVideos() {
+    clearTimeout(_joinSearchTimer);
+    if (!_joinState) return;
+    // Invalidate an in-flight page immediately, not only after the debounce.
+    _joinState.searchVersion++;
+    _joinSearchTimer = setTimeout(() => loadJoinCandidates(), 250);
+}
+
+async function loadJoinCandidates(reset = true) {
+    const state = _joinState;
+    if (!state) return;
+    const version = ++state.searchVersion;
+    if (reset) {
+        state.offset = 0;
+        state.query = document.getElementById('join-video-search').value;
+    }
+    const container = document.getElementById('join-video-candidates');
+    const more = document.getElementById('join-video-more');
+    container.setAttribute('aria-busy', 'true');
+    more.disabled = true;
+    try {
+        const page = await apiRequest('/videos/', { query: {
+            status: 'completed', search: state.query, limit: 24, offset: state.offset
+        } });
+        if (_joinState !== state || state.searchVersion !== version) return;
+        state.candidates = [...new Map((reset ? page : [...state.candidates, ...page])
+            .map(clip => [clip.id, clip])).values()];
+        state.offset += page.length;
+        state.more = page.length === 24;
+        renderJoinCandidates();
+    } catch (error) {
+        if (_joinState === state && state.searchVersion === version) {
+            document.getElementById('join-video-errors').textContent = `Could not load timelapses: ${error.message}`;
+        }
+    } finally {
+        if (_joinState === state && state.searchVersion === version) {
+            container.setAttribute('aria-busy', 'false');
+            more.disabled = false;
+        }
+    }
+}
+
+async function submitVideoJoin(event) {
+    event.preventDefault();
+    const state = _joinState;
+    if (!state || state.busy || state.drag || state.pickerOpen || state.entries.length < 2 || !state.outputFps || !state.outputResolution) return;
+    state.busy = true;
+    const version = state.version;
+    const validation = state.validation;
+    state.creating = !!validation;
+    renderJoinOrder();
+    renderJoinCandidates();
+    document.getElementById('join-video-errors').textContent = '';
+    try {
+        const ids = state.entries.map(clip => clip.id);
+        if (!validation) {
+            document.getElementById('join-video-status').textContent = 'Reviewing clips...';
+            const report = await apiRequest('/videos/join/validate', { method: 'POST',
+                body: { video_ids: ids, output_fps: state.outputFps, output_resolution: state.outputResolution } });
+            if (_joinState !== state || state.version !== version) return;
+            applyJoinTimings(report.clips);
+            state.review = report;
+            document.getElementById('join-video-status').textContent = '';
+            if (!report.compatible) {
+                document.getElementById('join-review-announcement').textContent =
+                    'Review found incompatible clips. Fix the marked entries and review again.';
+                return;
+            }
+            state.outputResolution = report.output_resolution || state.outputResolution;
+            state.resolutionChosen = true;
+            state.validation = report;
+            const kinds = report.clips.map((_, index) => joinReviewKind(index));
+            const unchanged = kinds.filter(kind => kind === 'preserved').length;
+            const adjusted = kinds.filter(kind => kind === 'adjusted').length;
+            const converted = kinds.filter(kind => kind === 'reencode').length;
+            document.getElementById('join-review-announcement').textContent =
+                `Review complete. Unchanged clips: ${unchanged}. Timing-adjusted clips: ${adjusted}. Clips needing conversion: ${converted}. Join is ready.`;
+            return;
+        }
+        state.creating = true;
+        document.getElementById('join-video-status').textContent = 'Starting join...';
+        renderJoinOrder();
+        const video = await apiRequest('/videos/join', { method: 'POST', body: {
+            name: document.getElementById('join-video-name').value,
+            video_ids: ids, output_fps: state.outputFps, output_resolution: state.outputResolution,
+            revisions: validation.clips.map(clip => clip.revision),
+            mode: validation.mode || 'copy', plan_token: validation.plan_token
+        } });
+        if (_joinState !== state) {
+            loadVideos();
+            showNotification('Joining started. Original videos are unchanged.');
+            return;
+        }
+        // Replace the modal's history entry instead of racing history.back()
+        // against navigation to the new video.
+        state.creating = false;
+        const closingFromPopstate = _closingFromPopstate;
+        try {
+            _closingFromPopstate = true;
+            closeModal('join-video-modal');
+        } finally {
+            _closingFromPopstate = closingFromPopstate;
+        }
+        if (_modalHistoryDepth > 0) _modalHistoryDepth--;
+        navigateTo(`/timelapses/${video.id}`, true);
+        loadVideos();
+        showNotification('Joining started. Original videos are unchanged.');
+    } catch (error) {
+        if (_joinState !== state) {
+            if (state.creating) showNotification(`Join could not start: ${error.message}`, 'error');
+            return;
+        }
+        state.validation = null;
+        state.review = null;
+        document.getElementById('join-review-announcement').textContent = '';
+        document.getElementById('join-video-errors').textContent = error.message;
+        if (error.detail && Array.isArray(error.detail.clips)) {
+            applyJoinTimings(error.detail.clips);
+            if (error.detail.clips.some(clip => clip.error)) {
+                state.review = { compatible: false, clips: error.detail.clips };
+            }
+        }
+        if (Array.isArray(error.detail?.available_fps)) {
+            const rates = error.detail.available_fps;
+            document.getElementById('join-video-errors').textContent += ` Actual source FPS: ${rates.join(', ')}.`;
+        }
+        if (Array.isArray(error.detail?.available_resolutions)) {
+            document.getElementById('join-video-errors').textContent += ` Actual resolutions: ${error.detail.available_resolutions.join(', ')}.`;
+        }
+        document.getElementById('join-video-status').textContent = '';
+    } finally {
+        if (_joinState === state) {
+            state.busy = false;
+            state.creating = false;
+            renderJoinOrder();
+            renderJoinCandidates();
+            if (document.activeElement === document.body) document.getElementById('join-video-submit').focus();
+        }
+    }
+}
+
+function handleJoinModalKeydown(event) {
+    if (!_joinState) return;
+    if (event.key === 'Escape' && (_joinState?.pickerOpen || _joinState?.drag)) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (_joinState.drag) cancelJoinDrag();
+        else closeJoinPicker();
+        return;
+    }
+    if (event.key !== 'Tab') return;
+    const modal = document.getElementById('join-video-modal');
+    const scope = modal;
+    const focusable = [...scope.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled)')]
+        .filter(element => !element.closest('[inert]'))
+        .filter(element => !element.hidden && element.offsetParent !== null);
+    if (!focusable.length) return;
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (!scope.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
+}
+
 async function loadVideos() {
     try {
         const videos = await apiRequest('/videos/');
@@ -2345,7 +2983,7 @@ function renderVideos(videos, isEmpty) {
         container.innerHTML = `
             <div class="empty-state">
                 <h3>${hasFilter ? 'No matching videos' : 'No processed videos'}</h3>
-                <p>${hasFilter ? 'Try adjusting your search or filters' : 'Click <strong>+ Build Timelapse</strong> above to create your first timelapse video'}</p>
+                <p>${hasFilter ? 'Try adjusting your search or filters' : 'Click <strong>Build</strong> above to create your first timelapse video'}</p>
             </div>
         `;
         return;
@@ -2366,8 +3004,10 @@ function renderVideos(videos, isEmpty) {
              data-video-id="${video.id}"
              onclick="videoSelection.handleCardClick(${video.id}, event, openVideoDetail)" title="${escapeAttr(video.name)}">
             <input type="checkbox" class="capture-checkbox"
+                   aria-label="Select ${escapeAttr(video.name)}"
                    ${isSelected ? 'checked' : ''}
                    onclick="event.stopPropagation(); videoSelection.toggle(${video.id}, event)">
+            <span class="gallery-checkbox-indicator" aria-hidden="true"></span>
             <button class="card-fav-btn ${video.is_favorite ? 'favorited' : ''}" 
                     onclick="event.stopPropagation(); toggleFavorite('videos', ${video.id}, ${video.is_favorite ? 'true' : 'false'})"
                     title="${video.is_favorite ? 'Remove from favorites' : 'Add to favorites'}">
@@ -2379,7 +3019,7 @@ function renderVideos(videos, isEmpty) {
                     `<div class="thumb-placeholder">${filmIcon}</div>`
                 }
                 ${isCompleted ? `<div class="video-gallery-duration">${formatDuration(video.duration_seconds)}</div>` : ''}
-                ${isProcessing ? `<div class="video-gallery-status"><span class="job-status processing">Processing</span></div>` : ''}
+                ${isProcessing ? `<div class="video-gallery-status"><span class="job-status processing">${video.build_source === 'joined' ? (video.progress >= 70 ? 'Validating' : 'Joining') : 'Processing'}</span></div>` : ''}
                 ${video.status === 'failed' ? `<div class="video-gallery-status"><span class="job-status completed" style="background:var(--danger-color)">Failed</span></div>` : ''}
                 ${isCompleted ? `<div class="video-gallery-play">${playIcon}</div>` : ''}
             </div>
@@ -2391,7 +3031,7 @@ function renderVideos(videos, isEmpty) {
             ` : ''}
             <div class="video-gallery-info">
                 <div class="video-gallery-name">${escapeHtml(video.name)}</div>
-                <div class="video-gallery-job">${video.build_source === 'imported' && !video.job_name ? '<span class="auto-build-badge imported">Imported</span>' : (video.job_name ? escapeHtml(video.job_name) : 'No job')}${video.build_source === 'imported' && video.job_name ? ' <span class="auto-build-badge imported">Imported</span>' : ''}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}</div>
+                <div class="video-gallery-job">${video.build_source === 'imported' && !video.job_name ? '<span class="auto-build-badge imported">Imported</span>' : (video.job_name ? escapeHtml(video.job_name) : 'No job')}${video.build_source === 'imported' && video.job_name ? ' <span class="auto-build-badge imported">Imported</span>' : ''}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}${video.build_source === 'joined' ? ' <span class="auto-build-badge">Joined</span>' : ''}</div>
                 ${video.tags && video.tags.length ? `<div class="card-tags">${video.tags.map(t => tagChipHTML(t, true)).join('')}</div>` : ''}
             </div>
         </div>`;
@@ -2416,6 +3056,7 @@ async function loadVideoDetail(videoId) {
         
         title.textContent = video.name;
         cancelVideoRename();
+        document.getElementById('video-rename-btn').disabled = video.build_source === 'joined' && video.status === 'processing';
         
         // Set up video player
         if (video.status === 'completed') {
@@ -2437,7 +3078,7 @@ async function loadVideoDetail(videoId) {
             progressContainer.innerHTML = `
                 <div style="margin-bottom: 1rem;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
-                        <span style="font-size:0.85rem;color:var(--text-secondary);">Building timelapse...</span>
+                        <span style="font-size:0.85rem;color:var(--text-secondary);">${video.build_source === 'joined' ? (video.progress >= 70 ? 'Validating joined video...' : 'Joining timelapses...') : 'Building timelapse...'}</span>
                         <span style="font-size:0.85rem;font-weight:600;color:var(--primary-color);">${Math.round(video.progress)}%</span>
                     </div>
                     <div class="progress-bar" style="height:6px;">
@@ -2457,7 +3098,7 @@ async function loadVideoDetail(videoId) {
                 }, 3000);
             }
         } else {
-            progressContainer.innerHTML = '';
+            progressContainer.innerHTML = video.error_message ? `<p class="join-error" role="alert">${escapeHtml(video.error_message)}</p>` : '';
             if (_videoDetailPollInterval) {
                 clearInterval(_videoDetailPollInterval);
                 _videoDetailPollInterval = null;
@@ -2472,7 +3113,7 @@ async function loadVideoDetail(videoId) {
             ? (video.job_id
                 ? `<a href="/jobs/${video.job_id}" class="job-link" onclick="event.preventDefault(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a>`
                 : escapeHtml(video.job_name))
-            : '<span class="auto-build-badge imported">Imported</span>';
+            : (video.build_source === 'imported' ? '<span class="auto-build-badge imported">Imported</span>' : 'No job');
         const jobEditBtn = `<button class="btn-icon" onclick="showVideoJobPicker(${video.id}, ${video.job_id || 'null'})" title="Change job" style="padding:0 0.25rem;margin-left:0.25rem;vertical-align:middle;">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </button>`;
@@ -2489,7 +3130,11 @@ async function loadVideoDetail(videoId) {
         
         // Row 3: Resolution, Framerate, Quality, Frames
         metaHtml += `<dt>Resolution</dt><dd>${video.resolution}</dd><dt>Framerate</dt><dd>${video.framerate} fps</dd>`;
-        metaHtml += `<dt>Quality</dt><dd>${video.quality}</dd><dt>Frames</dt><dd>${video.total_frames.toLocaleString()}</dd>`;
+        const qualityLabel = video.build_source === 'joined' ?
+            (video.quality === 'preserved' ? 'Original quality preserved' :
+                video.quality === 'partly_converted' ? 'Partly converted · High' : 'Converted · High') :
+            escapeHtml(video.quality);
+        metaHtml += `<dt>Quality</dt><dd>${qualityLabel}</dd><dt>Frames</dt><dd>${video.total_frames.toLocaleString()}</dd>`;
         
         meta.innerHTML = metaHtml;
         
@@ -2682,14 +3327,14 @@ async function saveVideoJob(videoId) {
 
 async function cancelVideoBuild(videoId, videoName) {
     confirmAction(
-        `Cancel the build for "${videoName}"? The partial file will be deleted.`,
+        `Cancel processing for "${videoName}"? The partial file will be deleted.`,
         async () => {
             try {
                 await apiRequest(`/videos/${videoId}/cancel`, { method: 'POST' });
                 closeVideoDetail();
                 loadVideos();
                 refreshEventsSoon();
-                showNotification(`Build cancelled for "${videoName}"`);
+                showNotification(`Processing cancelled for "${videoName}"`);
             } catch (error) {
                 showNotification(`Failed to cancel: ${error.message}`, 'error');
             }
@@ -2949,14 +3594,14 @@ async function showProcessVideoModal(jobId, jobName) {
             jobSelector.style.display = 'none';
             jobSelect.removeAttribute('required');
             document.getElementById('process_job_id').value = jobId;
-            document.querySelector('#process-video-modal .modal-header h3').textContent = `Build Timelapse - ${jobName}`;
+            document.querySelector('#process-video-modal .modal-header h3').textContent = `Build - ${jobName}`;
             await populateVideoFormFromJob(jobId, jobName);
         } else {
             // Opened from Timelapses page — show job selector
             jobSelector.style.display = '';
             jobSelect.setAttribute('required', 'required');
             document.getElementById('process_job_id').value = '';
-            document.querySelector('#process-video-modal .modal-header h3').textContent = 'Build Timelapse';
+            document.querySelector('#process-video-modal .modal-header h3').textContent = 'Build';
             
             // Populate job dropdown
             await populateJobSelector();
@@ -3869,8 +4514,20 @@ function showModal(modalId) {
 let _closingFromPopstate = false;
 
 function closeModal(modalId) {
+    if (modalId === 'join-video-modal' && _joinState?.creating) {
+        showNotification('Your confirmed join is still being submitted. Closing does not cancel it.', 'info');
+    }
     const wasActive = document.getElementById(modalId).classList.contains('active');
     document.getElementById(modalId).classList.remove('active');
+
+    if (modalId === 'join-video-modal') {
+        clearTimeout(_joinSearchTimer);
+        document.removeEventListener('keydown', handleJoinModalKeydown, true);
+        clearJoinDrag();
+        const returnFocus = _joinState?.returnFocus;
+        _joinState = null;
+        returnFocus?.focus();
+    }
     
     // Pop history entry if we pushed one and this isn't from popstate
     if (wasActive && _modalHistoryDepth > 0 && !_closingFromPopstate) {
@@ -6709,7 +7366,7 @@ async function scanOrphanedCaptures() {
     const title = document.getElementById('maintenance-title');
     const content = document.getElementById('maintenance-content');
     
-    title.textContent = 'Captures Cleanup';
+    title.textContent = 'Cleanup';
     content.innerHTML = `
         <div style="text-align: center; padding: 2rem;">
             <div style="font-size: 2rem; margin-bottom: 1rem;">🔍</div>
@@ -6942,8 +7599,10 @@ function renderCaptures(captures) {
              onclick="captureSelection.handleCardClick(${capture.id}, event, showCapturePreview)">
             <input type="checkbox" 
                    class="capture-checkbox" 
+                   aria-label="Select capture ${capture.id}"
                    ${captureSelection.has(capture.id) ? 'checked' : ''}
                    onclick="event.stopPropagation(); captureSelection.toggle(${capture.id}, event)">
+            <span class="gallery-checkbox-indicator" aria-hidden="true"></span>
             <button class="card-fav-btn ${capture.is_favorite ? 'favorited' : ''}" 
                     onclick="event.stopPropagation(); toggleFavorite('captures', ${capture.id}, ${capture.is_favorite ? 'true' : 'false'})"
                     title="${capture.is_favorite ? 'Remove from favorites' : 'Add to favorites'}">
@@ -7341,7 +8000,7 @@ function buildVideoCardHtml(v, extraClass) {
                 </div>`}
             <div class="homepage-card-overlay">
                 <div class="homepage-card-title">${escapeHtml(v.name)}</div>
-                <div class="homepage-card-sub">${v.duration_seconds ? formatDuration(v.duration_seconds) : ''} ${v.job_name ? '· ' + escapeHtml(v.job_name) : ''}</div>
+                <div class="homepage-card-sub">${v.duration_seconds ? formatDuration(v.duration_seconds) : ''} ${v.job_name ? '· ' + escapeHtml(v.job_name) : ''}${v.build_source === 'joined' ? ' · Joined' : ''}</div>
             </div>
         </div>`;
 }
@@ -7460,7 +8119,7 @@ function renderHomepageSpotlight(captureData, allVideos) {
                 </svg>
                 <p>Nothing here yet!</p>
                 <span>Set up your first capture job to start building your timelapse library.</span>
-                <button class="btn btn-accent btn-sm" onclick="showCreateJobModal()">+ Create Job</button>
+                <button class="btn btn-accent btn-sm" onclick="showCreateJobModal()">Create</button>
             </div>`;
         return;
     }
@@ -7484,7 +8143,7 @@ function renderHomepageSpotlight(captureData, allVideos) {
                     <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
                 </svg>
                 <p>No captures yet</p>
-                <button class="btn btn-accent btn-sm" onclick="showCreateJobModal()">+ Create Job</button>
+                <button class="btn btn-accent btn-sm" onclick="showCreateJobModal()">Create</button>
             </div>`;
     }
 
@@ -7511,7 +8170,7 @@ function renderHomepageSpotlight(captureData, allVideos) {
                     <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
                 </svg>
                 <p>No timelapses yet</p>
-                <button class="btn btn-accent btn-sm" onclick="navigateTo('/timelapses'); setTimeout(() => showProcessVideoModal(), 300)">+ Build Timelapse</button>
+                <button class="btn btn-accent btn-sm" onclick="navigateTo('/timelapses'); setTimeout(() => showProcessVideoModal(), 300)">Build</button>
             </div>`;
     }
 

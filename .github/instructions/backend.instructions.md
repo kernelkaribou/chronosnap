@@ -19,10 +19,13 @@ applyTo: "backend/**/*.py"
   Every new router needs that `verify_api_key` dependency unless there's a
   specific, documented reason not to (e.g. `/health`, static file serving).
 - **Helpers over duplication.** Use `backend/helpers/db_helpers.py`
-  (`get_or_404`, `ensure_column`, `enrich_capture`, `normalize_favorite`) and
+  (`get_or_404`, `enrich_capture`, `normalize_favorite`) and
   `backend/helpers/file_helpers.py` (`validate_writable_directory`,
   `delete_capture_file`, `delete_video_files`, `cleanup_empty_parents`) instead
   of re-implementing the same lookup/cleanup logic in a new router.
+- **Schema:** new tables/indexes go through `database.py` initialization. There
+  is no `ensure_column` helper. Adding columns to an existing table needs an
+  explicit migration design; editing `CREATE TABLE IF NOT EXISTS` is not enough.
 - **Path safety.** Any endpoint that resolves a path from stored/user-influenced
   data (capture paths, video paths, import file names) must go through the
   existing `resolve_*_path()` helpers — never build filesystem paths by naive
