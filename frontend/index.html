@@ -789,6 +789,79 @@
         </div>
     </div>
 
+    <div id="trim-video-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="trim-video-title">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="trim-video-title">Trim</h3>
+                <button type="button" class="btn-icon" aria-label="Close trim dialog" onclick="closeModal('trim-video-modal')">&times;</button>
+            </div>
+            <form class="trim-body" onsubmit="submitVideoTrim(event)">
+                <div id="trim-video-errors" class="join-error" role="alert"></div>
+                <div id="trim-video-status" class="join-status" role="status" aria-live="polite"></div>
+                <div id="trim-preview-wrap" class="trim-preview-wrap">
+                    <video id="trim-video-preview" class="trim-preview" muted playsinline preload="metadata" aria-label="Selected video preview" onclick="toggleVideoTrimPlayback()"></video>
+                    <fieldset id="trim-preview-controls" class="trim-preview-controls" aria-label="Selection playback controls" disabled>
+                        <button id="trim-preview-toggle" type="button" class="btn-icon" title="Play selection" aria-label="Play selection" onclick="toggleVideoTrimPlayback()">
+                            <svg id="trim-preview-play-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg>
+                            <svg id="trim-preview-pause-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="display:none;"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+                        </button>
+                        <input id="trim-preview-position" class="trim-preview-position" type="range" min="0" max="0" step="any" value="0" aria-label="Preview playback position" oninput="seekVideoTrimPreview(this.value)" onkeydown="handleVideoTrimPlaybackKey(event)">
+                        <output id="trim-preview-time" class="trim-preview-time" aria-label="Selection playback time" aria-live="off">0s / 0s</output>
+                        <button id="trim-preview-fullscreen" type="button" class="btn-icon" title="Fullscreen preview" aria-label="Toggle fullscreen preview" onclick="toggleVideoTrimFullscreen()" hidden>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m8 0h5v-5"/></svg>
+                        </button>
+                    </fieldset>
+                </div>
+                <video id="trim-filmstrip-source" class="trim-filmstrip-source" muted playsinline preload="auto" aria-hidden="true" tabindex="-1"></video>
+                <fieldset id="trim-video-controls" class="trim-controls" disabled>
+                    <div class="trim-timeline" id="trim-timeline">
+                        <div class="trim-film">
+                            <canvas id="trim-filmstrip" width="960" height="72" aria-hidden="true"></canvas>
+                            <div class="trim-discard trim-discard-start"></div>
+                            <div class="trim-discard trim-discard-end"></div>
+                            <div class="trim-window"></div>
+                        </div>
+                        <input id="trim-start-range" class="trim-range" type="range" min="0" max="0" step="1" value="0" aria-label="Seconds removed from start" oninput="setVideoTrimSeconds('start', Number(this.value) / _trimState.info.framerate)" onkeydown="handleVideoTrimRangeKey(event, 'start')">
+                        <input id="trim-end-range" class="trim-range trim-range-end" type="range" min="0" max="0" step="1" value="0" aria-label="Seconds removed from end" oninput="setVideoTrimSeconds('end', Number(this.value) / _trimState.info.framerate)" onkeydown="handleVideoTrimRangeKey(event, 'end')">
+                    </div>
+                    <div class="trim-range-summary">
+                        <span id="trim-video-selection" role="status" aria-live="polite"></span>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="previewVideoTrim()">Preview</button>
+                    </div>
+                    <div class="trim-numbers">
+                        <div class="form-group">
+                            <label for="trim-start-seconds">Start trim <span class="trim-hint">seconds</span></label>
+                            <div class="trim-number-row">
+                                <input id="trim-start-seconds" class="form-control" type="number" min="0" step="1" value="0" required oninput="setVideoTrimSeconds('start', this.value)">
+                                <button type="button" class="btn-icon" title="Reset start" aria-label="Reset start trim" onclick="setVideoTrimSeconds('start', 0)">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7M3 4v7h7"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="trim-end-seconds">End trim <span class="trim-hint">seconds</span></label>
+                            <div class="trim-number-row">
+                                <input id="trim-end-seconds" class="form-control" type="number" min="0" step="1" value="0" required oninput="setVideoTrimSeconds('end', this.value)">
+                                <button type="button" class="btn-icon" title="Reset end" aria-label="Reset end trim" onclick="setVideoTrimSeconds('end', 0)">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7M3 4v7h7"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="trim-video-name">New video name</label>
+                        <input id="trim-video-name" class="form-control" required maxlength="100" autocomplete="off">
+                    </div>
+                    <p class="trim-hint">The original stays unchanged. Safe regions are copied; cut regions may be re-encoded at High quality. Some selections need full re-encoding.</p>
+                </fieldset>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('trim-video-modal')">Close</button>
+                    <button id="trim-video-submit" type="submit" class="btn btn-accent" disabled>Trim</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="join-video-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="join-video-title">
         <div class="modal-content large">
             <div class="modal-header">

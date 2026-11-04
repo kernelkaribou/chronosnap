@@ -43,6 +43,22 @@ class JoinCancelled(Exception):
     pass
 
 
+class MediaCommandError(JoinError):
+    pass
+
+
+class MediaTimestampError(JoinError):
+    pass
+
+
+class MediaStorageError(JoinError):
+    pass
+
+
+class MediaStalledError(JoinError):
+    pass
+
+
 @dataclass
 class JoinOperation:
     lock: threading.RLock = field(default_factory=threading.RLock)
@@ -54,6 +70,8 @@ class JoinOperation:
     revisions: dict[int, str] = field(default_factory=dict)
     plan: "ConversionPlan | None" = None
     write_limit: int | None = None
+    kind: str = "join"
+    monitor_storage: bool = False
 
 
 _operations: dict[int, JoinOperation] = {}
@@ -134,7 +152,7 @@ def _lines(args: list[str], operation: JoinOperation | None = None) -> Iterator[
                 _check_cancel(operation)
                 events = selector.select(timeout=0.2)
                 if time.monotonic() - last_activity > config.VIDEO_BUILD_STALL_TIMEOUT:
-                    raise JoinError("Media processing stalled; the join was stopped")
+                    raise MediaStalledError("Media processing stalled; processing was stopped")
                 for key, _ in events:
                     chunk = os.read(key.fd, 65536)
                     if not chunk:
@@ -152,17 +170,17 @@ def _lines(args: list[str], operation: JoinOperation | None = None) -> Iterator[
                             line, buffer = buffer.split(b"\n", 1)
                             yield line.decode("utf-8", errors="replace")
                         if len(buffer) > 65536:
-                            raise JoinError("Media inspection returned an oversized record")
+                            raise MediaCommandError("Media inspection returned an oversized record")
             if buffer:
                 yield buffer.decode("utf-8", errors="replace")
             process.wait(timeout=5)
             _check_cancel(operation)
             if process.returncode:
                 # Diagnostics can contain private paths. Keep them out of client errors.
-                logger.warning("Join media command failed with exit code %s", process.returncode)
-                raise JoinError("FFmpeg could not read, copy, or validate the video")
+                logger.warning("Media command failed with exit code %s", process.returncode)
+                raise MediaCommandError("FFmpeg could not read, copy, or validate the video")
             if timestamp_error:
-                raise JoinError("Incompatible decoding timestamps; joining would alter playback")
+                raise MediaTimestampError("Incompatible decoding timestamps; processing would alter playback")
         finally:
             if process.poll() is None:
                 process.kill()
@@ -656,7 +674,7 @@ def assert_videos_mutable(video_ids: list[int]):
             if not operation.done.is_set() and (
                 output_id in selected or not selected.isdisjoint(operation.video_ids)
             ):
-                raise HTTPException(409, "A selected video is in use by an active join; cancel or wait for that join")
+                raise HTTPException(409, "A selected video is in use by a join or trim; cancel or wait for it to finish")
 
 
 def create_join(request: VideoJoinCreate) -> dict:
@@ -665,8 +683,8 @@ def create_join(request: VideoJoinCreate) -> dict:
     if not sanitized:
         raise HTTPException(422, "Video name contains only invalid characters")
     with get_db() as conn:
-        if conn.execute("SELECT 1 FROM processed_videos WHERE build_source='joined' AND status='processing'").fetchone():
-            raise HTTPException(409, "Joining is busy; try again when the current join finishes")
+        if conn.execute("SELECT 1 FROM processed_videos WHERE build_source IN ('joined','trimmed') AND status='processing'").fetchone():
+            raise HTTPException(409, "Joining or trimming is busy; try again when the current operation finishes")
     report, sources, plan = _analyze_join(request.video_ids, request.output_fps, request.output_resolution)
     if not report["compatible"]:
         raise HTTPException(422, {"message": "These videos cannot be joined without conversion", "clips": report["clips"]})
@@ -698,9 +716,9 @@ def create_join(request: VideoJoinCreate) -> dict:
         with get_db() as conn:
             conn.execute("BEGIN IMMEDIATE")
             if conn.execute(
-                "SELECT 1 FROM processed_videos WHERE build_source='joined' AND status='processing'"
+                "SELECT 1 FROM processed_videos WHERE build_source IN ('joined','trimmed') AND status='processing'"
             ).fetchone():
-                raise HTTPException(409, "Joining is busy; try again shortly")
+                raise HTTPException(409, "Joining or trimming is busy; try again shortly")
             if get_timelapses_path() != root:
                 raise HTTPException(409, "Timelapse storage changed; check compatibility again")
             for source in sources:
@@ -771,8 +789,18 @@ def _remove_retimed(output: str):
 
 def _progress(video_id: int, value: float):
     with get_db() as conn:
-        conn.execute("UPDATE processed_videos SET progress=? WHERE id=? AND status='processing'",
+        conn.execute("UPDATE processed_videos SET progress=MAX(progress,?) WHERE id=? AND status='processing'",
                      (min(99, value), video_id))
+
+
+def _check_storage(root: str, output: str, limit: int | None):
+    try:
+        if shutil.disk_usage(root).free < 16 * 1024 * 1024:
+            raise MediaStorageError("Timelapse storage is running out of space; processing stopped")
+        if limit and os.path.isfile(output) and os.path.getsize(output) > limit:
+            raise MediaStorageError("Video output exceeded its admitted storage bound")
+    except OSError as exc:
+        raise MediaStorageError("Timelapse storage is unavailable during processing") from exc
 
 
 def _media(args: list[str], operation: JoinOperation, video_id: int,
@@ -781,7 +809,7 @@ def _media(args: list[str], operation: JoinOperation, video_id: int,
     last_update = 0.0
     last_change = time.monotonic()
     previous = None
-    storage_root = get_timelapses_path() if operation.plan else None
+    storage_root = get_timelapses_path() if operation.plan or operation.monitor_storage else None
     with closing(_lines(["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "warning",
                          "-xerror", "-progress", "pipe:1", "-nostats", *args], operation)) as lines:
         for line in lines:
@@ -793,18 +821,14 @@ def _media(args: list[str], operation: JoinOperation, video_id: int,
                 if previous != current:
                     previous, last_change = current, time.monotonic()
                 elif time.monotonic() - last_change > config.VIDEO_BUILD_STALL_TIMEOUT:
-                    raise JoinError("Media processing stopped making progress")
+                    raise MediaStalledError("Media processing stopped making progress")
                 if time.monotonic() - last_update >= 0.5:
                     if storage_root:
-                        try:
-                            if shutil.disk_usage(storage_root).free < 16 * 1024 * 1024:
-                                raise JoinError("Timelapse storage is running out of space; conversion stopped")
-                            if operation.write_limit and os.path.isfile(args[-1]) and os.path.getsize(args[-1]) > operation.write_limit:
-                                raise JoinError("Converted output exceeded its admitted storage bound")
-                        except OSError as exc:
-                            raise JoinError("Timelapse storage is unavailable during conversion") from exc
+                        _check_storage(storage_root, args[-1], operation.write_limit)
                     _progress(video_id, start + span * max(0, float(Fraction(current, 1000000) / duration)))
                     last_update = time.monotonic()
+    if storage_root:
+        _check_storage(storage_root, args[-1], operation.write_limit)
     return frames
 
 
@@ -973,7 +997,7 @@ def process_join(video_id: int):
 def cancel_join(video_id: int) -> bool:
     with _operations_lock:
         operation = _operations.get(video_id)
-    if operation is None:
+    if operation is None or operation.kind != "join":
         return False
     with operation.lock:
         if operation.done.is_set():
@@ -1016,7 +1040,7 @@ def recover_joins():
 
 def shutdown_joins():
     with _operations_lock:
-        ids = list(_operations)
+        ids = [video_id for video_id, operation in _operations.items() if operation.kind == "join"]
     for video_id in ids:
         try:
             cancel_join(video_id)

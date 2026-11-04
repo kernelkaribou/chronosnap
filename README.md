@@ -67,6 +67,35 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 - Download timelapses as GIF with loop/single-play options
 - Background processing with real-time progress tracking
 - Join timelapses losslessly where possible, with opt-in selective conversion for mixed sizes or encodings
+- Trim whole seconds from either end of a completed timelapse without changing the original
+
+#### Trimming timelapses
+
+Open a completed video and choose the **Trim** scissors icon between GIF and Delete.
+Drag either timeline handle or enter the seconds to remove from the start/end.
+Each end has its own reset, and the selection must keep at least one second.
+Preview the selection, name the new video, then choose **Trim**.
+The preview clock shows whole seconds within the selected duration, starting at
+zero, rather than the original video's time range. The playback scrubber updates
+at the display's refresh rate; arrow keys still step through individual frames.
+Escape exits a fullscreen preview first; press it again to close Trim.
+
+Trimming preserves the dimensions, playback FPS, display aspect ratio, and color
+information. Independent H.264 regions are copied unchanged where safe; boundary
+regions are encoded at High quality. If their codec configurations cannot be
+safely stitched, the entire selection is encoded at High quality instead.
+This can introduce a small quality loss and is **not guaranteed lossless**.
+Widely spaced keyframes can mean several seconds need encoding, or that a short
+selection needs encoding in full. No additional dependencies are required.
+
+The original is never overwritten. The new video's Quality field reports whether
+its picture data was preserved, only boundary regions were re-encoded, or the
+whole selection was re-encoded. A completed trim is independent of its source and
+can be trimmed again, downloaded as MP4/GIF, or selected for Join.
+Silent, progressive 8-bit SDR video with a supported integer, constant FPS is
+required; unsupported files are rejected explicitly.
+Joining and trimming share one processing slot. Cancellation removes partial
+output; interrupted trims are cleaned up and marked failed at restart.
 
 #### Joining timelapses
 
@@ -628,6 +657,21 @@ Busy/stale/in-use requests return
 `409`, incompatible inputs `422`, insufficient output space `507`, and concurrent
 compatibility inspections `429`. The picker uses the videos list's `search`,
 `limit`, and `offset` parameters.
+
+**Trim API:** `POST /api/videos/{id}/trim/validate` accepts
+`{"trim_start_seconds":2,"trim_end_seconds":1}` (both default to zero).
+Values must be nonnegative integer **amounts removed**, not absolute timestamps.
+The response includes the real frame count/FPS, selected duration, maximum total
+removable whole seconds, proposed copy/encoding mode, and a source `revision`.
+To start, `POST /api/videos/{id}/trim` accepts the same amounts plus
+`{"name":"Trimmed video","revision":"TOKEN_FROM_VALIDATION"}`.
+Creation re-inspects the source and returns a new processing video with
+`build_source: "trimmed"`. Poll its normal detail endpoint and use the existing
+download, thumbnail, GIF, and cancellation endpoints. The final `quality` is
+`preserved`, `partly_converted`, or `high`, reflecting the actual processing.
+The plan is transient; no source-history fields or database schema are added.
+Busy/stale/in-use requests return `409`, invalid/unsupported selections `422`,
+insufficient storage `507`, and a concurrent inspection `429`.
 
 ---
 

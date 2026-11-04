@@ -15,4 +15,4 @@ docker run --rm \
     -v "$(pwd)/frontend:/frontend:ro" \
     -w /tests/unit-js \
     "$NODE_IMAGE" \
-    sh -c 'node test_xss_fixes.js && node test_video_join.js'
+    sh -c 'node test_xss_fixes.js && node test_video_join.js && node test_video_trim.js'

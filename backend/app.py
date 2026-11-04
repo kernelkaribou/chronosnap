@@ -83,7 +83,9 @@ async def lifespan(app: FastAPI):
     init_db()
 
     from .services.video_joiner import recover_joins, shutdown_joins
+    from .services.video_trimmer import recover_trims, shutdown_trims
     recover_joins()
+    recover_trims()
     
     # Ensure required directories exist (use DB settings with config fallbacks)
     import os
@@ -111,7 +113,10 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     try:
-        shutdown_joins()
+        try:
+            shutdown_trims()
+        finally:
+            shutdown_joins()
     finally:
         if scheduler:
             scheduler.stop()
