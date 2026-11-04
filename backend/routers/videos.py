@@ -8,7 +8,7 @@ from typing import List, Optional
 import os
 import logging
 
-from ..models import VideoCreate, VideoResponse, VideoJoinRequest, VideoJoinCreate
+from ..models import VideoCreate, VideoResponse, VideoJoinRequest, VideoJoinCreate, VideoTrimRequest, VideoTrimCreate
 from ..database import get_db, dict_from_row
 from ..services.video_processor import process_video, cancel_video, generate_gif
 from ..utils import get_now, to_iso
@@ -17,6 +17,7 @@ from ..helpers.template_vars import build_datetime_vars
 from ..helpers.file_helpers import delete_video_files, resolve_video_path, make_relative, cleanup_empty_parents, sanitize_directory_name
 from ..services.event_service import add_event
 from ..services.video_joiner import analyze_join, create_join, process_join, cancel_join, assert_videos_mutable
+from ..services.video_trimmer import analyze_trim, create_trim, start_trim, cancel_trim
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -316,6 +317,18 @@ async def get_video(video_id: int):
         return video_dict
 
 
+@router.post("/{video_id}/trim/validate")
+def validate_video_trim(video_id: int, request: VideoTrimRequest):
+    return analyze_trim(video_id, request)
+
+
+@router.post("/{video_id}/trim", response_model=VideoResponse, status_code=201)
+def trim_video(video_id: int, request: VideoTrimCreate):
+    result = create_trim(video_id, request)
+    start_trim(result["id"])
+    return result
+
+
 class VideoRenameRequest(BaseModel):
     name: str
 
@@ -565,7 +578,8 @@ def cancel_video_build(video_id: int):
         if vid['status'] != 'processing':
             raise HTTPException(status_code=400, detail="Video is not currently processing")
     
-    if cancel_join(video_id) if vid["build_source"] == "joined" else cancel_video(video_id):
+    cancel = {"joined": cancel_join, "trimmed": cancel_trim}.get(vid["build_source"], cancel_video)
+    if cancel(video_id):
         return {"status": "cancelled"}
     raise HTTPException(status_code=400, detail="No active build process found")
 

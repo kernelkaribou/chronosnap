@@ -206,7 +206,7 @@ function setValue(id, value) {
  * @param {Object} options - fetch options { method, body, query }
  */
 async function apiRequest(endpoint, options = {}) {
-    const { method = 'GET', body = null, rawBody = null, query = null } = options;
+    const { method = 'GET', body = null, rawBody = null, query = null, signal = null } = options;
     
     // Build URL with query params
     let url = `${API_BASE}${endpoint}`;
@@ -220,6 +220,7 @@ async function apiRequest(endpoint, options = {}) {
     }
     
     const fetchOptions = { method, headers: {} };
+    if (signal) fetchOptions.signal = signal;
     
     if (rawBody) {
         // FormData or other raw body — let browser set Content-Type (multipart boundary)
@@ -3019,7 +3020,7 @@ function renderVideos(videos, isEmpty) {
                     `<div class="thumb-placeholder">${filmIcon}</div>`
                 }
                 ${isCompleted ? `<div class="video-gallery-duration">${formatDuration(video.duration_seconds)}</div>` : ''}
-                ${isProcessing ? `<div class="video-gallery-status"><span class="job-status processing">${video.build_source === 'joined' ? (video.progress >= 70 ? 'Validating' : 'Joining') : 'Processing'}</span></div>` : ''}
+                ${isProcessing ? `<div class="video-gallery-status"><span class="job-status processing">${['joined', 'trimmed'].includes(video.build_source) ? (video.progress >= 70 ? 'Validating' : video.build_source === 'trimmed' ? 'Trimming' : 'Joining') : 'Processing'}</span></div>` : ''}
                 ${video.status === 'failed' ? `<div class="video-gallery-status"><span class="job-status completed" style="background:var(--danger-color)">Failed</span></div>` : ''}
                 ${isCompleted ? `<div class="video-gallery-play">${playIcon}</div>` : ''}
             </div>
@@ -3031,7 +3032,7 @@ function renderVideos(videos, isEmpty) {
             ` : ''}
             <div class="video-gallery-info">
                 <div class="video-gallery-name">${escapeHtml(video.name)}</div>
-                <div class="video-gallery-job">${video.build_source === 'imported' && !video.job_name ? '<span class="auto-build-badge imported">Imported</span>' : (video.job_name ? escapeHtml(video.job_name) : 'No job')}${video.build_source === 'imported' && video.job_name ? ' <span class="auto-build-badge imported">Imported</span>' : ''}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}${video.build_source === 'joined' ? ' <span class="auto-build-badge">Joined</span>' : ''}</div>
+                <div class="video-gallery-job">${video.build_source === 'imported' && !video.job_name ? '<span class="auto-build-badge imported">Imported</span>' : (video.job_name ? escapeHtml(video.job_name) : 'No job')}${video.build_source === 'imported' && video.job_name ? ' <span class="auto-build-badge imported">Imported</span>' : ''}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}${video.build_source === 'joined' ? ' <span class="auto-build-badge">Joined</span>' : ''}${video.build_source === 'trimmed' ? ' <span class="auto-build-badge">Trimmed</span>' : ''}</div>
                 ${video.tags && video.tags.length ? `<div class="card-tags">${video.tags.map(t => tagChipHTML(t, true)).join('')}</div>` : ''}
             </div>
         </div>`;
@@ -3056,7 +3057,7 @@ async function loadVideoDetail(videoId) {
         
         title.textContent = video.name;
         cancelVideoRename();
-        document.getElementById('video-rename-btn').disabled = video.build_source === 'joined' && video.status === 'processing';
+        document.getElementById('video-rename-btn').disabled = ['joined', 'trimmed'].includes(video.build_source) && video.status === 'processing';
         
         // Set up video player
         if (video.status === 'completed') {
@@ -3078,7 +3079,7 @@ async function loadVideoDetail(videoId) {
             progressContainer.innerHTML = `
                 <div style="margin-bottom: 1rem;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
-                        <span style="font-size:0.85rem;color:var(--text-secondary);">${video.build_source === 'joined' ? (video.progress >= 70 ? 'Validating joined video...' : 'Joining timelapses...') : 'Building timelapse...'}</span>
+                        <span style="font-size:0.85rem;color:var(--text-secondary);">${video.build_source === 'trimmed' ? (video.progress >= 70 ? 'Validating trimmed video...' : 'Trimming video...') : video.build_source === 'joined' ? (video.progress >= 70 ? 'Validating joined video...' : 'Joining timelapses...') : 'Building timelapse...'}</span>
                         <span style="font-size:0.85rem;font-weight:600;color:var(--primary-color);">${Math.round(video.progress)}%</span>
                     </div>
                     <div class="progress-bar" style="height:6px;">
@@ -3130,7 +3131,10 @@ async function loadVideoDetail(videoId) {
         
         // Row 3: Resolution, Framerate, Quality, Frames
         metaHtml += `<dt>Resolution</dt><dd>${video.resolution}</dd><dt>Framerate</dt><dd>${video.framerate} fps</dd>`;
-        const qualityLabel = video.build_source === 'joined' ?
+        const qualityLabel = video.build_source === 'trimmed' ?
+            (video.quality === 'preserved' ? 'Original quality preserved' :
+                video.quality === 'partly_converted' ? 'Boundary re-encoded · High' : 'Re-encoded · High') :
+            video.build_source === 'joined' ?
             (video.quality === 'preserved' ? 'Original quality preserved' :
                 video.quality === 'partly_converted' ? 'Partly converted · High' : 'Converted · High') :
             escapeHtml(video.quality);
@@ -3156,7 +3160,7 @@ async function loadVideoDetail(videoId) {
             });
         }
         
-        // Build actions (header icons: download, GIF, delete)
+        // Build actions for the selected video only.
         let actionsHtml = '';
         if (video.status === 'processing') {
             actionsHtml += `<button class="btn btn-danger btn-sm" onclick="cancelVideoBuild(${video.id}, '${escapeAttr(video.name)}')">Cancel</button>`;
@@ -3166,12 +3170,22 @@ async function loadVideoDetail(videoId) {
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 </a>`;
                 actionsHtml += gifPopoverHTML(video.id, video.name);
+                actionsHtml += `<button type="button" class="btn-icon" title="Trim" aria-label="Trim video" onclick="showVideoTrim(${video.id})">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="m8.1 8.1 12.9 12.9M14 10l7-7M8.1 15.9 12 12"/></svg>
+                </button>`;
             }
             actionsHtml += `<button class="btn-icon" title="Delete" onclick="deleteVideoFromDetail(${video.id}, '${escapeAttr(video.name)}')" style="color:var(--danger-color);">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
             </button>`;
         }
         actions.innerHTML = actionsHtml;
+        if (_trimReturnFocusId !== null) {
+            const returnId = _trimReturnFocusId;
+            _trimReturnFocusId = null;
+            if (returnId === video.id && !_trimState && document.activeElement === document.body) {
+                actions.querySelector('[aria-label="Trim video"]')?.focus();
+            }
+        }
     } catch (error) {
         console.error('Failed to load video details:', error);
         showNotification('Failed to load video details', 'error');
@@ -3212,6 +3226,466 @@ async function deleteVideoFromDetail(videoId, videoName) {
             }
         }
     );
+}
+
+let _trimState = null;
+let _trimReturnFocusId = null;
+
+function trimSecondsLabel(seconds) {
+    return `${Number(seconds.toFixed(2))}s`;
+}
+
+function renderVideoTrim() {
+    const state = _trimState;
+    if (!state?.info) return;
+    const info = state.info;
+    for (const edge of ['start', 'end']) {
+        const range = document.getElementById(`trim-${edge}-range`);
+        range.max = info.total_frames;
+        range.step = info.framerate;
+        range.value = state[edge] * info.framerate;
+        range.setAttribute('aria-valuetext', `${state[edge]} seconds removed from ${edge}`);
+        const input = document.getElementById(`trim-${edge}-seconds`);
+        input.value = state[edge];
+        input.max = info.max_trim_seconds - state[edge === 'start' ? 'end' : 'start'];
+        document.getElementById('trim-timeline').style.setProperty(
+            `--trim-${edge}`, `${state[edge] * info.framerate / info.total_frames * 100}%`);
+    }
+    const duration = info.total_frames / info.framerate;
+    document.getElementById('trim-video-selection').textContent =
+        `Keep ${trimSecondsLabel(state.start)} to ${trimSecondsLabel(duration - state.end)} · ${trimSecondsLabel(duration - state.start - state.end)} remaining`;
+    document.getElementById('trim-video-controls').disabled = state.busy || state.stale;
+    document.getElementById('trim-video-submit').disabled =
+        state.busy || state.invalid || state.start + state.end === 0;
+    renderVideoTrimPlayback();
+}
+
+function renderVideoTrimPlayback() {
+    const state = _trimState;
+    if (!state?.info) return;
+    const player = document.getElementById('trim-video-preview');
+    const frames = state.info.total_frames - (state.start + state.end) * state.info.framerate;
+    const duration = frames / state.info.framerate;
+    const elapsed = state.previewAtEnd ? duration : Math.max(0, Math.min(duration, player.currentTime - state.start));
+    const position = document.getElementById('trim-preview-position');
+    position.max = frames;
+    position.value = elapsed * state.info.framerate;
+    const elapsedLabel = formatDuration(elapsed);
+    const durationLabel = formatDuration(duration);
+    const description = `${elapsedLabel} of ${durationLabel}`;
+    if (position.getAttribute('aria-valuetext') !== description) position.setAttribute('aria-valuetext', description);
+    const clock = document.getElementById('trim-preview-time');
+    const timeLabel = `${elapsedLabel} / ${durationLabel}`;
+    if (clock.textContent !== timeLabel) clock.textContent = timeLabel;
+    document.getElementById('trim-preview-controls').disabled =
+        Boolean(state.busy || state.stale || state.previewError || player.readyState < 1);
+    const label = player.paused ? 'Play selection' : 'Pause selection';
+    const toggle = document.getElementById('trim-preview-toggle');
+    if (toggle.getAttribute('aria-label') !== label) {
+        toggle.setAttribute('aria-label', label);
+        toggle.title = label;
+        document.getElementById('trim-preview-play-icon').style.display = player.paused ? '' : 'none';
+        document.getElementById('trim-preview-pause-icon').style.display = player.paused ? 'none' : '';
+    }
+    document.getElementById('trim-preview-fullscreen').hidden = !document.fullscreenEnabled;
+}
+
+function setVideoTrimSeconds(edge, raw) {
+    const state = _trimState;
+    if (!state?.info || state.busy || state.stale || !['start', 'end'].includes(edge)) return;
+    const value = Number(raw);
+    if (raw === '' || !Number.isSafeInteger(value) || value < 0) {
+        state.invalid = true;
+        document.getElementById('trim-video-errors').textContent = 'Enter a whole number of seconds, zero or greater.';
+        document.getElementById('trim-video-submit').disabled = true;
+        return;
+    }
+    const other = edge === 'start' ? 'end' : 'start';
+    const maximum = state.info.max_trim_seconds - state[other];
+    state[edge] = Math.min(value, maximum);
+    state.invalid = false;
+    document.getElementById('trim-video-errors').textContent =
+        value > maximum ? 'The selection must keep at least one second.' : '';
+    state.previewAtEnd = edge === 'end';
+    const player = document.getElementById('trim-video-preview');
+    player.pause();
+    if (player.readyState >= 1) {
+        player.currentTime = edge === 'start' ? state.start :
+            (state.info.total_frames - 1) / state.info.framerate - state.end;
+    }
+    renderVideoTrim();
+}
+
+function handleVideoTrimRangeKey(event, edge) {
+    const state = _trimState;
+    if (!state?.info || state.busy || state.stale || event.altKey || event.ctrlKey || event.metaKey) return;
+    const other = edge === 'start' ? 'end' : 'start';
+    const values = {
+        ArrowLeft: state[edge] + (edge === 'start' ? -1 : 1),
+        ArrowRight: state[edge] + (edge === 'start' ? 1 : -1),
+        ArrowUp: state[edge] + 1, ArrowDown: state[edge] - 1,
+        PageUp: state[edge] + 10, PageDown: state[edge] - 10,
+        Home: 0, End: state.info.max_trim_seconds - state[other],
+    };
+    if (!(event.key in values)) return;
+    event.preventDefault();
+    setVideoTrimSeconds(edge, Math.max(0, values[event.key]));
+}
+
+function boundVideoTrimPreview(state) {
+    if (_trimState !== state || !state.info) return;
+    const player = document.getElementById('trim-video-preview');
+    const end = state.info.total_frames / state.info.framerate - state.end;
+    if (player.currentTime < state.start - 0.001) player.currentTime = state.start;
+    if (player.currentTime >= end) {
+        state.previewAtEnd = true;
+        player.pause();
+        player.currentTime = end - 1 / state.info.framerate;
+    }
+    renderVideoTrimPlayback();
+}
+
+function seekVideoTrimPreview(raw) {
+    const state = _trimState;
+    const player = document.getElementById('trim-video-preview');
+    if (!state?.info || state.busy || state.stale || state.previewError || player.readyState < 1) return;
+    const requested = Number(raw);
+    if (!Number.isFinite(requested)) {
+        showNotification('The preview position must be a valid number.', 'error');
+        return;
+    }
+    const frames = state.info.total_frames - (state.start + state.end) * state.info.framerate;
+    const frame = Math.max(0, Math.min(frames, Math.round(requested)));
+    // The logical endpoint is after the last retained frame. Show that frame
+    // while the selection-relative clock and scrubber reach the full duration.
+    state.previewAtEnd = frame === frames;
+    if (state.previewAtEnd) player.pause();
+    player.currentTime = state.start + Math.min(frame, frames - 1) / state.info.framerate;
+    renderVideoTrimPlayback();
+}
+
+function handleVideoTrimPlaybackKey(event) {
+    const state = _trimState;
+    if (!state?.info || event.altKey || event.ctrlKey || event.metaKey) return;
+    const frame = Math.round(Number(document.getElementById('trim-preview-position').value));
+    const values = {
+        ArrowLeft: frame - 1, ArrowRight: frame + 1,
+        ArrowDown: frame - 1, ArrowUp: frame + 1,
+        PageDown: frame - state.info.framerate, PageUp: frame + state.info.framerate,
+        Home: 0, End: state.info.total_frames - (state.start + state.end) * state.info.framerate,
+    };
+    if (!(event.key in values)) return;
+    event.preventDefault();
+    seekVideoTrimPreview(values[event.key]);
+}
+
+function toggleVideoTrimPlayback() {
+    const state = _trimState;
+    const player = document.getElementById('trim-video-preview');
+    if (!state?.info || state.busy || state.stale || state.previewError || player.readyState < 1) return;
+    if (!player.paused) {
+        player.pause();
+        renderVideoTrimPlayback();
+    } else {
+        if (state.previewAtEnd) seekVideoTrimPreview(0);
+        player.play().catch(error => {
+            if (_trimState === state) showNotification(`Preview could not play: ${error.message}`, 'error');
+        });
+        renderVideoTrimPlayback();
+    }
+}
+
+async function toggleVideoTrimFullscreen() {
+    const state = _trimState;
+    if (!state?.info || state.busy || state.stale) return;
+    const wrapper = document.getElementById('trim-preview-wrap');
+    try {
+        if (document.fullscreenElement === wrapper) await document.exitFullscreen();
+        else {
+            await wrapper.requestFullscreen();
+            if (_trimState !== state && document.fullscreenElement === wrapper) await document.exitFullscreen();
+        }
+    } catch (error) {
+        showNotification(`Fullscreen preview could not open: ${error.message}`, 'error');
+    }
+}
+
+function previewVideoTrim() {
+    const state = _trimState;
+    if (!state?.info || state.busy || state.stale || state.previewError) return;
+    const player = document.getElementById('trim-video-preview');
+    state.previewAtEnd = false;
+    player.currentTime = state.start;
+    player.play().catch(error => {
+        if (_trimState === state) showNotification(`Preview could not play: ${error.message}`, 'error');
+    });
+    renderVideoTrimPlayback();
+}
+
+function waitForTrimMedia(video, eventName, state, change) {
+    return new Promise((resolve, reject) => {
+        const cleanup = () => {
+            clearTimeout(timer);
+            video.removeEventListener(eventName, done);
+            video.removeEventListener('error', failed);
+            state.controller.signal.removeEventListener('abort', aborted);
+        };
+        const done = () => { cleanup(); resolve(); };
+        const failed = () => { cleanup(); reject(new Error('Video frames could not be loaded')); };
+        const aborted = () => { cleanup(); reject(new DOMException('Trim closed', 'AbortError')); };
+        const timer = setTimeout(failed, 15000);
+        video.addEventListener(eventName, done, { once: true });
+        video.addEventListener('error', failed, { once: true });
+        state.controller.signal.addEventListener('abort', aborted, { once: true });
+        if (state.controller.signal.aborted) aborted();
+        else change();
+    });
+}
+
+async function buildTrimFilmstrip(state) {
+    const video = document.getElementById('trim-filmstrip-source');
+    const canvas = document.getElementById('trim-filmstrip');
+    const context = canvas.getContext('2d');
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    try {
+        await waitForTrimMedia(video, 'loadeddata', state, () => {
+            video.src = `${API_BASE}/videos/${state.videoId}/download`;
+            video.load();
+        });
+        const duration = state.info.total_frames / state.info.framerate;
+        const cellWidth = canvas.width / 10;
+        for (let index = 0; index < 10; index++) {
+            if (_trimState !== state) return;
+            const time = Math.min(duration - 1 / state.info.framerate, (index + 0.5) * duration / 10);
+            if (Math.abs(video.currentTime - time) > 0.000001) {
+                await waitForTrimMedia(video, 'seeked', state, () => { video.currentTime = time; });
+            }
+            if (_trimState !== state) return;
+            const scale = Math.max(cellWidth / video.videoWidth, canvas.height / video.videoHeight);
+            const width = video.videoWidth * scale;
+            const height = video.videoHeight * scale;
+            context.save();
+            context.beginPath();
+            context.rect(index * cellWidth, 0, cellWidth, canvas.height);
+            context.clip();
+            context.drawImage(video, index * cellWidth + (cellWidth - width) / 2,
+                (canvas.height - height) / 2, width, height);
+            context.restore();
+        }
+    } catch (error) {
+        if (_trimState === state && error.name !== 'AbortError') {
+            console.warn('Trim timeline thumbnails could not load:', error);
+            showNotification('Timeline thumbnails could not load. The trim controls are still available.', 'warning');
+        }
+    } finally {
+        if (_trimState === state) {
+            video.removeAttribute('src');
+            video.load();
+        }
+    }
+}
+
+async function showVideoTrim(videoId) {
+    if (_trimState) return;
+    const gifPopover = document.getElementById('gif-popover');
+    if (gifPopover) gifPopover.style.display = 'none';
+    _removeGifPopoverCloseListener();
+    document.getElementById('video-detail-player').pause();
+    const state = {
+        videoId, start: 0, end: 0, info: null, busy: true, invalid: false, previewAtEnd: false,
+        controller: new AbortController(),
+        returnFocus: document.querySelector('#video-detail-actions [aria-label="Trim video"]') || document.activeElement,
+    };
+    _trimState = state;
+    document.getElementById('trim-video-errors').textContent = '';
+    document.getElementById('trim-video-status').textContent = 'Inspecting video...';
+    document.getElementById('trim-video-name').value = '';
+    document.getElementById('trim-video-selection').textContent = '';
+    document.getElementById('trim-video-controls').disabled = true;
+    document.getElementById('trim-video-submit').disabled = true;
+    document.getElementById('trim-preview-controls').disabled = true;
+    document.getElementById('trim-preview-time').textContent = '0s / 0s';
+    document.getElementById('trim-preview-position').value = 0;
+    document.getElementById('trim-preview-position').max = 0;
+    document.getElementById('trim-filmstrip').getContext('2d').clearRect(0, 0, 960, 72);
+    showModal('trim-video-modal');
+    document.addEventListener('keydown', handleTrimModalKeydown, true);
+    document.querySelector('#trim-video-modal .modal-header button').focus();
+    try {
+        const [video, info] = await Promise.all([
+            apiRequest(`/videos/${videoId}`, { signal: state.controller.signal }),
+            apiRequest(`/videos/${videoId}/trim/validate`, {
+                method: 'POST', body: {}, signal: state.controller.signal,
+            }),
+        ]);
+        if (_trimState !== state) return;
+        state.info = info;
+        state.busy = false;
+        document.getElementById('trim-video-name').value = `${video.name}_Trimmed`.slice(0, 100);
+        document.getElementById('trim-video-status').textContent = info.max_trim_seconds ?
+            '' : 'This video is too short to remove a whole second while keeping one second.';
+        const player = document.getElementById('trim-video-preview');
+        player.onloadedmetadata = () => {
+            if (_trimState !== state) return;
+            player.currentTime = state.previewAtEnd ?
+                (state.info.total_frames - 1) / state.info.framerate - state.end : state.start;
+            renderVideoTrimPlayback();
+        };
+        player.ontimeupdate = player.onseeking = player.onended = () => boundVideoTrimPreview(state);
+        player.onpause = () => {
+            if (_trimState !== state) return;
+            if (state.animationFrame != null) cancelAnimationFrame(state.animationFrame);
+            state.animationFrame = null;
+            renderVideoTrimPlayback();
+        };
+        player.onplay = () => {
+            if (_trimState !== state) return;
+            if (state.previewAtEnd) {
+                state.previewAtEnd = false;
+                player.currentTime = state.start;
+            }
+            boundVideoTrimPreview(state);
+            if (state.animationFrame != null) cancelAnimationFrame(state.animationFrame);
+            state.animationFrame = null;
+            if (!player.paused) {
+                const frame = () => {
+                    if (_trimState !== state) return;
+                    boundVideoTrimPreview(state);
+                    state.animationFrame = player.paused ? null : requestAnimationFrame(frame);
+                };
+                state.animationFrame = requestAnimationFrame(frame);
+            }
+        };
+        player.onerror = () => {
+            if (_trimState === state) {
+                state.previewError = true;
+                player.pause();
+                renderVideoTrimPlayback();
+                showNotification('The video preview could not load.', 'error');
+            }
+        };
+        player.src = `${API_BASE}/videos/${videoId}/download`;
+        player.load();
+        renderVideoTrim();
+        document.getElementById('trim-start-range').focus();
+        buildTrimFilmstrip(state);
+    } catch (error) {
+        if (_trimState !== state || error.name === 'AbortError') return;
+        document.getElementById('trim-video-errors').textContent = error.message;
+        document.getElementById('trim-video-status').textContent = '';
+    }
+}
+
+function handleTrimModalKeydown(event) {
+    if (!_trimState) return;
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (event.repeat) return;
+        if (document.fullscreenElement === document.getElementById('trim-preview-wrap')) {
+            document.exitFullscreen().catch(error => {
+                showNotification(`Fullscreen preview could not close: ${error.message}`, 'error');
+            });
+        } else {
+            closeModal('trim-video-modal');
+        }
+    } else if (event.key === 'Tab') {
+        const controls = [...document.querySelectorAll(
+            '#trim-video-modal button:not(:disabled), #trim-video-modal input:not(:disabled)'
+        )].filter(element => element.getClientRects().length);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+        }
+    }
+}
+
+function cleanupVideoTrim() {
+    const state = _trimState;
+    _trimState = null;
+    if (!state) return;
+    _trimReturnFocusId = _closingFromPopstate ? null : state.videoId;
+    state.controller.abort();
+    document.removeEventListener('keydown', handleTrimModalKeydown, true);
+    for (const id of ['trim-video-preview', 'trim-filmstrip-source']) {
+        const player = document.getElementById(id);
+        player.pause();
+        if (id === 'trim-video-preview') {
+            if (state.animationFrame != null) cancelAnimationFrame(state.animationFrame);
+            state.animationFrame = null;
+            player.onloadedmetadata = player.ontimeupdate = player.onseeking = player.onended =
+                player.onpause = player.onplay = player.onerror = null;
+        }
+        player.removeAttribute('src');
+        player.load();
+    }
+    if (document.fullscreenElement === document.getElementById('trim-preview-wrap')) {
+        document.exitFullscreen().then(() => {
+            const route = parseRoute();
+            if (!_trimState && route.view === 'video-detail' && Number(route.id) === state.videoId) {
+                document.querySelector('#video-detail-actions [aria-label="Trim video"]')?.focus();
+            }
+        }).catch(error => {
+            showNotification(`Preview fullscreen could not close: ${error.message}`, 'error');
+        });
+    }
+    state.returnFocus?.focus();
+}
+
+async function submitVideoTrim(event) {
+    event.preventDefault();
+    const state = _trimState;
+    if (!state?.info || state.busy || state.invalid || !state.start && !state.end) return;
+    state.busy = true;
+    state.creating = true;
+    renderVideoTrim();
+    document.getElementById('trim-video-errors').textContent = '';
+    document.getElementById('trim-video-status').textContent = 'Starting trim...';
+    document.getElementById('trim-video-preview').pause();
+    try {
+        const video = await apiRequest(`/videos/${state.videoId}/trim`, { method: 'POST', body: {
+            name: document.getElementById('trim-video-name').value,
+            trim_start_seconds: state.start, trim_end_seconds: state.end, revision: state.info.revision,
+        } });
+        if (_trimState === state) {
+            state.creating = false;
+            const closingFromPopstate = _closingFromPopstate;
+            try {
+                _closingFromPopstate = true;
+                closeModal('trim-video-modal');
+            } finally {
+                _closingFromPopstate = closingFromPopstate;
+            }
+            if (_modalHistoryDepth > 0) _modalHistoryDepth--;
+            navigateTo(`/timelapses/${video.id}`, true);
+        }
+        loadVideos();
+        refreshEventsSoon();
+        showNotification('Video processing started');
+    } catch (error) {
+        if (_trimState !== state) {
+            showNotification(`Trim could not start: ${error.message}`, 'error');
+            return;
+        }
+        document.getElementById('trim-video-errors').textContent = error.message;
+        document.getElementById('trim-video-status').textContent = '';
+        if (error.status === 409) {
+            state.invalid = true;
+            state.stale = true;
+            document.getElementById('trim-video-errors').textContent += ' Close and reopen Trim to inspect the video again.';
+        }
+    } finally {
+        if (_trimState === state) {
+            state.busy = false;
+            state.creating = false;
+            renderVideoTrim();
+        }
+    }
 }
 
 function startVideoRename() {
@@ -4517,8 +4991,12 @@ function closeModal(modalId) {
     if (modalId === 'join-video-modal' && _joinState?.creating) {
         showNotification('Your confirmed join is still being submitted. Closing does not cancel it.', 'info');
     }
+    if (modalId === 'trim-video-modal' && _trimState?.creating) {
+        showNotification('Your trim is still being submitted. Closing does not cancel it.', 'info');
+    }
     const wasActive = document.getElementById(modalId).classList.contains('active');
     document.getElementById(modalId).classList.remove('active');
+    if (modalId === 'trim-video-modal') cleanupVideoTrim();
 
     if (modalId === 'join-video-modal') {
         clearTimeout(_joinSearchTimer);
@@ -8000,7 +8478,7 @@ function buildVideoCardHtml(v, extraClass) {
                 </div>`}
             <div class="homepage-card-overlay">
                 <div class="homepage-card-title">${escapeHtml(v.name)}</div>
-                <div class="homepage-card-sub">${v.duration_seconds ? formatDuration(v.duration_seconds) : ''} ${v.job_name ? '· ' + escapeHtml(v.job_name) : ''}${v.build_source === 'joined' ? ' · Joined' : ''}</div>
+                <div class="homepage-card-sub">${v.duration_seconds ? formatDuration(v.duration_seconds) : ''} ${v.job_name ? '· ' + escapeHtml(v.job_name) : ''}${v.build_source === 'joined' ? ' · Joined' : ''}${v.build_source === 'trimmed' ? ' · Trimmed' : ''}</div>
             </div>
         </div>`;
 }

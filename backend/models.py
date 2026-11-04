@@ -283,6 +283,16 @@ class VideoJoinCreate(VideoJoinRequest):
         return self
 
 
+class VideoTrimRequest(BaseModel):
+    trim_start_seconds: Annotated[int, Field(strict=True, ge=0)] = 0
+    trim_end_seconds: Annotated[int, Field(strict=True, ge=0)] = 0
+
+
+class VideoTrimCreate(VideoTrimRequest):
+    name: str = Field(min_length=1, max_length=100)
+    revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class VideoResponse(BaseModel):
     id: int
     job_id: Optional[int] = None

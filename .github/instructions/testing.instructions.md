@@ -8,7 +8,7 @@ applyTo: "tests/**"
 
 This is **critical HTTP-capture-to-video API E2E coverage** — it exercises the
 backend pipeline that a real HTTP-based capture job goes through: job
-creation → scheduled/manual capture → capture storage → video build → preserved/selective join → GIF
+creation → scheduled/manual capture → capture storage → video build → preserved/selective join → trim → GIF
 export → tags/favorites → storage dashboard/event log → webhook delivery →
 cleanup.
 
@@ -162,3 +162,14 @@ in E2E as well, without expanding its cancellation scope.
 geometry, encoding arguments, resource estimates, and deduplicated planning
 without rendering media. Real-codec tests also check full-range black/white
 levels and that repeated outliers are encoded only once.
+
+`test_video_trim.py` covers whole-second range validation, exact one-second
+outputs, genuinely copied and smart-trimmed picture data, high-quality fallback,
+source independence, shared Join/Trim admission and mutation protection, storage,
+worker cancellation/shutdown, and restart cleanup. `test_video_trim.js` exercises
+the actual frontend's handles, numeric fields/resets, selection-relative preview
+clock, smooth playback/scrubbing, last-frame resume, fullscreen Escape, animation
+cleanup, preview bounds, action placement, quality labels, focus cleanup, and
+close/submit races. The ordered
+`video_trim` E2E scenario uses only the existing public picsum captures to verify
+real builds, trimming again, download/GIF/thumbnail, Join eligibility, and cleanup.

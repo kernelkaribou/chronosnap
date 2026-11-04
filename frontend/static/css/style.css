@@ -1,3 +1,226 @@
+.trim-body {
+    padding: 1.25rem;
+}
+
+.trim-preview-wrap {
+    overflow: hidden;
+    background: var(--bg-color);
+    border-radius: var(--radius-sm);
+}
+
+.trim-preview {
+    width: 100%;
+    max-height: max(100px, calc(28vh - 44px));
+    display: block;
+    object-fit: contain;
+    background: var(--bg-color);
+}
+
+.trim-preview-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: 44px;
+    border: 0;
+    padding: 6px 8px;
+    margin: 0;
+    min-width: 0;
+}
+
+.trim-preview-controls .btn-icon {
+    flex: 0 0 32px;
+    height: 32px;
+}
+
+.trim-preview-controls .btn-icon[hidden] {
+    display: none;
+}
+
+.trim-preview-position {
+    flex: 1;
+    min-width: 0;
+    accent-color: var(--primary-color);
+}
+
+.trim-preview-time {
+    flex-shrink: 0;
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.trim-preview-wrap:fullscreen {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.trim-preview-wrap:fullscreen .trim-preview {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+}
+
+.trim-preview-wrap:fullscreen .trim-preview-controls {
+    flex-shrink: 0;
+}
+
+.trim-controls {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+}
+
+.trim-filmstrip-source {
+    position: fixed;
+    width: 1px;
+    height: 1px;
+    left: 0;
+    top: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.trim-timeline {
+    position: relative;
+    height: 84px;
+    margin-top: 1rem;
+    --trim-start: 0%;
+    --trim-end: 0%;
+}
+
+.trim-film {
+    position: absolute;
+    inset: 6px 12px;
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: var(--bg-color);
+}
+
+.trim-film canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.trim-discard {
+    position: absolute;
+    inset-block: 0;
+    background: var(--bg-color);
+    opacity: 0.75;
+}
+
+.trim-discard-start {
+    left: 0;
+    width: var(--trim-start);
+}
+
+.trim-discard-end {
+    right: 0;
+    width: var(--trim-end);
+}
+
+.trim-window {
+    position: absolute;
+    inset-block: 0;
+    left: var(--trim-start);
+    right: var(--trim-end);
+    border-block: 3px solid var(--primary-color);
+    pointer-events: none;
+}
+
+.trim-range {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 84px;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    appearance: none;
+    -webkit-appearance: none;
+    pointer-events: none;
+    touch-action: none;
+}
+
+.trim-range-end {
+    direction: rtl;
+}
+
+.trim-range::-webkit-slider-thumb {
+    width: 24px;
+    height: 72px;
+    background: var(--primary-color);
+    border: 3px solid var(--surface-color);
+    border-radius: var(--radius-sm);
+    pointer-events: auto;
+    cursor: ew-resize;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.trim-range::-moz-range-thumb {
+    width: 18px;
+    height: 66px;
+    background: var(--primary-color);
+    border: 3px solid var(--surface-color);
+    border-radius: var(--radius-sm);
+    pointer-events: auto;
+    cursor: ew-resize;
+}
+
+.trim-range:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 3px;
+    border-radius: var(--radius-sm);
+}
+
+.trim-range:focus {
+    z-index: 1;
+}
+
+.trim-range-summary, .trim-number-row, .trim-numbers label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.trim-range-summary {
+    justify-content: space-between;
+    flex-wrap: wrap;
+    margin: 0.5rem 0 1rem;
+    font-size: 0.85rem;
+}
+
+.trim-numbers {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.trim-numbers label {
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
+}
+
+.trim-number-row input {
+    min-width: 0;
+}
+
+.trim-number-row button {
+    flex-shrink: 0;
+}
+
+.trim-hint {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
 .join-hint {
     color: var(--text-secondary);
     font-size: var(--text-sm);
