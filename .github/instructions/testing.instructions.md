@@ -8,7 +8,7 @@ applyTo: "tests/**"
 
 This is **critical HTTP-capture-to-video API E2E coverage** — it exercises the
 backend pipeline that a real HTTP-based capture job goes through: job
-creation → scheduled/manual capture → capture storage → video build → GIF
+creation → scheduled/manual capture → capture storage → video build → preserved/selective join → GIF
 export → tags/favorites → storage dashboard/event log → webhook delivery →
 cleanup.
 
@@ -150,3 +150,15 @@ extend the shim in the test file rather than adding a real DOM dependency
 (jsdom, etc.) — keep it dependency-free per the project's "no build tools"
 frontend convention. As with backend fixes, confirm a new regression test
 actually fails against the pre-fix code before considering it done.
+
+`test_video_join.py` also runs real FFmpeg against disposable synthetic codec
+fixtures, comparing every preserved output frame with ordered sources. Mixed
+resolution/codec conversion, consent, aspect-ratio padding, unchanged schema,
+transient-state cleanup, cancellation, storage limits, admission/source-mutation
+races, and restart cleanup belong here. Keep real image-build selective joining
+in E2E as well, without expanding its cancellation scope.
+
+`test_video_join_contracts.py` covers bounded metadata/packet parsing, display
+geometry, encoding arguments, resource estimates, and deduplicated planning
+without rendering media. Real-codec tests also check full-range black/white
+levels and that repeated outliers are encoded only once.

@@ -66,6 +66,97 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 - Automated builds on configurable intervals with webhook notifications
 - Download timelapses as GIF with loop/single-play options
 - Background processing with real-time progress tracking
+- Join timelapses losslessly where possible, with opt-in selective conversion for mixed sizes or encodings
+
+#### Joining timelapses
+
+Choose **Join**, or select videos first and use the join action.
+The editable name defaults to `Joined_Timelapse_YYYYMMDD_HHMM`, using your
+local time when the dialog opens.
+Use **Add +** to replace the ordering list with a full-width searchable preview
+gallery. The video name and output settings stay visible for reference. Toggle
+the circular checkbox at the top left, or click a card, to select each clip once.
+Selection uses the same theme colors as the video and capture galleries.
+Choose **Add** to apply the selection and return to ordering; the picker’s ×
+button or Escape cancels selection changes. Existing playback order is retained,
+with newly selected clips appended in selection order. Choose 2-100 clips,
+drag the left-hand grip to arrange playback order, choose a playback FPS and
+output resolution, then click **Review**. Actual-file checks mark clips green when
+their FPS, resolution, and encoding already match the output, FPS changes blue,
+re-encoded clips amber, and incompatible clips red, with details beside each clip.
+Click **Join** to approve a successful review and start joining.
+Changing the order, selected clips, FPS, or resolution requires a fresh review.
+The grip also supports
+arrow keys, Home, and End. On phones, clip details span the card width while
+the grip and remove button retain 44px touch targets. Remove a clip
+with its × icon. The API also supports repeated entries. Joining creates an independent
+MP4; originals are unchanged and may be deleted after the join completes.
+
+Lossless joining supports compatible silent H.264/MP4 streams with constant integer
+frame rates, preserving matching limited- or full-range 8-bit 4:2:0 color.
+Choose an output FPS from the selected clips' rates. Every original frame is
+retained: increasing FPS speeds a clip up and shortens it; decreasing FPS slows
+it down and lengthens it. Source metadata and requested frame-rate changes are
+shown beside each clip; the total duration updates before confirmation.
+FPS-only normalization changes timing metadata, not image
+quality: there is no frame dropping, duplication, or interpolation.
+Internal timestamp normalization at unchanged FPS is joining bookkeeping, not a
+playback-setting change; matching clips remain green with **No changes needed**.
+Compatibility is checked against actual codec configuration,
+resolution, color/display information, and packet timing, not just
+file extensions or quality labels. The original codec's browser playback
+limitations remain unchanged for preserved streams.
+
+For mixed resolutions or encodings, choose an output size from the selected
+clips. The default is the largest pixel count, and an explicit choice is kept
+when reordering. Clips fit within that canvas with their display aspect ratio
+preserved, adding black padding rather than stretching or cropping. Upscaling
+does not restore detail; downscaling discards detail.
+Proportionally halving a 16:9 clip into a 16:9 output adds no padding. Different
+display aspect ratios can require padding even when pixel dimensions are
+proportional, because pixel-aspect metadata also affects how a clip is displayed.
+Requested resolution changes appear immediately beside each clip, using stored
+pixel dimensions. The actual-file check updates source metadata and confirms any
+padding and encoding work using display-aspect metadata before approval.
+
+The joiner first tries to preserve the largest compatible group by total frame
+count and convert only outliers to its exact stream configuration. Each entry
+shows **No changes needed** or a concise list of changed output parameters, such
+as resolution or frame rate, rather than internal timestamp bookkeeping.
+Converted clips are marked **Lossy re-encode**, with **Padding** and codec changes
+where applicable. This flag indicates potential quality loss; its tooltip
+explains the risk before the explicit **Join** approval.
+If selective encoding cannot be reproduced safely,
+review marks every clip for re-encoding and explains why, never a silent fallback.
+All converted streams use capped High-quality H.264 encoding; each distinct
+source is encoded once, reused for repetitions, and the final join is a stream
+copy, not a second encoding pass. Original files are never modified.
+
+Conversion supports decodable, progressive 8-bit SDR YUV video with constant
+integer FPS, including other installed FFmpeg codecs and containers. Audio,
+HDR, interlacing, fractional/variable FPS, rotated videos, and unsupported
+display metadata remain explicit errors rather than being silently discarded.
+Missing color tags use standard SDR assumptions: BT.709 primaries/transfer,
+BT.709 matrix for HD or BT.470BG for SD, and limited range unless full range
+is tagged. Existing target pixel-aspect metadata is respected when preserving
+a reference stream. Video details show whether quality was preserved or some/all
+clips were converted, without retaining source playback history.
+
+One join runs at a time; additional requests receive a busy response rather than
+being queued. Sources cannot be renamed/deleted while in use. Progress includes a
+decode-only validation phase, which checks the new file without re-encoding it.
+Cancellation removes partial output; application restarts mark interrupted joins
+failed and release their sources. Success/failure is recorded in Events; manual
+joins do not send automatic completion webhooks.
+
+Allow additional space on the timelapse volume for the new file, approximately
+the combined input sizes including repetitions plus container overhead.
+Timing copies additionally need approximately the size of the distinct input
+clips. Conversion space is admitted using the encoder's bitrate/buffer bounds
+for both temporary clips and the final file, including repetitions; converted
+files can exceed the original sizes. Free space is monitored during conversion.
+Working files are removed on completion, cancellation, or restart recovery.
+Source files are not reduced in size. Post-creation trimming is not included.
 
 ### Organization
 
@@ -507,6 +598,36 @@ curl -X POST http://localhost:8080/api/videos/ \
 curl http://localhost:8080/api/jobs/ \
   -H "X-API-Key: YOUR_KEY"
 ```
+
+**Join API:** `POST /api/videos/join/validate` accepts
+`{"video_ids":[12,8,12],"output_fps":30}` and returns per-entry compatibility diagnostics,
+actual source FPS/frame counts, adjusted durations/speed ratios, and
+revision tokens. If compatible, `POST /api/videos/join` accepts
+`{"name":"Combined","video_ids":[12,8,12],"output_fps":30,"revisions":["TOKEN_1","TOKEN_2","TOKEN_3"]}`.
+`output_fps` must be an actual selected source rate. Omitting it keeps the
+original strict matching-FPS behavior with no speed changes.
+Adding `"output_resolution":"1920x1080"` enables conversion planning. The size
+must match an actual selected source's even-sized dimensions. Validation returns
+`mode` (`copy`, `selective`, or `all`), available resolutions, actual per-source
+dimensions/codecs, and each entry's `action` (`copy`, `retime`, or `reencode`).
+An incompatible report may instead contain explicit unsupported-input errors.
+Re-encoding creation requires the matching `mode` and `plan_token` from the
+confirmed report, alongside the same resolution, FPS, ordered IDs and revisions.
+The token binds the encoding settings and source order; stale or missing consent
+returns `409`. Omitting the resolution retains the original copy-only contract.
+Copy each token from the matching ordered validation entry. Creation revalidates
+the files and returns a processing video; poll `GET /api/videos/{id}` and use its
+normal download/cancel endpoints. Ordered inputs, revision checks, conversion
+plans, and source protection are temporary in-memory state, discarded when joining
+ends. Joining adds no tables, columns, indexes, or migrations; only the ordinary
+video record is stored, using the existing `quality` field for `preserved`,
+`partly_converted`, or `high` (all clips converted). There is no source-history
+field in the video response. Interrupted joins are marked failed and cleaned up
+at startup, not resumed.
+Busy/stale/in-use requests return
+`409`, incompatible inputs `422`, insufficient output space `507`, and concurrent
+compatibility inspections `429`. The picker uses the videos list's `search`,
+`limit`, and `offset` parameters.
 
 ---
 
