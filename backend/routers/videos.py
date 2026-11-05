@@ -8,7 +8,7 @@ from typing import List, Optional
 import os
 import logging
 
-from ..models import VideoCreate, VideoResponse
+from ..models import VideoCreate, VideoResponse, VideoJoinRequest, VideoJoinCreate, VideoTrimRequest, VideoTrimCreate
 from ..database import get_db, dict_from_row
 from ..services.video_processor import process_video, cancel_video, generate_gif
 from ..utils import get_now, to_iso
@@ -16,9 +16,23 @@ from ..helpers.db_helpers import get_or_404, normalize_favorite, fetch_tags_for_
 from ..helpers.template_vars import build_datetime_vars
 from ..helpers.file_helpers import delete_video_files, resolve_video_path, make_relative, cleanup_empty_parents, sanitize_directory_name
 from ..services.event_service import add_event
+from ..services.video_joiner import analyze_join, create_join, process_join, cancel_join, assert_videos_mutable
+from ..services.video_trimmer import analyze_trim, create_trim, start_trim, cancel_trim
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+@router.post("/join/validate")
+def validate_video_join(request: VideoJoinRequest):
+    return analyze_join(request.video_ids, request.output_fps, request.output_resolution)[0]
+
+
+@router.post("/join", response_model=VideoResponse, status_code=201)
+def join_videos(request: VideoJoinCreate, background_tasks: BackgroundTasks):
+    video = create_join(request)
+    background_tasks.add_task(process_join, video["id"])
+    return video
 
 
 @router.post("/", response_model=VideoResponse, status_code=201)
@@ -161,6 +175,7 @@ async def list_videos(
     job_id: Optional[int] = Query(None, description="Filter by job ID"),
     status: Optional[str] = Query(None, description="Filter by status"),
     favorites_only: bool = Query(False, description="Show only favorites"),
+    search: Optional[str] = Query(None, max_length=200, description="Search video and job names"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0)
 ):
@@ -186,8 +201,12 @@ async def list_videos(
         
         if favorites_only:
             query += " AND v.is_favorite = 1"
+
+        if search:
+            query += " AND (instr(lower(v.name), lower(?)) > 0 OR instr(lower(COALESCE(v.job_name, j.name, '')), lower(?)) > 0)"
+            params.extend([search, search])
         
-        query += " ORDER BY v.created_at DESC LIMIT ? OFFSET ?"
+        query += " ORDER BY v.created_at DESC, v.id DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         
         cursor.execute(query, params)
@@ -298,12 +317,24 @@ async def get_video(video_id: int):
         return video_dict
 
 
+@router.post("/{video_id}/trim/validate")
+def validate_video_trim(video_id: int, request: VideoTrimRequest):
+    return analyze_trim(video_id, request)
+
+
+@router.post("/{video_id}/trim", response_model=VideoResponse, status_code=201)
+def trim_video(video_id: int, request: VideoTrimCreate):
+    result = create_trim(video_id, request)
+    start_trim(result["id"])
+    return result
+
+
 class VideoRenameRequest(BaseModel):
     name: str
 
 
 @router.patch("/{video_id}", response_model=VideoResponse)
-async def rename_video(video_id: int, body: VideoRenameRequest):
+def rename_video(video_id: int, body: VideoRenameRequest):
     """Rename a video: updates display name, folder, files, and thumbnail on disk and in DB."""
     new_name = body.name.strip()
     if not new_name:
@@ -315,6 +346,8 @@ async def rename_video(video_id: int, body: VideoRenameRequest):
         raise HTTPException(status_code=400, detail="Name contains only invalid characters")
     
     with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        assert_videos_mutable([video_id])
         cursor = conn.cursor()
         video = get_or_404(cursor,
             "SELECT * FROM processed_videos WHERE id = ?",
@@ -535,25 +568,28 @@ async def download_video_as_gif(
 
 
 @router.post("/{video_id}/cancel")
-async def cancel_video_build(video_id: int):
+def cancel_video_build(video_id: int):
     """Cancel an in-progress video build"""
     with get_db() as conn:
         cursor = conn.cursor()
         vid = get_or_404(cursor,
-            "SELECT id, status FROM processed_videos WHERE id = ?",
+            "SELECT id, status, build_source FROM processed_videos WHERE id = ?",
             (video_id,), "Video not found")
         if vid['status'] != 'processing':
             raise HTTPException(status_code=400, detail="Video is not currently processing")
     
-    if cancel_video(video_id):
+    cancel = {"joined": cancel_join, "trimmed": cancel_trim}.get(vid["build_source"], cancel_video)
+    if cancel(video_id):
         return {"status": "cancelled"}
     raise HTTPException(status_code=400, detail="No active build process found")
 
 
 @router.delete("/{video_id}", status_code=204)
-async def delete_video(video_id: int):
+def delete_video(video_id: int):
     """Delete a processed video"""
     with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        assert_videos_mutable([video_id])
         cursor = conn.cursor()
         
         vid = get_or_404(cursor,
@@ -581,12 +617,14 @@ class BulkDeleteRequest(BaseModel):
 
 
 @router.post("/delete-multiple")
-async def delete_multiple_videos(request: BulkDeleteRequest):
+def delete_multiple_videos(request: BulkDeleteRequest):
     """Delete multiple processed videos"""
     deleted = 0
     deleted_names = []
     
     with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        assert_videos_mutable(request.video_ids)
         cursor = conn.cursor()
         
         for video_id in request.video_ids:
@@ -665,4 +703,3 @@ async def update_video_tags(video_id: int, request: VideoTagsRequest):
         set_video_tags(cursor, video_id, request.tag_ids)
         tags = fetch_tags_for_videos(cursor, [video_id]).get(video_id, [])
         return {"tags": tags}
-

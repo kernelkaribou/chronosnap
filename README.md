@@ -8,6 +8,8 @@ A self-hosted timelapse management application that automates the capture, organ
 
 ChronoSnap runs as a single Docker container with a built-in web interface. No external services, no cloud dependencies, no accounts. Everything stays on your hardware.
 
+<img src="docs/screenshots/dashboard.png" alt="Dashboard" width="32%"> <img src="docs/screenshots/capture-job.png" alt="Capture job" width="32%"> <img src="docs/screenshots/timelapse.png" alt="Viewing a timelapse" width="32%">
+
 ### What can you do with it?
 
 - Point it at a security camera and take a daily photo for a year to watch the seasons change
@@ -32,6 +34,9 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 - [Importing and Exporting](#importing-and-exporting)
   - [Importing](#importing)
   - [Exporting](#exporting)
+- [Editing Timelapses](#editing-timelapses)
+  - [Trimming](#trimming)
+  - [Joining](#joining)
 - [Scheduling Guides](#scheduling-guides)
   - [Short-Term Capture](#short-term-capture-hours-to-days)
   - [Long-Term Capture](#long-term-capture-weeks-to-months)
@@ -66,6 +71,8 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 - Automated builds on configurable intervals with webhook notifications
 - Download timelapses as GIF with loop/single-play options
 - Background processing with real-time progress tracking
+- Join timelapses losslessly where possible, with opt-in selective conversion for mixed sizes or encodings
+- Trim whole seconds from either end of a completed timelapse without changing the original
 
 ### Organization
 
@@ -76,7 +83,7 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 
 ### Interface
 
-- Dark and light mode with five visual themes
+- Dark and light mode with six visual themes
 - Installable as a Progressive Web App (PWA) on mobile and desktop
 - REST API with built-in Swagger UI at `/docs`
 
@@ -336,6 +343,26 @@ Exported archives can be re-imported into the same or a different ChronoSnap ins
 
 ---
 
+## Editing Timelapses
+
+Completed timelapses can be trimmed or joined into a new video. Both operations run in the background, show progress in the video library, and leave the originals unchanged. The result is a standalone MP4 that can be downloaded, exported as GIF, or edited again.
+
+### Trimming
+
+Set how many whole seconds to remove from each end, preview the remaining section, and save it as a new video. Either end can be reset independently, and at least one second must remain.
+
+The new video keeps the original resolution, FPS, and Quality value. Trimming can still introduce a small quality loss.
+
+### Joining
+
+Choose 2-100 clips, arrange their playback order, and select the output FPS and resolution. Review the result before starting; any conversion that may reduce quality is flagged for approval.
+
+Compatible clips retain their original picture quality. Changing FPS changes playback speed and duration. Different sizes are fitted to the output without stretching or cropping.
+
+Only one Join or Trim can run at a time. Allow extra storage for the new video and temporary files. Cancelling removes the unfinished output.
+
+---
+
 ## Scheduling Guides
 
 ### Short-Term Capture (Hours to Days)
@@ -439,11 +466,12 @@ The SQLite database holds job configuration, capture metadata, video records, ta
 
 ### Security and Privacy
 
-ChronoSnap is designed for self-hosted use. No data leaves your network unless you explicitly configure webhooks.
+ChronoSnap is designed for self-hosted use. Camera footage is not uploaded to external services. Capture sources, optional webhooks, the release check, and API documentation assets make the network requests described below.
 
 **Authentication:**
-- All API endpoints require an API key (auto-generated, visible in Settings)
-- The web interface is exempt from key requirements when accessed from the same origin
+- External API requests require an API key (auto-generated, visible in Settings)
+- The bundled web interface uses a same-origin convenience bypass based on request headers. These headers can be forged by non-browser clients, so the API key is **not a hardened access boundary**
+- Keep the application on a trusted network or VPN, or put it behind an authenticated reverse proxy. Do not expose it directly to the internet
 
 **Network hardening:**
 - Security response headers on all requests (content type enforcement, frame embedding prevention, referrer restrictions, permission restrictions)
@@ -459,11 +487,13 @@ ChronoSnap is designed for self-hosted use. No data leaves your network unless y
 
 **Data privacy:**
 - Stream URLs (which may contain camera credentials) are redacted from all exports
-- No telemetry or analytics calls. The only automatic outbound request the app makes on its own is a check against the GitHub releases API for update notifications, triggered when the Settings page loads. Set `VERSION_CHECK=false` to disable it entirely
+- No telemetry or analytics calls. The server checks the GitHub releases API for update notifications when Settings loads. Set `VERSION_CHECK=false` to disable that check
+- The main web interface uses locally installed system fonts and serves its scripts and styles locally; it makes no external font requests
+- The optional API documentation at `/docs` loads Swagger UI assets from `cdn.jsdelivr.net` and its favicon from `fastapi.tiangolo.com`
 
 ### API
 
-The full API is documented interactively at `/docs` (Swagger UI) when the application is running. All endpoints are under `/api/` and require authentication via the `X-API-Key` header or `api_key` query parameter.
+The full API is documented interactively at `/docs` (Swagger UI) when the application is running. Endpoints are under `/api/`; external clients should supply the `X-API-Key` header or `api_key` query parameter. The same-origin bypass and access-control limitations described above also apply to these endpoints.
 
 **Example: Create a capture job**
 
@@ -508,6 +538,94 @@ curl http://localhost:8080/api/jobs/ \
   -H "X-API-Key: YOUR_KEY"
 ```
 
+#### Join API
+
+| Step | Endpoint |
+|------|----------|
+| Validate clips and output settings | `POST /api/videos/join/validate` |
+| Create the reviewed join | `POST /api/videos/join` |
+
+**Validation request**
+
+```json
+{
+  "video_ids": [12, 8],
+  "output_fps": 30
+}
+```
+
+Validation returns compatibility results, per-clip changes, durations, and a revision token for each ordered entry.
+
+**Creation request**
+
+```json
+{
+  "name": "Combined",
+  "video_ids": [12, 8],
+  "output_fps": 30,
+  "revisions": ["REVISION_12", "REVISION_8"]
+}
+```
+
+Use the same ordered clips and settings as validation. Repeated clip IDs are supported.
+
+| Option | Requirement |
+|--------|-------------|
+| `output_fps` | Must match a selected clip's actual FPS. Omit it to require matching source rates with no speed changes. |
+| `output_resolution` | Optional, such as `"1920x1080"`. Must match a selected clip's even-sized dimensions. Omit it for copy-only joining. |
+| `mode`, `plan_token` | When conversion is needed, include both values from the approved validation report, with the same clips, order, revisions, FPS, and resolution. |
+| `revisions` | Copy each token from its matching ordered validation entry. Changed files require fresh validation. |
+
+Conversion validation reports a `mode` of `copy`, `selective`, or `all`, available resolutions, and each clip's `action`: `copy`, `retime`, or `reencode`. Joined videos report `quality` as `preserved`, `partly_converted`, or `high`.
+
+For clip selection, `GET /api/videos/` supports `search`, `limit`, and `offset`.
+
+#### Trim API
+
+| Step | Endpoint |
+|------|----------|
+| Validate the selection | `POST /api/videos/{id}/trim/validate` |
+| Create the trimmed video | `POST /api/videos/{id}/trim` |
+
+**Validation request**
+
+```json
+{
+  "trim_start_seconds": 2,
+  "trim_end_seconds": 1
+}
+```
+
+Both values are nonnegative whole-second **amounts removed**, not timestamps, and default to zero. Creation must remove at least one second and leave at least one second.
+
+Validation returns the source `revision`, real frame count/FPS, selected duration, maximum removable seconds, and proposed processing mode.
+
+**Creation request**
+
+```json
+{
+  "name": "Trimmed video",
+  "trim_start_seconds": 2,
+  "trim_end_seconds": 1,
+  "revision": "REVISION_FROM_VALIDATION"
+}
+```
+
+The new video has `build_source: "trimmed"` and inherits its source's `quality` value, including when it is trimmed again.
+
+#### Progress and errors
+
+Join and Trim return a new processing video. Poll `GET /api/videos/{id}` for progress; the usual download, thumbnail, GIF, and cancellation endpoints apply. Originals remain unchanged, and videos in use cannot be renamed or deleted.
+
+| Status | Meaning |
+|--------|---------|
+| `409` | Busy operation, changed source, video in use, or missing/stale conversion approval |
+| `422` | Invalid selection or unsupported input |
+| `429` | Another compatibility inspection is running |
+| `507` | Insufficient output storage |
+
+Interrupted operations are marked failed and cleaned up at startup, not resumed. Processing plans and source checks are temporary; no source-history fields are added to the video response.
+
 ---
 
 ## Considerations
@@ -526,11 +644,11 @@ Capture frequency and image resolution are the primary drivers of storage usage.
 
 ### Backup
 
-Back up the `/app/data` directory (contains the database) and the `/captures` volume. The `/timelapses` volume can be recreated from captures if needed. Export archives are a convenient way to create portable backups of individual jobs.
+Back up `/app/data` (contains the database), `/captures`, and `/timelapses`. Joined, trimmed, or imported videos may no longer have all their original sources available and should not be treated as replaceable. Export archives are a convenient way to create portable backups of individual jobs.
 
 ### Job Deletion
 
-Deleting a job removes all its captures, videos, thumbnails, and database records. This is irreversible. Export the job first if you may want the data later.
+Deleting a job permanently removes its captures and job record. Its timelapse videos remain in the library without an associated job and can be deleted separately. Export the job first if you may want its captures or configuration later.
 
 ### Network and Camera Reliability
 
@@ -569,8 +687,8 @@ See the [ha-chronosnap README](https://github.com/kernelkaribou/ha-chronosnap#re
 
 | Component | Technology |
 |-----------|------------|
-| Backend | Python 3.11, FastAPI, Uvicorn |
-| Frontend | Vanilla JavaScript, Alpine.js (minimal), HTML/CSS |
+| Backend | Python 3.13, FastAPI, Uvicorn |
+| Frontend | Vanilla JavaScript, HTML/CSS |
 | Database | SQLite with WAL journaling |
 | Video Processing | ffmpeg |
 | Container | Docker (Python slim base image) |
@@ -587,3 +705,5 @@ Maintained by [kernelkaribou](https://github.com/kernelkaribou)
 ## Disclaimer
 
 This was a shell script I had personally made before but wanted something easier to configure and schedule on a larger scale. This application was built almost exclusively using vibe coding. If you are reading this you should know because some people get upset. This was an idea I carried around for a while and AI made it actually happen. I can't imagine that I will be making much changes to it as its more of a utility than an application but intend to keep it functioning as long as I can. Do whatever you want with it, I don't care.
+
+Screenshots use public sample images from [Lorem Picsum](https://picsum.photos).

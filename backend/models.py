@@ -2,7 +2,7 @@
 Pydantic models for request/response validation
 """
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Annotated, Literal
 from datetime import datetime, timedelta
 from enum import Enum
 
@@ -262,6 +262,37 @@ class VideoCreate(BaseModel):
     tag_ids: Optional[List[int]] = None
 
 
+class VideoJoinRequest(BaseModel):
+    video_ids: List[Annotated[int, Field(strict=True, gt=0)]] = Field(min_length=2, max_length=100)
+    output_fps: Optional[Annotated[int, Field(strict=True, gt=0)]] = None
+    output_resolution: Optional[str] = Field(None, pattern=r"^[1-9]\d*x[1-9]\d*$", max_length=21)
+
+
+class VideoJoinCreate(VideoJoinRequest):
+    name: str = Field(min_length=1, max_length=100)
+    revisions: List[Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]] = Field(min_length=2, max_length=100)
+    mode: Literal["copy", "selective", "all"] = "copy"
+    plan_token: Optional[str] = Field(None, pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def matching_revisions(self):
+        if len(self.revisions) != len(self.video_ids):
+            raise ValueError("A revision is required for each ordered clip")
+        if self.mode != "copy" and (not self.plan_token or not self.output_resolution):
+            raise ValueError("Re-encoding requires a confirmed plan and output resolution")
+        return self
+
+
+class VideoTrimRequest(BaseModel):
+    trim_start_seconds: Annotated[int, Field(strict=True, ge=0)] = 0
+    trim_end_seconds: Annotated[int, Field(strict=True, ge=0)] = 0
+
+
+class VideoTrimCreate(VideoTrimRequest):
+    name: str = Field(min_length=1, max_length=100)
+    revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class VideoResponse(BaseModel):
     id: int
     job_id: Optional[int] = None
@@ -287,6 +318,7 @@ class VideoResponse(BaseModel):
     is_favorite: bool = False
     text_overlay: Optional[str] = None
     tags: List[TagBrief] = []
+    error_message: Optional[str] = None
 
 
 class TestUrlRequest(BaseModel):
@@ -344,5 +376,3 @@ class MaintenanceCleanup(BaseModel):
 
 class MaintenanceImport(BaseModel):
     orphaned_files: List[Dict[str, Any]]
-
-

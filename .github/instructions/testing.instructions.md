@@ -8,7 +8,7 @@ applyTo: "tests/**"
 
 This is **critical HTTP-capture-to-video API E2E coverage** — it exercises the
 backend pipeline that a real HTTP-based capture job goes through: job
-creation → scheduled/manual capture → capture storage → video build → GIF
+creation → scheduled/manual capture → capture storage → video build → preserved/selective join → trim → GIF
 export → tags/favorites → storage dashboard/event log → webhook delivery →
 cleanup.
 
@@ -16,6 +16,11 @@ It is **not** a claim of "all functionality" coverage. Out of scope by design:
 RTSP/V4L2/libcamera device capture, the browser UI/PWA behavior, mobile
 testing, import/export of pre-existing file trees, time-window/DST edge cases,
 and video cancellation. Those still need manual, interactive Docker testing.
+
+`manual_capture.py` also decodes the returned WebP thumbnails, and
+`video_build.py` validates an overlay preview and builds with text overlay
+enabled. These checks use Pillow already installed in the application image;
+they add no test or production dependency.
 
 **When adding a new backend feature, add or extend a scenario here** as part
 of calling the feature "tested," per the root instructions' testing
@@ -116,6 +121,12 @@ reuse the `conftest.py` fixtures, and import backend modules directly (e.g.
 a bug (especially a security-relevant one), prove the test is meaningful:
 confirm it fails against the pre-fix code before considering it done.
 
+`test_pillow_security.py` enforces the patched Pillow minimum and exercises
+real overlay previews, PSD decoding, and WebP capture thumbnails. Its
+lossless-JPEG thumbnail fixture is synthetic and standards-compliant; that
+decoder test is skipped on vulnerable Pillow versions so the regression
+suite never intentionally exercises their unsafe scaling path.
+
 # Frontend Unit Test Suite (`tests/unit-js/`)
 
 ## What this suite is for
@@ -150,3 +161,34 @@ extend the shim in the test file rather than adding a real DOM dependency
 (jsdom, etc.) — keep it dependency-free per the project's "no build tools"
 frontend convention. As with backend fixes, confirm a new regression test
 actually fails against the pre-fix code before considering it done.
+
+`test_ui_maintenance.js` covers job FPS initialization/change tracking/saving,
+stale detail and capture responses, serialized processing polls, shared modal
+focus/history/inert cleanup, native theme controls, tag selection semantics,
+generated labels, local system-font assets, and proven orphan removal. Browser
+checks are still needed for responsive layout, computed contrast, native
+keyboard behavior, and media playback; the DOM shim does not claim coverage
+of those rendering behaviors.
+
+`test_video_join.py` also runs real FFmpeg against disposable synthetic codec
+fixtures, comparing every preserved output frame with ordered sources. Mixed
+resolution/codec conversion, consent, aspect-ratio padding, unchanged schema,
+transient-state cleanup, cancellation, storage limits, admission/source-mutation
+races, and restart cleanup belong here. Keep real image-build selective joining
+in E2E as well, without expanding its cancellation scope.
+
+`test_video_join_contracts.py` covers bounded metadata/packet parsing, display
+geometry, encoding arguments, resource estimates, and deduplicated planning
+without rendering media. Real-codec tests also check full-range black/white
+levels and that repeated outliers are encoded only once.
+
+`test_video_trim.py` covers whole-second range validation, exact one-second
+outputs, genuinely copied and smart-trimmed picture data, high-quality fallback,
+source independence, shared Join/Trim admission and mutation protection, storage,
+worker cancellation/shutdown, and restart cleanup. `test_video_trim.js` exercises
+the actual frontend's handles, numeric fields/resets, selection-relative preview
+clock, smooth playback/scrubbing, last-frame resume, fullscreen Escape, animation
+cleanup, preview bounds, action placement, quality labels, focus cleanup, and
+close/submit races. The ordered
+`video_trim` E2E scenario uses only the existing public picsum captures to verify
+real builds, trimming again, download/GIF/thumbnail, Join eligibility, and cleanup.

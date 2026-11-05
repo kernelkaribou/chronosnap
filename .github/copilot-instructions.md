@@ -67,7 +67,7 @@ backend/
 ├── app.py                  # FastAPI app setup, lifespan, middleware, router registration
 ├── auth.py                 # API key auth + same-origin/localhost bypass (see Security section)
 ├── config.py               # Environment variable configuration
-├── database.py             # SQLite init, WAL mode, ensure_column() migrations
+├── database.py             # SQLite init, WAL mode, additive tables and indexes
 ├── models.py                # Pydantic request/response models
 ├── utils.py                 # Module (get_now, to_iso, parse_iso) — do NOT convert to a package
 ├── helpers/                 # get_or_404, file/path helpers, template variable helpers
@@ -86,8 +86,10 @@ See `.github/instructions/backend.instructions.md` and
 `.github/instructions/frontend.instructions.md` for conventions specific to those trees.
 
 **Database:** SQLite (WAL mode) at `/app/data/chronosnap.db` inside the container. No
-ORM — raw SQL via the stdlib `sqlite3` module. Schema changes go through
-`database.py`'s `ensure_column()` migration helper, not destructive alters.
+ORM — raw SQL via the stdlib `sqlite3` module. Additive tables/indexes belong in
+`database.py`'s initialization. There is no `ensure_column()` helper; changing
+existing columns requires an explicit migration design, not only editing a
+`CREATE TABLE IF NOT EXISTS` declaration.
 
 ---
 
@@ -141,7 +143,8 @@ camera footage.
 - **Data minimization:** don't log API keys, full stream URLs with embedded
   credentials, or capture image contents. Don't add telemetry or outbound calls
   beyond what's documented (the optional, opt-out-able GitHub release version
-  check) without calling it out explicitly in the README's data-privacy section.
+  check and external assets for the optional `/docs` API documentation) without
+  calling it out explicitly in the README's data-privacy section.
 - **Test data must never be real footage.** The e2e suite (see Testing) uses only
   `https://picsum.photos` (public placeholder images) as its capture source —
   never point automated tests at a real camera, RTSP stream, or any data that
@@ -151,7 +154,7 @@ camera footage.
 
 ## Testing
 
-There is no unit test suite for backend logic — validation is:
+Validation combines:
 1. **Manual, interactive testing via Docker** for UI/UX, mobile, RTSP/V4L2/libcamera
    device behavior, and anything the e2e suite doesn't cover.
 2. **The reusable Docker-based end-to-end suite** in `tests/e2e/` for the backend
@@ -162,6 +165,9 @@ There is no unit test suite for backend logic — validation is:
    ```
    See `.github/instructions/testing.instructions.md` for what it covers, its
    scope boundaries, and how to add a new scenario.
+3. **Docker backend and frontend unit suites:** `./tests/unit/run.sh` and
+   `./tests/unit-js/run.sh` cover isolated logic, codec/lifecycle behavior, and
+   targeted frontend functions. See the testing instructions for their fixtures.
 
 **Fixed test port:** all ad hoc/manual container testing (`docker run`,
 one-off `docker compose` files, etc.) must publish on **`127.0.0.1:28080`**,

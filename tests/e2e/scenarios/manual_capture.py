@@ -5,6 +5,9 @@ future, so the scheduler itself never touches it — see job_lifecycle.py).
 """
 import os
 import time
+from io import BytesIO
+
+from PIL import Image
 
 CAPTURE_COUNT = 5
 
@@ -25,6 +28,15 @@ def run(ctx):
     captures = body["captures"]
     ctx["capture_ids"] = [c["id"] for c in captures]
     assert len(ctx["capture_ids"]) >= CAPTURE_COUNT
+
+    for capture_id in ctx["capture_ids"]:
+        _, thumbnail_bytes = client.get(
+            f"/api/captures/{capture_id}/thumbnail", raw=True, expect=200,
+        )
+        with Image.open(BytesIO(thumbnail_bytes)) as thumbnail:
+            thumbnail.load()
+            assert thumbnail.format == "WEBP"
+            assert 0 < thumbnail.width <= 384 and 0 < thumbnail.height <= 216
 
     # Verify the files actually landed on disk (via the read-only /captures
     # mount). Captures are nested under date-based subfolders

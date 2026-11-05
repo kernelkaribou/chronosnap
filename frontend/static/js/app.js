@@ -117,13 +117,22 @@ function renderThemePresets() {
     const grid = document.getElementById('theme-preset-grid');
     if (!grid) return;
     const current = localStorage.getItem('themePreset') || 'cosmic';
+    const radios = grid.querySelectorAll('input[name="theme-preset"]');
+    if (radios.length) {
+        radios.forEach(radio => {
+            radio.checked = radio.value === current;
+            radio.closest('.theme-preset-card').classList.toggle('active', radio.checked);
+        });
+        return;
+    }
     grid.innerHTML = Object.entries(THEME_PRESETS).map(([key, preset]) => `
-        <div class="theme-preset-card ${key === current ? 'active' : ''}" onclick="setThemePreset('${key}')">
-            <div class="theme-preset-swatches">
+        <label class="theme-preset-card ${key === current ? 'active' : ''}">
+            <input type="radio" name="theme-preset" value="${key}"${key === current ? ' checked' : ''} onchange="setThemePreset(this.value)">
+            <span class="theme-preset-swatches" aria-hidden="true">
                 ${preset.colors.map(c => `<span style="background:${c};"></span>`).join('')}
-            </div>
-            <div class="theme-preset-name">${preset.name}</div>
-        </div>
+            </span>
+            <span class="theme-preset-name">${preset.name}</span>
+        </label>
     `).join('');
 }
 
@@ -206,7 +215,7 @@ function setValue(id, value) {
  * @param {Object} options - fetch options { method, body, query }
  */
 async function apiRequest(endpoint, options = {}) {
-    const { method = 'GET', body = null, rawBody = null, query = null } = options;
+    const { method = 'GET', body = null, rawBody = null, query = null, signal = null } = options;
     
     // Build URL with query params
     let url = `${API_BASE}${endpoint}`;
@@ -220,6 +229,7 @@ async function apiRequest(endpoint, options = {}) {
     }
     
     const fetchOptions = { method, headers: {} };
+    if (signal) fetchOptions.signal = signal;
     
     if (rawBody) {
         // FormData or other raw body — let browser set Content-Type (multipart boundary)
@@ -237,8 +247,12 @@ async function apiRequest(endpoint, options = {}) {
             ? error.detail 
             : Array.isArray(error.detail) 
                 ? error.detail.map(e => e.msg || e.message || JSON.stringify(e)).join('; ')
-                : `Request failed: ${response.status}`;
-        throw new Error(message);
+                : (error.detail && typeof error.detail.message === 'string')
+                    ? error.detail.message : `Request failed: ${response.status}`;
+        const requestError = new Error(message);
+        requestError.status = response.status;
+        requestError.detail = error.detail;
+        throw requestError;
     }
     
     // Return parsed JSON or null for 204 responses
@@ -257,21 +271,6 @@ function getValues(config) {
     });
     return result;
 }
-
-/**
- * Batch set values to multiple elements
- * @param {Object} values - { elementId: value }
- */
-function setValues(values) {
-    Object.entries(values).forEach(([id, value]) => {
-        setValue(id, value);
-    });
-}
-
-/**
- * Clear form elements
- * @param {string[]} ids - Array of element IDs to clear
- */
 
 // =============================================================================
 // End Universal Utilities
@@ -428,23 +427,19 @@ document.addEventListener('click', (e) => {
 
 // Confirmation system
 function showConfirm(message, callback) {
-    const modal = document.getElementById('confirm-modal');
     const messageEl = document.getElementById('confirm-message');
     
     messageEl.textContent = message;
     confirmCallback = callback;
     
-    modal.classList.add('active');
+    showModal('confirm-modal');
 }
 
 function closeConfirmModal(confirmed) {
-    const modal = document.getElementById('confirm-modal');
-    modal.classList.remove('active');
-    
-    if (confirmCallback) {
-        confirmCallback(confirmed);
-        confirmCallback = null;
-    }
+    const callback = confirmCallback;
+    confirmCallback = null;
+    closeModal('confirm-modal');
+    if (callback) callback(confirmed);
 }
 
 /**
@@ -472,6 +467,7 @@ function confirmAction(message, actionFn, opts = {}) {
 function toggleFieldGroup(checkboxId, containerId, opts = {}) {
     const enabled = document.getElementById(checkboxId).checked;
     const container = document.getElementById(containerId);
+    container.inert = !enabled;
     if (enabled) {
         container.classList.remove('disabled');
     } else {
@@ -616,8 +612,8 @@ class SelectionManager {
 
     clear() {
         this.selected.clear();
-        document.querySelectorAll(`${this.cardSelector}.selected`).forEach(c => c.classList.remove('selected'));
-        document.querySelectorAll(`${this.cardSelector} .capture-checkbox`).forEach(cb => cb.checked = false);
+        document.querySelectorAll(`${this.cardSelector}[${this.dataAttr}].selected`).forEach(c => c.classList.remove('selected'));
+        document.querySelectorAll(`${this.cardSelector}[${this.dataAttr}] .capture-checkbox`).forEach(cb => cb.checked = false);
         this.updateControls();
     }
 
@@ -793,6 +789,11 @@ const _viewToPath = {
     'storage': '/storage', 'settings': '/settings',
     'job-detail': '/jobs', 'video-detail': '/timelapses',
 };
+let _routeVersion = 0;
+let _jobDetailRequestVersion = 0;
+let _videoDetailRequestVersion = 0;
+let _capturesPageRequestVersion = 0;
+let _capturesLoadVersion = 0;
 
 function parseRoute(pathname) {
     pathname = pathname || window.location.pathname;
@@ -821,12 +822,16 @@ function handleRoute(pushState = false) {
 }
 
 function navigateTo(path, replace = false) {
-    if (replace) {
-        history.replaceState({ path }, '', path);
-    } else {
-        history.pushState({ path }, '', path);
-    }
-    handleRoute(false);
+    closeModalsForNavigation(true);
+    _modalHistoryNavigation = () => {
+        if (replace) {
+            history.replaceState({ path }, '', path);
+        } else {
+            history.pushState({ path }, '', path);
+        }
+        handleRoute(false);
+    };
+    drainModalHistory();
 }
 
 function setupNavigation() {
@@ -840,20 +845,20 @@ function setupNavigation() {
     
     // Handle browser back/forward buttons
     window.addEventListener('popstate', (e) => {
-        // If a modal is open, close the topmost one
-        const activeModals = document.querySelectorAll('.modal.active');
-        if (activeModals.length > 0) {
+        if (_modalHistoryBackInFlight) {
+            _modalHistoryBackInFlight = false;
+            _pendingModalBacks--;
+            drainModalHistory();
+            return;
+        }
+        const topModal = getTopModal();
+        if (topModal) {
             _closingFromPopstate = true;
-            _modalHistoryDepth = Math.max(0, _modalHistoryDepth - 1);
-            const topModal = activeModals[activeModals.length - 1];
-            if (topModal.id === 'comparison-modal') {
-                closeComparison();
-            } else if (topModal.id === 'confirm-modal') {
-                topModal.classList.remove('active');
-            } else {
+            try {
                 closeModal(topModal.id);
+            } finally {
+                _closingFromPopstate = false;
             }
-            _closingFromPopstate = false;
             return;
         }
         
@@ -862,11 +867,12 @@ function setupNavigation() {
 }
 
 function switchView(view, pushState = true) {
-    // Clean up video detail polling when leaving that view
-    if (view !== 'video-detail' && _videoDetailPollInterval) {
-        clearInterval(_videoDetailPollInterval);
-        _videoDetailPollInterval = null;
-    }
+    // Every route entry is a new lifetime, even when re-entering the same ID.
+    _routeVersion++;
+    _currentVideoDetailId = null;
+    clearTimeout(_videoDetailPollInterval);
+    _videoDetailPollInterval = null;
+    closeModalsForNavigation();
     // Clean up homepage polling when leaving
     if (view !== 'homepage') stopHomepagePoll();
     
@@ -1078,11 +1084,22 @@ function renderJobs(jobs) {
 }
 
 async function loadJobDetail(jobId) {
+    const route = parseRoute();
+    if (currentView !== 'job-detail' || route.view !== 'job-detail' || route.id !== Number(jobId)) return;
+    const version = ++_jobDetailRequestVersion;
+    const routeVersion = _routeVersion;
+    const isCurrent = () => {
+        const route = parseRoute();
+        return routeVersion === _routeVersion && version === _jobDetailRequestVersion &&
+            currentView === 'job-detail' && route.view === 'job-detail' && route.id === Number(jobId);
+    };
+    if (!isCurrent()) return;
     try {
         const [job, capturesData] = await Promise.all([
             apiRequest(`/jobs/${jobId}`),
             apiRequest('/captures/', { query: { job_id: jobId, page: 1, page_size: 1, sort_order: 'desc' } })
         ]);
+        if (!isCurrent()) return;
         
         const content = document.getElementById('job-detail-content');
         const title = document.getElementById('job-detail-title');
@@ -1100,9 +1117,9 @@ async function loadJobDetail(jobId) {
                         ${renderJobScheduleSection(job)}
                         ${renderJobAutoBuildSection(job)}
                         <div class="form-section">
-                            <div class="form-section-title">Tags</div>
+                            <div class="form-section-title" id="edit-job-tags-label">Tags</div>
                             <div class="form-group" style="margin-bottom: 1rem;">
-                                <div class="tag-picker" id="edit-job-tags"></div>
+                                <div class="tag-picker" id="edit-job-tags" role="group" aria-labelledby="edit-job-tags-label"></div>
                             </div>
                         </div>
                     </div><!-- /detail-main -->
@@ -1110,8 +1127,9 @@ async function loadJobDetail(jobId) {
                 <input type="hidden" id="edit_start_datetime" value="${job.start_datetime}">
         `;
         
-        initJobDetailPostRender(job, capturesData);
+        initJobDetailPostRender(job, capturesData, isCurrent);
     } catch (error) {
+        if (!isCurrent()) return;
         console.error('Failed to load job details:', error);
         showNotification('Failed to load job details', 'error');
         navigateTo('/jobs');
@@ -1188,7 +1206,7 @@ function renderJobSidebar(job, capturesData) {
             </button>
             <button class="btn btn-accent btn-sm" onclick="event.stopPropagation(); showProcessVideoModal(${job.id}, '${escapeAttr(job.name)}')" style="width: 100%;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                Build Timelapse
+                Build
             </button>
             ${renderJobActionButtons(job)}
         </div>
@@ -1270,7 +1288,7 @@ function renderJobTimeWindow(job) {
 
 function renderJobSourceSection(job) {
     const sourceInput = job.stream_type === 'device' ? `
-        <label>Camera Device</label>
+        <label for="edit_device_path">Camera Device</label>
         <div class="source-row">
             <select id="edit_device_path" class="form-control" style="flex: 1; min-width: 0;">
                 <option value="${escapeAttr(job.url)}" selected>${escapeHtml(job.url)}</option>
@@ -1290,12 +1308,12 @@ function renderJobSourceSection(job) {
                 Preview
             </button>
             <div class="warn-after-group">
-                <label>Warn After</label>
+                <label for="edit_warning_threshold">Warn After</label>
                 <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50">
             </div>
         </div>
     ` : `
-        <label>Stream URL *</label>
+        <label for="edit_url">Stream URL *</label>
         <div class="source-row">
             <input type="text" id="edit_url" class="form-control" value="${escapeAttr(job.url)}" required style="flex: 1; min-width: 0;">
             <button type="button" class="compare-btn" onclick="previewStream('edit_url', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
@@ -1306,7 +1324,7 @@ function renderJobSourceSection(job) {
                 Preview
             </button>
             <div class="warn-after-group">
-                <label>Warn After</label>
+                <label for="edit_warning_threshold">Warn After</label>
                 <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50">
             </div>
         </div>
@@ -1321,7 +1339,7 @@ function renderJobSourceSection(job) {
             </div>
             <div class="form-row-wrap" style="gap: 1rem; margin-top: 0.75rem;">
                 <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0;">
-                    <label>Capture Quality</label>
+                    <label for="edit_capture_quality">Capture Quality</label>
                     <select id="edit_capture_quality" class="form-control">
                         <option value="maximum" ${(!job.capture_quality || job.capture_quality === 'maximum') ? 'selected' : ''}>Maximum</option>
                         <option value="high" ${job.capture_quality === 'high' ? 'selected' : ''}>High</option>
@@ -1330,7 +1348,7 @@ function renderJobSourceSection(job) {
                     </select>
                 </div>
                 <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0;">
-                    <label>Capture Resolution</label>
+                    <label for="edit_capture_resolution">Capture Resolution</label>
                     <select id="edit_capture_resolution" class="form-control">
                         <option value="native" selected>Native</option>
                         ${job.capture_resolution && job.capture_resolution !== 'native' ? `<option value="${escapeAttr(job.capture_resolution)}" selected>${escapeHtml(job.capture_resolution)}</option>` : ''}
@@ -1349,7 +1367,7 @@ function renderJobScheduleSection(job) {
         <div class="form-section">
             <div class="form-section-title">Schedule</div>
             <div class="form-group" style="margin-bottom: 1rem;">
-                <label style="display:flex;align-items:baseline;gap:0.5rem;">End Date & Time <small style="color:var(--text-secondary);font-weight:normal;font-size:0.75rem;">Leave empty for ongoing</small></label>
+                <label for="edit_end_datetime" style="display:flex;align-items:baseline;gap:0.5rem;">End Date & Time <small style="color:var(--text-secondary);font-weight:normal;font-size:0.75rem;">Leave empty for ongoing</small></label>
                 <input type="datetime-local" id="edit_end_datetime" class="form-control" style="max-width: 280px;">
             </div>
             
@@ -1359,13 +1377,13 @@ function renderJobScheduleSection(job) {
                         <input type="checkbox" id="edit_time_window_enabled" ${job.time_window_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditTimeWindow()">
                         <span><strong>Daily Time Window</strong></span>
                     </label>
-                    <div id="edit-time-window-fields" class="toggle-fields form-row ${job.time_window_enabled ? '' : 'disabled'}">
-                        <label class="text-sm" style="margin: 0;">Start</label>
+                    <div id="edit-time-window-fields" class="toggle-fields form-row ${job.time_window_enabled ? '' : 'disabled'}"${job.time_window_enabled ? '' : ' inert'}>
+                        <label for="edit_time_window_start_time" class="text-sm" style="margin: 0;">Start</label>
                         <div class="time-picker-container" style="margin: 0;">
                             <input type="time" id="edit_time_window_start_time" class="form-control" style="padding: 0.3rem 0.5rem;">
                         </div>
                         <input type="hidden" id="edit_time_window_start">
-                        <label class="text-sm" style="margin: 0;">End</label>
+                        <label for="edit_time_window_end_time" class="text-sm" style="margin: 0;">End</label>
                         <div class="time-picker-container" style="margin: 0;">
                             <input type="time" id="edit_time_window_end_time" class="form-control" style="padding: 0.3rem 0.5rem;">
                         </div>
@@ -1376,12 +1394,12 @@ function renderJobScheduleSection(job) {
 
             <div class="form-row-wrap" style="gap: 1rem; align-items: flex-start;">
                 <div class="form-group" style="margin-bottom: 0;">
-                    <label>Capture Interval (s) *</label>
+                    <label for="edit_interval_seconds">Capture Interval (s) *</label>
                     <input type="number" id="edit_interval_seconds" class="form-control" value="${job.interval_seconds}" min="10" required style="width: 140px;">
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
-                    <label>Timelapse FPS</label>
-                    <input type="number" id="edit_framerate" class="form-control" value="30" min="1" max="120" required style="width: 140px;">
+                    <label for="edit_framerate">Timelapse FPS</label>
+                    <input type="number" id="edit_framerate" class="form-control" value="${job.framerate}" min="1" max="120" required style="width: 140px;">
                 </div>
                 <div class="duration-estimate" id="edit-duration-estimate" style="flex: 1; min-width: 200px; margin: 0;"></div>
             </div>
@@ -1401,9 +1419,9 @@ function renderJobAutoBuildSection(job) {
                 </label>
             </div>
 
-            <div id="edit-auto-build-fields" class="toggle-fields ${job.auto_build_enabled ? '' : 'disabled'}" style="margin-bottom: 1rem; margin-left: 1.5rem;">
+            <div id="edit-auto-build-fields" class="toggle-fields ${job.auto_build_enabled ? '' : 'disabled'}"${job.auto_build_enabled ? '' : ' inert'} style="margin-bottom: 1rem;">
                 <div class="form-group" style="margin-bottom: 0.75rem;">
-                    <label>Build Interval</label>
+                    <label for="edit_auto_build_interval_hours">Build Interval</label>
                     <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                         <input type="number" id="edit_auto_build_interval_hours" class="form-control" min="1" max="8760" value="${job.auto_build_interval_hours || 168}" style="width: 100px;">
                         <small style="color: var(--text-secondary);">hours</small>
@@ -1417,11 +1435,11 @@ function renderJobAutoBuildSection(job) {
                 </div>
                 <div class="form-row">
                     <div class="form-group flex-1">
-                        <label>FPS</label>
+                        <label for="edit_auto_build_fps">FPS</label>
                         <input type="number" id="edit_auto_build_fps" class="form-control" min="1" max="120" value="${job.auto_build_fps || 30}">
                     </div>
                     <div class="form-group flex-1">
-                        <label>Quality</label>
+                        <label for="edit_auto_build_quality">Quality</label>
                         <select id="edit_auto_build_quality" class="form-control">
                             <option value="low" ${job.auto_build_quality === 'low' ? 'selected' : ''}>Low</option>
                             <option value="medium" ${(!job.auto_build_quality || job.auto_build_quality === 'medium') ? 'selected' : ''}>Medium</option>
@@ -1430,7 +1448,7 @@ function renderJobAutoBuildSection(job) {
                         </select>
                     </div>
                     <div class="form-group flex-1">
-                        <label>Resolution</label>
+                        <label for="edit_auto_build_resolution">Resolution</label>
                         <select id="edit_auto_build_resolution" class="form-control">
                             <option value="3840x2160" ${job.auto_build_resolution === '3840x2160' ? 'selected' : ''}>4K (3840x2160)</option>
                             <option value="1920x1080" ${(!job.auto_build_resolution || job.auto_build_resolution === '1920x1080') ? 'selected' : ''}>Full HD (1920x1080)</option>
@@ -1446,11 +1464,11 @@ function renderJobAutoBuildSection(job) {
     `;
 }
 
-function initJobDetailPostRender(job, capturesData) {
+function initJobDetailPostRender(job, capturesData, isCurrent = () => true) {
     const content = document.getElementById('job-detail-content');
     content.scrollTop = 0;
     initializeEditTimePickers(job);
-    initEditJobOverlay(job);
+    initEditJobOverlay(job, isCurrent);
     
     // Populate capture resolution dropdown from persisted source dimensions
     if (job.source_width && job.source_height) {
@@ -1463,7 +1481,8 @@ function initJobDetailPostRender(job, capturesData) {
     
     // Load device list for device-type jobs
     if (job.stream_type === 'device') {
-        refreshDevices('edit_device_path').then(() => {
+        refreshDevices('edit_device_path', isCurrent).then(() => {
+            if (!isCurrent()) return;
             const sel = document.getElementById('edit_device_path');
             if (sel) sel.value = job.url;
         });
@@ -1472,6 +1491,7 @@ function initJobDetailPostRender(job, capturesData) {
     // Add native resolution option to auto-build dropdown
     if (job.capture_count > 0) {
         fetch(`${API_BASE}/captures/job/${job.id}/time-range`).then(r => r.json()).then(tr => {
+            if (!isCurrent()) return;
             if (tr.native_resolution) {
                 const sel = document.getElementById('edit_auto_build_resolution');
                 if (sel && !sel.querySelector(`option[value="${tr.native_resolution}"]`)) {
@@ -1493,11 +1513,6 @@ function initJobDetailPostRender(job, capturesData) {
     });
     
     setupJobEditChangeTracking(job);
-}
-
-// Compatibility wrapper for internal calls that need to navigate to job detail
-function showJobDetails(jobId) {
-    navigateTo(`/jobs/${jobId}`);
 }
 
 async function createJob(event) {
@@ -1619,6 +1634,7 @@ function setupJobEditChangeTracking(originalJob) {
 
     // Initially disabled
     setButtonState(saveBtn, true);
+    saveBtn.dataset.editReady = 'false';
 
     // Snapshot initial form values to compare against
     const getFormSnapshot = () => {
@@ -1637,6 +1653,7 @@ function setupJobEditChangeTracking(originalJob) {
 
     const trackedFields = [
         'edit_interval_seconds',
+        'edit_framerate',
         'edit_end_datetime',
         'edit_time_window_enabled',
         'edit_time_window_start_time',
@@ -1665,7 +1682,10 @@ function setupJobEditChangeTracking(originalJob) {
 
     // Take snapshot after a tick so DOM values are fully populated
     let initialSnapshot = null;
-    setTimeout(() => { initialSnapshot = getFormSnapshot(); }, 50);
+    setTimeout(() => {
+        initialSnapshot = getFormSnapshot();
+        saveBtn.dataset.editReady = 'true';
+    }, 50);
 
     const checkForChanges = () => {
         if (!initialSnapshot) { setButtonState(saveBtn, true); return; }
@@ -1757,69 +1777,6 @@ async function updateJobStatus(jobId, status, jobName) {
     }
 }
 
-async function updateJobEndTime(jobId) {
-    const endDatetimeInput = document.getElementById('edit_end_datetime');
-    const rawValue = endDatetimeInput.value || null;
-    const endDatetime = rawValue ? datetimeLocalToISO(rawValue) : null;
-    
-    if (endDatetime) {
-        const endTime = new Date(endDatetime);
-        if (endTime <= new Date()) {
-            showNotification('End time must be in the future', 'error');
-            return;
-        }
-    }
-    
-    try {
-        await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { end_datetime: endDatetime } });
-        loadJobDetail(jobId);
-        loadJobs();
-        showNotification('End time updated successfully');
-    } catch (error) {
-        console.error('Failed to update end time:', error);
-        showNotification(error.message || 'Failed to update end time', 'error');
-    }
-}
-
-async function updateJobUrl(jobId) {
-    const editDeviceEl = document.getElementById('edit_device_path');
-    const url = editDeviceEl ? editDeviceEl.value : document.getElementById('edit_url').value.trim();
-    
-    if (!url) {
-        showNotification('URL cannot be empty', 'error');
-        return;
-    }
-    
-    let stream_type = detectStreamType(url);
-    
-    try {
-        await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { url, stream_type } });
-        showNotification('Stream URL updated successfully');
-        loadJobDetail(jobId);
-    } catch (error) {
-        console.error('Failed to update URL:', error);
-        showNotification(error.message || 'Failed to update URL', 'error');
-    }
-}
-
-async function updateJobInterval(jobId) {
-    const interval = parseInt(document.getElementById('edit_interval_seconds').value);
-    
-    if (!interval || interval < 10) {
-        showNotification('Interval must be at least 10 seconds', 'error');
-        return;
-    }
-    
-    try {
-        await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { interval_seconds: interval } });
-        showNotification('Capture interval updated successfully');
-        loadJobDetail(jobId);
-    } catch (error) {
-        console.error('Failed to update interval:', error);
-        showNotification(error.message || 'Failed to update interval', 'error');
-    }
-}
-
 function toggleEditTimeWindow() {
     toggleFieldGroup('edit_time_window_enabled', 'edit-time-window-fields', {
         requiredIds: ['edit_time_window_start', 'edit_time_window_end']
@@ -1843,6 +1800,7 @@ function setAutoBuildInterval(inputId, hours) {
 async function saveJobChanges(jobId) {
     // Collect all form values
     const interval = parseInt(document.getElementById('edit_interval_seconds').value);
+    const framerate = Number(document.getElementById('edit_framerate').value);
     // URL may come from device picker or text input
     const editDeviceEl = document.getElementById('edit_device_path');
     const url = editDeviceEl ? editDeviceEl.value : document.getElementById('edit_url').value.trim();
@@ -1868,6 +1826,11 @@ async function saveJobChanges(jobId) {
     
     if (!interval || interval < 10) {
         showNotification('Interval must be at least 10 seconds', 'error');
+        return;
+    }
+
+    if (!Number.isInteger(framerate) || framerate < 1 || framerate > 120) {
+        showNotification('Framerate must be between 1 and 120 FPS', 'error');
         return;
     }
     
@@ -1901,6 +1864,7 @@ async function saveJobChanges(jobId) {
     // Build update payload
     const updateData = {
         interval_seconds: interval,
+        framerate: framerate,
         url: url,
         stream_type: stream_type,
         end_datetime: endDatetime,
@@ -1992,12 +1956,13 @@ function setSourceType(type) {
     document.getElementById('device-test-result').innerHTML = '';
 }
 
-async function refreshDevices(selectId) {
+async function refreshDevices(selectId, isCurrent = () => true) {
     const select = document.getElementById(selectId);
     if (!select) return;
     select.innerHTML = '<option value="">Scanning...</option>';
     try {
         const devices = await apiRequest('/devices/');
+        if (!isCurrent()) return;
         select.innerHTML = '';
         if (devices.length === 0) {
             select.innerHTML = '<option value="">No cameras detected</option>';
@@ -2010,6 +1975,7 @@ async function refreshDevices(selectId) {
             select.appendChild(opt);
         }
     } catch (err) {
+        if (!isCurrent()) return;
         select.innerHTML = '<option value="">Error loading devices</option>';
     }
 }
@@ -2134,6 +2100,628 @@ function downloadSelectedVideos() {
     const ids = [...videoSelection.selected];
     if (ids.length === 0) return;
     window.location.href = `${API_BASE}/videos/download-multiple?ids=${ids.join(',')}`;
+}
+
+let _joinState = null;
+let _joinSearchTimer = null;
+
+async function showJoinVideoModal() {
+    const ids = [...videoSelection.selected];
+    if (ids.length > 100) {
+        showNotification('Choose at most 100 entries for one join', 'error');
+        return;
+    }
+    const state = {
+        entries: [], candidates: [], offset: 0, more: false, query: '',
+        version: 0, searchVersion: 0, validation: null, review: null, busy: true,
+        creating: false, pickerOpen: false, pickerSelection: null, outputFps: null, drag: null,
+        outputResolution: null, resolutionChosen: false,
+        returnFocus: document.activeElement
+    };
+    _joinState = state;
+    document.addEventListener('keydown', handleJoinModalKeydown, true);
+    const timestamp = isoToDatetimeLocal(new Date().toISOString()).replace(/[-:]/g, '').replace('T', '_');
+    document.getElementById('join-video-name').value = `Joined_Timelapse_${timestamp}`;
+    document.getElementById('join-video-search').value = '';
+    document.getElementById('join-video-errors').textContent = '';
+    document.getElementById('join-review-announcement').textContent = '';
+    document.getElementById('join-video-picker').hidden = true;
+    document.getElementById('join-video-ordering').hidden = false;
+    document.getElementById('join-video-output').inert = false;
+    document.getElementById('join-video-actions').hidden = false;
+    document.getElementById('join-video-add').setAttribute('aria-expanded', 'false');
+    document.getElementById('join-video-status').textContent = 'Loading timelapses...';
+    showModal('join-video-modal');
+    renderJoinOrder();
+    renderJoinCandidates();
+    document.getElementById('join-video-name').focus();
+    try {
+        const entries = await Promise.all(ids.map(id => apiRequest(`/videos/${id}`)));
+        if (_joinState !== state) return;
+        state.entries = entries;
+        state.busy = false;
+        document.getElementById('join-video-status').textContent = '';
+        renderJoinOrder();
+        await loadJoinCandidates();
+    } catch (error) {
+        if (_joinState !== state) return;
+        state.busy = false;
+        document.getElementById('join-video-errors').textContent = error.message;
+        renderJoinOrder();
+        await loadJoinCandidates();
+    }
+}
+
+function invalidateJoinCheck(message = '') {
+    _joinState.version++;
+    _joinState.validation = null;
+    _joinState.review = null;
+    document.getElementById('join-review-announcement').textContent = '';
+    document.getElementById('join-video-errors').textContent = '';
+    document.getElementById('join-video-status').textContent = message;
+}
+
+function openJoinPicker() {
+    const state = _joinState;
+    if (!state || state.busy || state.drag || state.pickerOpen) return;
+    state.pickerOpen = true;
+    state.pickerSelection = new Map(state.entries.map(clip => [clip.id, clip]));
+    document.getElementById('join-picker-errors').textContent = '';
+    document.getElementById('join-video-picker').hidden = false;
+    document.getElementById('join-video-ordering').hidden = true;
+    document.getElementById('join-video-output').inert = true;
+    document.getElementById('join-video-actions').hidden = true;
+    document.getElementById('join-video-add').setAttribute('aria-expanded', 'true');
+    document.getElementById('join-video-submit').disabled = true;
+    renderJoinCandidates();
+    document.getElementById('join-video-search').focus();
+    if (!state.candidates.length &&
+        document.getElementById('join-video-candidates').getAttribute('aria-busy') !== 'true') {
+        loadJoinCandidates();
+    }
+}
+
+function closeJoinPicker() {
+    if (!_joinState || !_joinState.pickerOpen) return;
+    _joinState.pickerOpen = false;
+    _joinState.pickerSelection = null;
+    document.getElementById('join-picker-errors').textContent = '';
+    document.getElementById('join-video-picker').hidden = true;
+    document.getElementById('join-video-ordering').hidden = false;
+    document.getElementById('join-video-output').inert = false;
+    document.getElementById('join-video-actions').hidden = false;
+    document.getElementById('join-video-add').setAttribute('aria-expanded', 'false');
+    renderJoinOrder();
+    renderJoinCandidates();
+    document.getElementById('join-video-add').focus();
+}
+
+function getJoinPickerEntries() {
+    const state = _joinState;
+    if (!state?.pickerSelection) return [];
+    const originalIds = new Set(state.entries.map(clip => clip.id));
+    const entries = state.entries.filter(clip => state.pickerSelection.has(clip.id));
+    for (const clip of state.pickerSelection.values()) {
+        if (!originalIds.has(clip.id)) entries.push(clip);
+    }
+    return entries;
+}
+
+function toggleJoinCandidate(id) {
+    const state = _joinState;
+    if (!state?.pickerOpen || state.busy || state.drag) return;
+    const error = document.getElementById('join-picker-errors');
+    error.textContent = '';
+    if (state.pickerSelection.has(id)) {
+        state.pickerSelection.delete(id);
+    } else {
+        const clip = state.candidates.find(video => video.id === id);
+        if (!clip) {
+            error.textContent = 'This timelapse is no longer available. Refresh the clip search.';
+            updateJoinPickerControls();
+            return;
+        }
+        state.pickerSelection.set(id, clip);
+        if (getJoinPickerEntries().length > 100) {
+            state.pickerSelection.delete(id);
+            error.textContent = 'A join can contain at most 100 entries.';
+        }
+    }
+    updateJoinPickerControls();
+    const toggle = document.getElementById(`join-select-${id}`);
+    (toggle && !toggle.disabled ? toggle : document.getElementById('join-video-search')).focus({ preventScroll: true });
+}
+
+function applyJoinPicker() {
+    const state = _joinState;
+    if (!state?.pickerOpen || state.busy || state.drag) return;
+    const entries = getJoinPickerEntries();
+    if (entries.length > 100) {
+        document.getElementById('join-picker-errors').textContent = 'A join can contain at most 100 entries.';
+        return;
+    }
+    if (entries.length !== state.entries.length ||
+        entries.some((clip, index) => clip.id !== state.entries[index].id)) {
+        state.entries = entries;
+        invalidateJoinCheck();
+    }
+    closeJoinPicker();
+}
+
+function joinReorderClip(index, target) {
+    const state = _joinState;
+    if (!state || state.busy || state.drag || index === target || index < 0 ||
+        index >= state.entries.length || target < 0 || target >= state.entries.length) return;
+    const [clip] = state.entries.splice(index, 1);
+    state.entries.splice(target, 0, clip);
+    invalidateJoinCheck();
+    renderJoinOrder();
+    document.getElementById('join-video-status').textContent = `${clip.name} moved to position ${target + 1}.`;
+    document.getElementById(`join-grip-${target}`).focus({ preventScroll: true });
+}
+
+function joinGripKeydown(event, index) {
+    const targets = { ArrowUp: index - 1, ArrowDown: index + 1, Home: 0, End: (_joinState?.entries.length || 1) - 1 };
+    if (!(event.key in targets)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    joinReorderClip(index, targets[event.key]);
+}
+
+function beginJoinDrag(event, index) {
+    const state = _joinState;
+    if (!state || state.busy || state.pickerOpen || state.drag || state.entries.length < 2 ||
+        !event.isPrimary || event.button !== 0) return;
+    event.preventDefault();
+    const handle = event.currentTarget;
+    handle.focus({ preventScroll: true });
+    const row = handle.closest('.join-order-item');
+    const scroller = handle.closest('.modal-content');
+    state.drag = {
+        handle, row, scroller, pointerId: event.pointerId, from: index, to: index,
+        startY: event.clientY, clientY: event.clientY, scrollTop: scroller.scrollTop,
+        active: false, frame: null
+    };
+    handle.setPointerCapture(event.pointerId);
+    handle.addEventListener('pointermove', moveJoinDrag);
+    handle.addEventListener('pointerup', finishJoinDrag);
+    handle.addEventListener('pointercancel', cancelJoinDrag);
+    handle.addEventListener('lostpointercapture', cancelJoinDrag);
+    document.getElementById('join-video-submit').disabled = true;
+}
+
+function moveJoinDrag(event) {
+    const drag = _joinState?.drag;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    drag.clientY = event.clientY;
+    if (!drag.active && Math.abs(event.clientY - drag.startY) >= 5) {
+        drag.active = true;
+        drag.row.classList.add('join-dragging');
+        document.getElementById('join-video-modal').classList.add('join-sorting');
+        updateJoinDrag();
+    }
+}
+
+function updateJoinDrag() {
+    const drag = _joinState?.drag;
+    if (!drag || !drag.active) return;
+    const bounds = drag.scroller.getBoundingClientRect();
+    if (drag.clientY < bounds.top + 48) drag.scroller.scrollTop -= 12;
+    else if (drag.clientY > bounds.bottom - 48) drag.scroller.scrollTop += 12;
+    drag.row.style.transform = `translateY(${drag.clientY - drag.startY + drag.scroller.scrollTop - drag.scrollTop}px)`;
+    const rows = [...document.querySelectorAll('#join-video-order .join-order-item')];
+    rows.forEach(row => row.classList.remove('join-drop-before', 'join-drop-after'));
+    const others = rows.filter(row => row !== drag.row);
+    const target = others.findIndex(row => {
+        const rect = row.getBoundingClientRect();
+        return drag.clientY < rect.top + rect.height / 2;
+    });
+    drag.to = target < 0 ? others.length : target;
+    if (drag.to !== drag.from) {
+        if (target < 0) others[others.length - 1].classList.add('join-drop-after');
+        else others[target].classList.add('join-drop-before');
+    }
+    drag.frame = requestAnimationFrame(updateJoinDrag);
+}
+
+function clearJoinDrag() {
+    const state = _joinState;
+    const drag = state?.drag;
+    if (!drag) return null;
+    state.drag = null;
+    cancelAnimationFrame(drag.frame);
+    drag.handle.removeEventListener('pointermove', moveJoinDrag);
+    drag.handle.removeEventListener('pointerup', finishJoinDrag);
+    drag.handle.removeEventListener('pointercancel', cancelJoinDrag);
+    drag.handle.removeEventListener('lostpointercapture', cancelJoinDrag);
+    if (drag.handle.hasPointerCapture(drag.pointerId)) drag.handle.releasePointerCapture(drag.pointerId);
+    drag.row.style.transform = '';
+    drag.row.classList.remove('join-dragging');
+    document.getElementById('join-video-modal').classList.remove('join-sorting');
+    document.querySelectorAll('#join-video-order .join-order-item')
+        .forEach(row => row.classList.remove('join-drop-before', 'join-drop-after'));
+    document.getElementById('join-video-submit').disabled = state.busy || state.entries.length < 2 || !state.outputFps || !state.outputResolution;
+    return drag;
+}
+
+function finishJoinDrag(event) {
+    const drag = _joinState?.drag;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    if (drag.active) {
+        cancelAnimationFrame(drag.frame);
+        drag.clientY = event.clientY;
+        updateJoinDrag();
+    }
+    const finished = clearJoinDrag();
+    if (finished.active) joinReorderClip(finished.from, finished.to);
+}
+
+function cancelJoinDrag() {
+    clearJoinDrag();
+}
+
+function joinRemoveClip(index) {
+    const state = _joinState;
+    if (!state || state.busy || state.drag || index < 0 || index >= state.entries.length) return;
+    state.entries.splice(index, 1);
+    invalidateJoinCheck();
+    renderJoinOrder();
+    renderJoinCandidates();
+    const focusTarget = state.entries.length ?
+        document.getElementById(`join-grip-${Math.min(index, state.entries.length - 1)}`) :
+        document.getElementById('join-video-add');
+    focusTarget.focus();
+}
+
+function changeJoinFps() {
+    if (!_joinState || _joinState.busy || _joinState.drag) return;
+    _joinState.outputFps = Number(document.getElementById('join-video-fps').value);
+    invalidateJoinCheck();
+    renderJoinOrder();
+}
+
+function changeJoinResolution() {
+    if (!_joinState || _joinState.busy || _joinState.drag) return;
+    _joinState.outputResolution = document.getElementById('join-video-resolution').value;
+    _joinState.resolutionChosen = true;
+    invalidateJoinCheck();
+    renderJoinOrder();
+}
+
+function formatJoinDuration(seconds) {
+    return seconds < 60 ? `${Number(seconds.toFixed(2))}s` : formatDuration(seconds);
+}
+
+function joinOutputDuration(clip) {
+    if (!_joinState.outputFps) return clip.duration_seconds;
+    return clip.total_frames > 0 ? clip.total_frames / _joinState.outputFps :
+        clip.duration_seconds * clip.framerate / _joinState.outputFps;
+}
+
+function applyJoinTimings(clips) {
+    clips.forEach((clip, index) => {
+        const entry = _joinState.entries[index];
+        if (entry && clip.video_id === entry.id && clip.source_fps && clip.total_frames) {
+            Object.assign(entry, {
+                framerate: clip.source_fps, total_frames: clip.total_frames, duration_seconds: clip.duration_seconds
+            });
+            if (clip.resolution) entry.resolution = clip.resolution;
+        }
+    });
+}
+
+function joinProcessingHint(clip, index) {
+    const state = _joinState;
+    const review = state.review || state.validation;
+    const plan = review?.clips[index];
+    if (plan?.error) return `Cannot join · ${plan.error}`;
+    if (plan && review.compatible === false) return 'Checked';
+    const changes = [];
+    const resolutionChanged = clip.resolution && state.outputResolution && clip.resolution !== state.outputResolution;
+    if (resolutionChanged) {
+        const [sourceWidth, sourceHeight] = clip.resolution.split('x').map(Number);
+        const [targetWidth, targetHeight] = state.outputResolution.split('x').map(Number);
+        const valid = [sourceWidth, sourceHeight, targetWidth, targetHeight]
+            .every(value => Number.isSafeInteger(value) && value > 0);
+        const direction = valid && targetWidth >= sourceWidth && targetHeight >= sourceHeight ? 'increased' :
+            valid && targetWidth <= sourceWidth && targetHeight <= sourceHeight ? 'decreased' : 'changed';
+        changes.push(`Resolution ${direction} to ${state.outputResolution}`);
+    }
+    if (state.outputFps && state.outputFps !== clip.framerate) {
+        changes.push(`Frame rate changed to ${state.outputFps} FPS`);
+    }
+    const reencode = plan ? plan.action === 'reencode' || review.mode === 'all' : resolutionChanged;
+    if (reencode) {
+        if (plan?.padding) changes.push('Padding');
+        if (plan?.codec && plan.codec !== 'h264') changes.push('Codec changed to H.264');
+        changes.push('Lossy re-encode');
+    }
+    return changes.join(' · ') || (plan ? 'No changes needed' : '');
+}
+
+function joinReviewKind(index) {
+    const state = _joinState;
+    const review = state.review || state.validation;
+    const plan = review?.clips[index];
+    if (!plan) return '';
+    if (plan.error) return 'error';
+    if (review.compatible !== true) return '';
+    if (plan.action === 'reencode' || review.mode === 'all') return 'reencode';
+    if (plan.action !== 'copy' && plan.action !== 'retime') return '';
+    // Timestamp normalization alone does not change the playback settings.
+    const clip = state.entries[index];
+    return clip.framerate === state.outputFps && clip.resolution === state.outputResolution ? 'preserved' : 'adjusted';
+}
+
+function renderJoinOrder() {
+    const state = _joinState;
+    if (!state) return;
+    const rates = [...new Set(state.entries.map(clip => clip.framerate).filter(Number.isInteger))].sort((a, b) => a - b);
+    const resolutions = [...new Set(state.entries.map(clip => clip.resolution)
+        .filter(resolution => typeof resolution === 'string' && /^[1-9]\d*x[1-9]\d*$/.test(resolution)))];
+    const area = resolution => resolution.split('x').reduce((product, value) => product * Number(value), 1);
+    resolutions.sort((a, b) => area(b) - area(a));
+    if (!state.resolutionChosen || !resolutions.includes(state.outputResolution)) {
+        state.outputResolution = resolutions[0] || null;
+    }
+    const resolutionSelect = document.getElementById('join-video-resolution');
+    resolutionSelect.innerHTML = resolutions.length ?
+        resolutions.map(resolution => `<option value="${resolution}">${resolution}</option>`).join('') :
+        '<option value="">Add clips first</option>';
+    resolutionSelect.value = state.outputResolution || '';
+    resolutionSelect.disabled = state.busy || !resolutions.length;
+    if (!rates.includes(state.outputFps)) state.outputFps = rates[0] || null;
+    const fpsSelect = document.getElementById('join-video-fps');
+    fpsSelect.innerHTML = rates.length ? rates.map(fps => `<option value="${fps}">${fps} FPS</option>`).join('') :
+        '<option value="">Add clips first</option>';
+    fpsSelect.value = state.outputFps || '';
+    fpsSelect.disabled = state.busy || !rates.length;
+    document.getElementById('join-video-add').disabled = state.busy;
+    const disabled = state.busy ? ' disabled' : '';
+    document.getElementById('join-video-order').innerHTML = state.entries.map((clip, index) => {
+        const resolutionChanged = state.outputResolution && clip.resolution && clip.resolution !== state.outputResolution;
+        const processingHint = joinProcessingHint(clip, index);
+        const reviewKind = joinReviewKind(index);
+        const reencode = reviewKind === 'reencode' || (!reviewKind && resolutionChanged);
+        const review = state.review || state.validation;
+        const warning = [
+            review?.warning,
+            index === 0 && review?.mode === 'all' ? review.fallback_reason : '',
+        ].filter(Boolean).join(' ');
+        const indicator = reviewKind ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${reviewKind === 'preserved' ?
+            '<path d="m5 12 4 4L19 6"/>' : reviewKind === 'adjusted' ?
+                '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>' :
+                '<path d="M12 3 2 21h20L12 3ZM12 9v5M12 17v1"/>'}</svg>` : '';
+        return `
+        <li class="join-item join-order-item${reviewKind ? ` join-reviewed-${reviewKind}` : ''}">
+            <button id="join-grip-${index}" type="button" class="btn-icon join-grip" onpointerdown="beginJoinDrag(event, ${index})" onkeydown="joinGripKeydown(event, ${index})" aria-label="Reorder ${escapeAttr(clip.name)}" aria-describedby="join-order-help"${disabled}>
+                <svg width="18" height="22" viewBox="0 0 20 24" fill="currentColor" aria-hidden="true"><rect x="4" y="3" width="4" height="4" rx="1"/><rect x="12" y="3" width="4" height="4" rx="1"/><rect x="4" y="10" width="4" height="4" rx="1"/><rect x="12" y="10" width="4" height="4" rx="1"/><rect x="4" y="17" width="4" height="4" rx="1"/><rect x="12" y="17" width="4" height="4" rx="1"/></svg>
+            </button>
+            ${clip.thumbnail_path ? `<img src="${API_BASE}/videos/${clip.id}/thumbnail" alt="" loading="lazy" draggable="false">` : '<span></span>'}
+            <div class="join-clip-label">
+                <strong>${index + 1}. ${escapeHtml(clip.name)}</strong>
+                <span class="join-hint">${clip.resolution ? escapeHtml(clip.resolution) + ' · ' : ''}${clip.framerate} fps · ${formatJoinDuration(clip.duration_seconds)}</span>
+                ${processingHint ? `<span class="join-hint${reviewKind ? ' join-clip-status' : ''}"${reencode ? ' title="Re-encoding may reduce quality"' : ''}>${indicator}<span>${escapeHtml(processingHint)}</span></span>` : ''}
+                ${warning ? `<span class="join-hint join-clip-warning">${escapeHtml(warning)}</span>` : ''}
+            </div>
+            <button type="button" class="btn-icon join-remove" onclick="joinRemoveClip(${index})" aria-label="Remove entry ${index + 1}" title="Remove clip"${disabled}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+            </button>
+        </li>`;
+    }).join('') || '<li class="join-empty">Add at least two clips to get started.</li>';
+    const duration = state.validation ? state.validation.duration_seconds :
+        state.entries.reduce((sum, clip) => sum + joinOutputDuration(clip), 0);
+    document.getElementById('join-video-total').textContent =
+        `${state.entries.length} clips${state.outputFps ? ` · ${state.outputFps} FPS` : ''} · ${formatJoinDuration(duration)}${state.validation ? '' : ' estimated'}`;
+    const submit = document.getElementById('join-video-submit');
+    submit.disabled = state.busy || state.pickerOpen || state.entries.length < 2 || !state.outputFps || !state.outputResolution || !!state.drag;
+    submit.textContent = state.busy ? (state.creating ? 'Starting join...' : 'Reviewing...') :
+        state.validation ? 'Join' : 'Review';
+}
+
+function renderJoinCandidates() {
+    const state = _joinState;
+    if (!state) return;
+    const selection = state.pickerSelection || new Map(state.entries.map(clip => [clip.id, clip]));
+    document.getElementById('join-video-candidates').innerHTML = state.candidates.map(clip => {
+        const selected = selection.has(clip.id);
+        return `
+        <label id="join-candidate-${clip.id}" class="video-gallery-card join-candidate${selected ? ' selected' : ''}">
+            <input id="join-select-${clip.id}" type="checkbox" class="capture-checkbox" aria-label="Select ${escapeAttr(clip.name)}" onchange="toggleJoinCandidate(${clip.id})"${selected ? ' checked' : ''}>
+            <span class="gallery-checkbox-indicator" aria-hidden="true"></span>
+            <span class="join-candidate-preview">
+                ${clip.thumbnail_path ? `<img src="${API_BASE}/videos/${clip.id}/thumbnail" alt="" loading="lazy">` : '<span class="join-hint">No preview</span>'}
+            </span>
+            <span class="join-candidate-details">
+                <span class="join-clip-label"><strong>${escapeHtml(clip.name)}</strong><span class="join-hint">${escapeHtml(clip.resolution)} · ${clip.framerate} fps · ${formatJoinDuration(clip.duration_seconds)}</span></span>
+            </span>
+        </label>`;
+    }).join('') || '<div class="join-empty">No matching completed timelapses.</div>';
+    document.getElementById('join-video-more').hidden = !state.more;
+    updateJoinPickerControls();
+}
+
+function updateJoinPickerControls() {
+    const state = _joinState;
+    if (!state) return;
+    const selection = state.pickerSelection || new Map(state.entries.map(clip => [clip.id, clip]));
+    const entryCount = state.pickerOpen ? getJoinPickerEntries().length : state.entries.length;
+    const originalCounts = new Map();
+    for (const clip of state.entries) {
+        originalCounts.set(clip.id, (originalCounts.get(clip.id) || 0) + 1);
+    }
+    for (const clip of state.candidates) {
+        const toggle = document.getElementById(`join-select-${clip.id}`);
+        if (!toggle) continue;
+        toggle.checked = selection.has(clip.id);
+        toggle.disabled = state.busy || !!state.drag || !state.pickerOpen ||
+            (!toggle.checked && entryCount + (originalCounts.get(clip.id) || 1) > 100);
+        toggle.closest('.join-candidate')?.classList.toggle('selected', toggle.checked);
+    }
+    document.getElementById('join-video-picker-count').textContent = `${selection.size} selected`;
+    document.getElementById('join-video-picker-apply').disabled = state.busy || !!state.drag || !state.pickerOpen;
+}
+
+function searchJoinVideos() {
+    clearTimeout(_joinSearchTimer);
+    if (!_joinState) return;
+    // Invalidate an in-flight page immediately, not only after the debounce.
+    _joinState.searchVersion++;
+    _joinSearchTimer = setTimeout(() => loadJoinCandidates(), 250);
+}
+
+async function loadJoinCandidates(reset = true) {
+    const state = _joinState;
+    if (!state) return;
+    const version = ++state.searchVersion;
+    if (reset) {
+        state.offset = 0;
+        state.query = document.getElementById('join-video-search').value;
+    }
+    const container = document.getElementById('join-video-candidates');
+    const more = document.getElementById('join-video-more');
+    container.setAttribute('aria-busy', 'true');
+    more.disabled = true;
+    try {
+        const page = await apiRequest('/videos/', { query: {
+            status: 'completed', search: state.query, limit: 24, offset: state.offset
+        } });
+        if (_joinState !== state || state.searchVersion !== version) return;
+        state.candidates = [...new Map((reset ? page : [...state.candidates, ...page])
+            .map(clip => [clip.id, clip])).values()];
+        state.offset += page.length;
+        state.more = page.length === 24;
+        renderJoinCandidates();
+    } catch (error) {
+        if (_joinState === state && state.searchVersion === version) {
+            document.getElementById('join-video-errors').textContent = `Could not load timelapses: ${error.message}`;
+        }
+    } finally {
+        if (_joinState === state && state.searchVersion === version) {
+            container.setAttribute('aria-busy', 'false');
+            more.disabled = false;
+        }
+    }
+}
+
+async function submitVideoJoin(event) {
+    event.preventDefault();
+    const state = _joinState;
+    if (!state || state.busy || state.drag || state.pickerOpen || state.entries.length < 2 || !state.outputFps || !state.outputResolution) return;
+    state.busy = true;
+    const version = state.version;
+    const validation = state.validation;
+    state.creating = !!validation;
+    renderJoinOrder();
+    renderJoinCandidates();
+    document.getElementById('join-video-errors').textContent = '';
+    try {
+        const ids = state.entries.map(clip => clip.id);
+        if (!validation) {
+            document.getElementById('join-video-status').textContent = 'Reviewing clips...';
+            const report = await apiRequest('/videos/join/validate', { method: 'POST',
+                body: { video_ids: ids, output_fps: state.outputFps, output_resolution: state.outputResolution } });
+            if (_joinState !== state || state.version !== version) return;
+            applyJoinTimings(report.clips);
+            state.review = report;
+            document.getElementById('join-video-status').textContent = '';
+            if (!report.compatible) {
+                document.getElementById('join-review-announcement').textContent =
+                    'Review found incompatible clips. Fix the marked entries and review again.';
+                return;
+            }
+            state.outputResolution = report.output_resolution || state.outputResolution;
+            state.resolutionChosen = true;
+            state.validation = report;
+            const kinds = report.clips.map((_, index) => joinReviewKind(index));
+            const unchanged = kinds.filter(kind => kind === 'preserved').length;
+            const adjusted = kinds.filter(kind => kind === 'adjusted').length;
+            const converted = kinds.filter(kind => kind === 'reencode').length;
+            document.getElementById('join-review-announcement').textContent =
+                `Review complete. Unchanged clips: ${unchanged}. Timing-adjusted clips: ${adjusted}. Clips needing conversion: ${converted}. Join is ready.`;
+            return;
+        }
+        state.creating = true;
+        document.getElementById('join-video-status').textContent = 'Starting join...';
+        renderJoinOrder();
+        const video = await apiRequest('/videos/join', { method: 'POST', body: {
+            name: document.getElementById('join-video-name').value,
+            video_ids: ids, output_fps: state.outputFps, output_resolution: state.outputResolution,
+            revisions: validation.clips.map(clip => clip.revision),
+            mode: validation.mode || 'copy', plan_token: validation.plan_token
+        } });
+        if (_joinState !== state) {
+            loadVideos();
+            showNotification('Joining started. Original videos are unchanged.');
+            return;
+        }
+        state.creating = false;
+        closeModal('join-video-modal');
+        navigateTo(`/timelapses/${video.id}`);
+        loadVideos();
+        showNotification('Joining started. Original videos are unchanged.');
+    } catch (error) {
+        if (_joinState !== state) {
+            if (state.creating) showNotification(`Join could not start: ${error.message}`, 'error');
+            return;
+        }
+        state.validation = null;
+        state.review = null;
+        document.getElementById('join-review-announcement').textContent = '';
+        document.getElementById('join-video-errors').textContent = error.message;
+        if (error.detail && Array.isArray(error.detail.clips)) {
+            applyJoinTimings(error.detail.clips);
+            if (error.detail.clips.some(clip => clip.error)) {
+                state.review = { compatible: false, clips: error.detail.clips };
+            }
+        }
+        if (Array.isArray(error.detail?.available_fps)) {
+            const rates = error.detail.available_fps;
+            document.getElementById('join-video-errors').textContent += ` Actual source FPS: ${rates.join(', ')}.`;
+        }
+        if (Array.isArray(error.detail?.available_resolutions)) {
+            document.getElementById('join-video-errors').textContent += ` Actual resolutions: ${error.detail.available_resolutions.join(', ')}.`;
+        }
+        document.getElementById('join-video-status').textContent = '';
+    } finally {
+        if (_joinState === state) {
+            state.busy = false;
+            state.creating = false;
+            renderJoinOrder();
+            renderJoinCandidates();
+            if (document.activeElement === document.body) document.getElementById('join-video-submit').focus();
+        }
+    }
+}
+
+function handleJoinModalKeydown(event) {
+    if (!_joinState || document.getElementById('confirm-modal')?.classList.contains('active')) return;
+    if (event.key === 'Escape' && (_joinState?.pickerOpen || _joinState?.drag)) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.repeat) return;
+        if (_joinState.drag) cancelJoinDrag();
+        else closeJoinPicker();
+        return;
+    }
+    if (event.key !== 'Tab') return;
+    const modal = document.getElementById('join-video-modal');
+    const scope = modal;
+    const focusable = [...scope.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled)')]
+        .filter(element => !element.closest('[inert]'))
+        .filter(element => !element.hidden && element.offsetParent !== null);
+    if (!focusable.length) return;
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (!scope.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
 }
 
 async function loadVideos() {
@@ -2328,7 +2916,6 @@ function updateLoadMoreButton() {
             btn.onclick = showMoreVideos;
             document.getElementById('videos-list').insertAdjacentElement('afterend', btn);
         }
-        const next = Math.min(remaining, VIDEO_PAGE_SIZE);
         btn.textContent = `Load More (${remaining} remaining)`;
         btn.style.display = '';
     } else if (btn) {
@@ -2345,7 +2932,7 @@ function renderVideos(videos, isEmpty) {
         container.innerHTML = `
             <div class="empty-state">
                 <h3>${hasFilter ? 'No matching videos' : 'No processed videos'}</h3>
-                <p>${hasFilter ? 'Try adjusting your search or filters' : 'Click <strong>+ Build Timelapse</strong> above to create your first timelapse video'}</p>
+                <p>${hasFilter ? 'Try adjusting your search or filters' : 'Click <strong>Build</strong> above to create your first timelapse video'}</p>
             </div>
         `;
         return;
@@ -2366,8 +2953,10 @@ function renderVideos(videos, isEmpty) {
              data-video-id="${video.id}"
              onclick="videoSelection.handleCardClick(${video.id}, event, openVideoDetail)" title="${escapeAttr(video.name)}">
             <input type="checkbox" class="capture-checkbox"
+                   aria-label="Select ${escapeAttr(video.name)}"
                    ${isSelected ? 'checked' : ''}
                    onclick="event.stopPropagation(); videoSelection.toggle(${video.id}, event)">
+            <span class="gallery-checkbox-indicator" aria-hidden="true"></span>
             <button class="card-fav-btn ${video.is_favorite ? 'favorited' : ''}" 
                     onclick="event.stopPropagation(); toggleFavorite('videos', ${video.id}, ${video.is_favorite ? 'true' : 'false'})"
                     title="${video.is_favorite ? 'Remove from favorites' : 'Add to favorites'}">
@@ -2379,7 +2968,7 @@ function renderVideos(videos, isEmpty) {
                     `<div class="thumb-placeholder">${filmIcon}</div>`
                 }
                 ${isCompleted ? `<div class="video-gallery-duration">${formatDuration(video.duration_seconds)}</div>` : ''}
-                ${isProcessing ? `<div class="video-gallery-status"><span class="job-status processing">Processing</span></div>` : ''}
+                ${isProcessing ? `<div class="video-gallery-status"><span class="job-status processing">${['joined', 'trimmed'].includes(video.build_source) ? (video.progress >= 70 ? 'Validating' : video.build_source === 'trimmed' ? 'Trimming' : 'Joining') : 'Processing'}</span></div>` : ''}
                 ${video.status === 'failed' ? `<div class="video-gallery-status"><span class="job-status completed" style="background:var(--danger-color)">Failed</span></div>` : ''}
                 ${isCompleted ? `<div class="video-gallery-play">${playIcon}</div>` : ''}
             </div>
@@ -2391,7 +2980,7 @@ function renderVideos(videos, isEmpty) {
             ` : ''}
             <div class="video-gallery-info">
                 <div class="video-gallery-name">${escapeHtml(video.name)}</div>
-                <div class="video-gallery-job">${video.build_source === 'imported' && !video.job_name ? '<span class="auto-build-badge imported">Imported</span>' : (video.job_name ? escapeHtml(video.job_name) : 'No job')}${video.build_source === 'imported' && video.job_name ? ' <span class="auto-build-badge imported">Imported</span>' : ''}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}</div>
+                <div class="video-gallery-job">${video.build_source === 'imported' && !video.job_name ? '<span class="auto-build-badge imported">Imported</span>' : (video.job_name ? escapeHtml(video.job_name) : 'No job')}${video.build_source === 'imported' && video.job_name ? ' <span class="auto-build-badge imported">Imported</span>' : ''}${video.build_source === 'auto' ? ' <span class="auto-build-badge">Auto</span>' : ''}${video.build_source === 'joined' ? ' <span class="auto-build-badge">Joined</span>' : ''}${video.build_source === 'trimmed' ? ' <span class="auto-build-badge">Trimmed</span>' : ''}</div>
                 ${video.tags && video.tags.length ? `<div class="card-tags">${video.tags.map(t => tagChipHTML(t, true)).join('')}</div>` : ''}
             </div>
         </div>`;
@@ -2404,8 +2993,21 @@ let _currentVideoDetailId = null;
 let _videoDetailPollInterval = null;
 
 async function loadVideoDetail(videoId) {
+    const route = parseRoute();
+    if (currentView !== 'video-detail' || route.view !== 'video-detail' || route.id !== Number(videoId)) return;
+    const version = ++_videoDetailRequestVersion;
+    const routeVersion = _routeVersion;
+    const isCurrent = () => {
+        const route = parseRoute();
+        return routeVersion === _routeVersion && version === _videoDetailRequestVersion &&
+            currentView === 'video-detail' && route.view === 'video-detail' && route.id === Number(videoId);
+    };
+    if (!isCurrent()) return;
+    clearTimeout(_videoDetailPollInterval);
+    _videoDetailPollInterval = null;
     try {
         const video = await apiRequest(`/videos/${videoId}`);
+        if (!isCurrent()) return;
         _currentVideoDetailId = video.id;
         
         const title = document.getElementById('video-detail-title');
@@ -2416,6 +3018,7 @@ async function loadVideoDetail(videoId) {
         
         title.textContent = video.name;
         cancelVideoRename();
+        document.getElementById('video-rename-btn').disabled = ['joined', 'trimmed'].includes(video.build_source) && video.status === 'processing';
         
         // Set up video player
         if (video.status === 'completed') {
@@ -2437,29 +3040,22 @@ async function loadVideoDetail(videoId) {
             progressContainer.innerHTML = `
                 <div style="margin-bottom: 1rem;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
-                        <span style="font-size:0.85rem;color:var(--text-secondary);">Building timelapse...</span>
+                        <span style="font-size:0.85rem;color:var(--text-secondary);">${video.build_source === 'trimmed' ? (video.progress >= 70 ? 'Validating trimmed video...' : 'Trimming video...') : video.build_source === 'joined' ? (video.progress >= 70 ? 'Validating joined video...' : 'Joining timelapses...') : 'Building timelapse...'}</span>
                         <span style="font-size:0.85rem;font-weight:600;color:var(--primary-color);">${Math.round(video.progress)}%</span>
                     </div>
                     <div class="progress-bar" style="height:6px;">
                         <div class="progress-fill" style="width:${video.progress}%;"></div>
                     </div>
                 </div>`;
-            // Auto-refresh while processing
-            if (!_videoDetailPollInterval) {
-                _videoDetailPollInterval = setInterval(() => {
-                    const route = parseRoute();
-                    if (route.view === 'video-detail' && route.id) {
-                        loadVideoDetail(route.id);
-                    } else {
-                        clearInterval(_videoDetailPollInterval);
-                        _videoDetailPollInterval = null;
-                    }
-                }, 3000);
-            }
+            // Schedule after completion so a slow request cannot overlap or starve.
+            _videoDetailPollInterval = setTimeout(() => {
+                _videoDetailPollInterval = null;
+                if (isCurrent()) loadVideoDetail(videoId);
+            }, 3000);
         } else {
-            progressContainer.innerHTML = '';
+            progressContainer.innerHTML = video.error_message ? `<p class="join-error" role="alert">${escapeHtml(video.error_message)}</p>` : '';
             if (_videoDetailPollInterval) {
-                clearInterval(_videoDetailPollInterval);
+                clearTimeout(_videoDetailPollInterval);
                 _videoDetailPollInterval = null;
             }
         }
@@ -2472,7 +3068,7 @@ async function loadVideoDetail(videoId) {
             ? (video.job_id
                 ? `<a href="/jobs/${video.job_id}" class="job-link" onclick="event.preventDefault(); navigateToJob(${video.job_id})">${escapeHtml(video.job_name)}</a>`
                 : escapeHtml(video.job_name))
-            : '<span class="auto-build-badge imported">Imported</span>';
+            : (video.build_source === 'imported' ? '<span class="auto-build-badge imported">Imported</span>' : 'No job');
         const jobEditBtn = `<button class="btn-icon" onclick="showVideoJobPicker(${video.id}, ${video.job_id || 'null'})" title="Change job" style="padding:0 0.25rem;margin-left:0.25rem;vertical-align:middle;">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </button>`;
@@ -2489,7 +3085,11 @@ async function loadVideoDetail(videoId) {
         
         // Row 3: Resolution, Framerate, Quality, Frames
         metaHtml += `<dt>Resolution</dt><dd>${video.resolution}</dd><dt>Framerate</dt><dd>${video.framerate} fps</dd>`;
-        metaHtml += `<dt>Quality</dt><dd>${video.quality}</dd><dt>Frames</dt><dd>${video.total_frames.toLocaleString()}</dd>`;
+        const qualityLabel = video.quality === 'preserved' ? 'Original quality preserved' :
+            video.quality === 'partly_converted' ? 'Partly converted · High' :
+            video.build_source === 'joined' ? 'Converted · High' :
+            escapeHtml(video.quality);
+        metaHtml += `<dt>Quality</dt><dd>${qualityLabel}</dd><dt>Frames</dt><dd>${video.total_frames.toLocaleString()}</dd>`;
         
         meta.innerHTML = metaHtml;
         
@@ -2499,8 +3099,8 @@ async function loadVideoDetail(videoId) {
             const currentTagIds = (video.tags || []).map(t => t.id);
             tagsContainer.innerHTML = `
                 <div style="margin: 0.5rem 0;">
-                    <label style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Tags</label>
-                    <div class="tag-picker" id="video-detail-tag-picker"></div>
+                    <div id="video-detail-tags-label" style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.25rem;">Tags</div>
+                    <div class="tag-picker" id="video-detail-tag-picker" role="group" aria-labelledby="video-detail-tags-label"></div>
                 </div>
             `;
             tagsContainer.style.display = 'block';
@@ -2511,7 +3111,7 @@ async function loadVideoDetail(videoId) {
             });
         }
         
-        // Build actions (header icons: download, GIF, delete)
+        // Build actions for the selected video only.
         let actionsHtml = '';
         if (video.status === 'processing') {
             actionsHtml += `<button class="btn btn-danger btn-sm" onclick="cancelVideoBuild(${video.id}, '${escapeAttr(video.name)}')">Cancel</button>`;
@@ -2521,13 +3121,24 @@ async function loadVideoDetail(videoId) {
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 </a>`;
                 actionsHtml += gifPopoverHTML(video.id, video.name);
+                actionsHtml += `<button type="button" class="btn-icon" title="Trim" aria-label="Trim video" onclick="showVideoTrim(${video.id})">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="m8.1 8.1 12.9 12.9M14 10l7-7M8.1 15.9 12 12"/></svg>
+                </button>`;
             }
             actionsHtml += `<button class="btn-icon" title="Delete" onclick="deleteVideoFromDetail(${video.id}, '${escapeAttr(video.name)}')" style="color:var(--danger-color);">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
             </button>`;
         }
         actions.innerHTML = actionsHtml;
+        if (_trimReturnFocusId !== null) {
+            const returnId = _trimReturnFocusId;
+            _trimReturnFocusId = null;
+            if (returnId === video.id && !_trimState && document.activeElement === document.body) {
+                actions.querySelector('[aria-label="Trim video"]')?.focus();
+            }
+        }
     } catch (error) {
+        if (!isCurrent()) return;
         console.error('Failed to load video details:', error);
         showNotification('Failed to load video details', 'error');
         navigateTo('/timelapses');
@@ -2567,6 +3178,459 @@ async function deleteVideoFromDetail(videoId, videoName) {
             }
         }
     );
+}
+
+let _trimState = null;
+let _trimReturnFocusId = null;
+
+function trimSecondsLabel(seconds) {
+    return `${Number(seconds.toFixed(2))}s`;
+}
+
+function renderVideoTrim() {
+    const state = _trimState;
+    if (!state?.info) return;
+    const info = state.info;
+    for (const edge of ['start', 'end']) {
+        const range = document.getElementById(`trim-${edge}-range`);
+        range.max = info.total_frames;
+        range.step = info.framerate;
+        range.value = state[edge] * info.framerate;
+        range.setAttribute('aria-valuetext', `${state[edge]} seconds removed from ${edge}`);
+        const input = document.getElementById(`trim-${edge}-seconds`);
+        input.value = state[edge];
+        input.max = info.max_trim_seconds - state[edge === 'start' ? 'end' : 'start'];
+        document.getElementById('trim-timeline').style.setProperty(
+            `--trim-${edge}`, `${state[edge] * info.framerate / info.total_frames * 100}%`);
+    }
+    const duration = info.total_frames / info.framerate;
+    document.getElementById('trim-video-selection').textContent =
+        `Keep ${trimSecondsLabel(state.start)} to ${trimSecondsLabel(duration - state.end)} · ${trimSecondsLabel(duration - state.start - state.end)} remaining`;
+    document.getElementById('trim-video-controls').disabled = state.busy || state.stale;
+    document.getElementById('trim-video-submit').disabled =
+        state.busy || state.invalid || state.start + state.end === 0;
+    renderVideoTrimPlayback();
+}
+
+function renderVideoTrimPlayback() {
+    const state = _trimState;
+    if (!state?.info) return;
+    const player = document.getElementById('trim-video-preview');
+    const frames = state.info.total_frames - (state.start + state.end) * state.info.framerate;
+    const duration = frames / state.info.framerate;
+    const elapsed = state.previewAtEnd ? duration : Math.max(0, Math.min(duration, player.currentTime - state.start));
+    const position = document.getElementById('trim-preview-position');
+    position.max = frames;
+    position.value = elapsed * state.info.framerate;
+    const elapsedLabel = formatDuration(elapsed);
+    const durationLabel = formatDuration(duration);
+    const description = `${elapsedLabel} of ${durationLabel}`;
+    if (position.getAttribute('aria-valuetext') !== description) position.setAttribute('aria-valuetext', description);
+    const clock = document.getElementById('trim-preview-time');
+    const timeLabel = `${elapsedLabel} / ${durationLabel}`;
+    if (clock.textContent !== timeLabel) clock.textContent = timeLabel;
+    document.getElementById('trim-preview-controls').disabled =
+        Boolean(state.busy || state.stale || state.previewError || player.readyState < 1);
+    const label = player.paused ? 'Play selection' : 'Pause selection';
+    const toggle = document.getElementById('trim-preview-toggle');
+    if (toggle.getAttribute('aria-label') !== label) {
+        toggle.setAttribute('aria-label', label);
+        toggle.title = label;
+        document.getElementById('trim-preview-play-icon').style.display = player.paused ? '' : 'none';
+        document.getElementById('trim-preview-pause-icon').style.display = player.paused ? 'none' : '';
+    }
+    document.getElementById('trim-preview-fullscreen').hidden = !document.fullscreenEnabled;
+}
+
+function setVideoTrimSeconds(edge, raw) {
+    const state = _trimState;
+    if (!state?.info || state.busy || state.stale || !['start', 'end'].includes(edge)) return;
+    const value = Number(raw);
+    if (raw === '' || !Number.isSafeInteger(value) || value < 0) {
+        state.invalid = true;
+        document.getElementById('trim-video-errors').textContent = 'Enter a whole number of seconds, zero or greater.';
+        document.getElementById('trim-video-submit').disabled = true;
+        return;
+    }
+    const other = edge === 'start' ? 'end' : 'start';
+    const maximum = state.info.max_trim_seconds - state[other];
+    state[edge] = Math.min(value, maximum);
+    state.invalid = false;
+    document.getElementById('trim-video-errors').textContent =
+        value > maximum ? 'The selection must keep at least one second.' : '';
+    state.previewAtEnd = edge === 'end';
+    const player = document.getElementById('trim-video-preview');
+    player.pause();
+    if (player.readyState >= 1) {
+        player.currentTime = edge === 'start' ? state.start :
+            (state.info.total_frames - 1) / state.info.framerate - state.end;
+    }
+    renderVideoTrim();
+}
+
+function handleVideoTrimRangeKey(event, edge) {
+    const state = _trimState;
+    if (!state?.info || state.busy || state.stale || event.altKey || event.ctrlKey || event.metaKey) return;
+    const other = edge === 'start' ? 'end' : 'start';
+    const values = {
+        ArrowLeft: state[edge] + (edge === 'start' ? -1 : 1),
+        ArrowRight: state[edge] + (edge === 'start' ? 1 : -1),
+        ArrowUp: state[edge] + 1, ArrowDown: state[edge] - 1,
+        PageUp: state[edge] + 10, PageDown: state[edge] - 10,
+        Home: 0, End: state.info.max_trim_seconds - state[other],
+    };
+    if (!(event.key in values)) return;
+    event.preventDefault();
+    setVideoTrimSeconds(edge, Math.max(0, values[event.key]));
+}
+
+function boundVideoTrimPreview(state) {
+    if (_trimState !== state || !state.info) return;
+    const player = document.getElementById('trim-video-preview');
+    const end = state.info.total_frames / state.info.framerate - state.end;
+    if (player.currentTime < state.start - 0.001) player.currentTime = state.start;
+    if (player.currentTime >= end) {
+        state.previewAtEnd = true;
+        player.pause();
+        player.currentTime = end - 1 / state.info.framerate;
+    }
+    renderVideoTrimPlayback();
+}
+
+function seekVideoTrimPreview(raw) {
+    const state = _trimState;
+    const player = document.getElementById('trim-video-preview');
+    if (!state?.info || state.busy || state.stale || state.previewError || player.readyState < 1) return;
+    const requested = Number(raw);
+    if (!Number.isFinite(requested)) {
+        showNotification('The preview position must be a valid number.', 'error');
+        return;
+    }
+    const frames = state.info.total_frames - (state.start + state.end) * state.info.framerate;
+    const frame = Math.max(0, Math.min(frames, Math.round(requested)));
+    // The logical endpoint is after the last retained frame. Show that frame
+    // while the selection-relative clock and scrubber reach the full duration.
+    state.previewAtEnd = frame === frames;
+    if (state.previewAtEnd) player.pause();
+    player.currentTime = state.start + Math.min(frame, frames - 1) / state.info.framerate;
+    renderVideoTrimPlayback();
+}
+
+function handleVideoTrimPlaybackKey(event) {
+    const state = _trimState;
+    if (!state?.info || event.altKey || event.ctrlKey || event.metaKey) return;
+    const frame = Math.round(Number(document.getElementById('trim-preview-position').value));
+    const values = {
+        ArrowLeft: frame - 1, ArrowRight: frame + 1,
+        ArrowDown: frame - 1, ArrowUp: frame + 1,
+        PageDown: frame - state.info.framerate, PageUp: frame + state.info.framerate,
+        Home: 0, End: state.info.total_frames - (state.start + state.end) * state.info.framerate,
+    };
+    if (!(event.key in values)) return;
+    event.preventDefault();
+    seekVideoTrimPreview(values[event.key]);
+}
+
+function toggleVideoTrimPlayback() {
+    const state = _trimState;
+    const player = document.getElementById('trim-video-preview');
+    if (!state?.info || state.busy || state.stale || state.previewError || player.readyState < 1) return;
+    if (!player.paused) {
+        player.pause();
+        renderVideoTrimPlayback();
+    } else {
+        if (state.previewAtEnd) seekVideoTrimPreview(0);
+        player.play().catch(error => {
+            if (_trimState === state) showNotification(`Preview could not play: ${error.message}`, 'error');
+        });
+        renderVideoTrimPlayback();
+    }
+}
+
+async function toggleVideoTrimFullscreen() {
+    const state = _trimState;
+    if (!state?.info || state.busy || state.stale) return;
+    const wrapper = document.getElementById('trim-preview-wrap');
+    try {
+        if (document.fullscreenElement === wrapper) await document.exitFullscreen();
+        else {
+            await wrapper.requestFullscreen();
+            if (_trimState !== state && document.fullscreenElement === wrapper) await document.exitFullscreen();
+        }
+    } catch (error) {
+        showNotification(`Fullscreen preview could not open: ${error.message}`, 'error');
+    }
+}
+
+function previewVideoTrim() {
+    const state = _trimState;
+    if (!state?.info || state.busy || state.stale || state.previewError) return;
+    const player = document.getElementById('trim-video-preview');
+    state.previewAtEnd = false;
+    player.currentTime = state.start;
+    player.play().catch(error => {
+        if (_trimState === state) showNotification(`Preview could not play: ${error.message}`, 'error');
+    });
+    renderVideoTrimPlayback();
+}
+
+function waitForTrimMedia(video, eventName, state, change) {
+    return new Promise((resolve, reject) => {
+        const cleanup = () => {
+            clearTimeout(timer);
+            video.removeEventListener(eventName, done);
+            video.removeEventListener('error', failed);
+            state.controller.signal.removeEventListener('abort', aborted);
+        };
+        const done = () => { cleanup(); resolve(); };
+        const failed = () => { cleanup(); reject(new Error('Video frames could not be loaded')); };
+        const aborted = () => { cleanup(); reject(new DOMException('Trim closed', 'AbortError')); };
+        const timer = setTimeout(failed, 15000);
+        video.addEventListener(eventName, done, { once: true });
+        video.addEventListener('error', failed, { once: true });
+        state.controller.signal.addEventListener('abort', aborted, { once: true });
+        if (state.controller.signal.aborted) aborted();
+        else change();
+    });
+}
+
+async function buildTrimFilmstrip(state) {
+    const video = document.getElementById('trim-filmstrip-source');
+    const canvas = document.getElementById('trim-filmstrip');
+    const context = canvas.getContext('2d');
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    try {
+        await waitForTrimMedia(video, 'loadeddata', state, () => {
+            video.src = `${API_BASE}/videos/${state.videoId}/download`;
+            video.load();
+        });
+        const duration = state.info.total_frames / state.info.framerate;
+        const cellWidth = canvas.width / 10;
+        for (let index = 0; index < 10; index++) {
+            if (_trimState !== state) return;
+            const time = Math.min(duration - 1 / state.info.framerate, (index + 0.5) * duration / 10);
+            if (Math.abs(video.currentTime - time) > 0.000001) {
+                await waitForTrimMedia(video, 'seeked', state, () => { video.currentTime = time; });
+            }
+            if (_trimState !== state) return;
+            const scale = Math.max(cellWidth / video.videoWidth, canvas.height / video.videoHeight);
+            const width = video.videoWidth * scale;
+            const height = video.videoHeight * scale;
+            context.save();
+            context.beginPath();
+            context.rect(index * cellWidth, 0, cellWidth, canvas.height);
+            context.clip();
+            context.drawImage(video, index * cellWidth + (cellWidth - width) / 2,
+                (canvas.height - height) / 2, width, height);
+            context.restore();
+        }
+    } catch (error) {
+        if (_trimState === state && error.name !== 'AbortError') {
+            console.warn('Trim timeline thumbnails could not load:', error);
+            showNotification('Timeline thumbnails could not load. The trim controls are still available.', 'warning');
+        }
+    } finally {
+        if (_trimState === state) {
+            video.removeAttribute('src');
+            video.load();
+        }
+    }
+}
+
+async function showVideoTrim(videoId) {
+    if (_trimState) return;
+    const gifPopover = document.getElementById('gif-popover');
+    if (gifPopover) gifPopover.style.display = 'none';
+    _removeGifPopoverCloseListener();
+    document.getElementById('video-detail-player').pause();
+    const state = {
+        videoId, start: 0, end: 0, info: null, busy: true, invalid: false, previewAtEnd: false,
+        controller: new AbortController(),
+        returnFocus: document.querySelector('#video-detail-actions [aria-label="Trim video"]') || document.activeElement,
+    };
+    _trimState = state;
+    document.getElementById('trim-video-errors').textContent = '';
+    document.getElementById('trim-video-status').textContent = 'Inspecting video...';
+    document.getElementById('trim-video-name').value = '';
+    document.getElementById('trim-video-selection').textContent = '';
+    document.getElementById('trim-video-controls').disabled = true;
+    document.getElementById('trim-video-submit').disabled = true;
+    document.getElementById('trim-preview-controls').disabled = true;
+    document.getElementById('trim-preview-time').textContent = '0s / 0s';
+    document.getElementById('trim-preview-position').value = 0;
+    document.getElementById('trim-preview-position').max = 0;
+    document.getElementById('trim-filmstrip').getContext('2d').clearRect(0, 0, 960, 72);
+    showModal('trim-video-modal');
+    document.addEventListener('keydown', handleTrimModalKeydown, true);
+    document.querySelector('#trim-video-modal .modal-header button').focus();
+    try {
+        const [video, info] = await Promise.all([
+            apiRequest(`/videos/${videoId}`, { signal: state.controller.signal }),
+            apiRequest(`/videos/${videoId}/trim/validate`, {
+                method: 'POST', body: {}, signal: state.controller.signal,
+            }),
+        ]);
+        if (_trimState !== state) return;
+        state.info = info;
+        state.busy = false;
+        document.getElementById('trim-video-name').value = `${video.name}_Trimmed`.slice(0, 100);
+        document.getElementById('trim-video-status').textContent = info.max_trim_seconds ?
+            '' : 'This video is too short to remove a whole second while keeping one second.';
+        const player = document.getElementById('trim-video-preview');
+        player.onloadedmetadata = () => {
+            if (_trimState !== state) return;
+            player.currentTime = state.previewAtEnd ?
+                (state.info.total_frames - 1) / state.info.framerate - state.end : state.start;
+            renderVideoTrimPlayback();
+        };
+        player.ontimeupdate = player.onseeking = player.onended = () => boundVideoTrimPreview(state);
+        player.onpause = () => {
+            if (_trimState !== state) return;
+            if (state.animationFrame != null) cancelAnimationFrame(state.animationFrame);
+            state.animationFrame = null;
+            renderVideoTrimPlayback();
+        };
+        player.onplay = () => {
+            if (_trimState !== state) return;
+            if (state.previewAtEnd) {
+                state.previewAtEnd = false;
+                player.currentTime = state.start;
+            }
+            boundVideoTrimPreview(state);
+            if (state.animationFrame != null) cancelAnimationFrame(state.animationFrame);
+            state.animationFrame = null;
+            if (!player.paused) {
+                const frame = () => {
+                    if (_trimState !== state) return;
+                    boundVideoTrimPreview(state);
+                    state.animationFrame = player.paused ? null : requestAnimationFrame(frame);
+                };
+                state.animationFrame = requestAnimationFrame(frame);
+            }
+        };
+        player.onerror = () => {
+            if (_trimState === state) {
+                state.previewError = true;
+                player.pause();
+                renderVideoTrimPlayback();
+                showNotification('The video preview could not load.', 'error');
+            }
+        };
+        player.src = `${API_BASE}/videos/${videoId}/download`;
+        player.load();
+        renderVideoTrim();
+        document.getElementById('trim-start-range').focus();
+        buildTrimFilmstrip(state);
+    } catch (error) {
+        if (_trimState !== state || error.name === 'AbortError') return;
+        document.getElementById('trim-video-errors').textContent = error.message;
+        document.getElementById('trim-video-status').textContent = '';
+    }
+}
+
+function handleTrimModalKeydown(event) {
+    if (!_trimState || document.getElementById('confirm-modal')?.classList.contains('active')) return;
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (event.repeat) return;
+        if (document.fullscreenElement === document.getElementById('trim-preview-wrap')) {
+            document.exitFullscreen().catch(error => {
+                showNotification(`Fullscreen preview could not close: ${error.message}`, 'error');
+            });
+        } else {
+            closeModal('trim-video-modal');
+        }
+    } else if (event.key === 'Tab') {
+        const controls = [...document.querySelectorAll(
+            '#trim-video-modal button:not(:disabled), #trim-video-modal input:not(:disabled)'
+        )].filter(element => element.getClientRects().length);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+        }
+    }
+}
+
+function cleanupVideoTrim() {
+    const state = _trimState;
+    _trimState = null;
+    if (!state) return;
+    _trimReturnFocusId = _closingFromPopstate ? null : state.videoId;
+    state.controller.abort();
+    document.removeEventListener('keydown', handleTrimModalKeydown, true);
+    for (const id of ['trim-video-preview', 'trim-filmstrip-source']) {
+        const player = document.getElementById(id);
+        player.pause();
+        if (id === 'trim-video-preview') {
+            if (state.animationFrame != null) cancelAnimationFrame(state.animationFrame);
+            state.animationFrame = null;
+            player.onloadedmetadata = player.ontimeupdate = player.onseeking = player.onended =
+                player.onpause = player.onplay = player.onerror = null;
+        }
+        player.removeAttribute('src');
+        player.load();
+    }
+    if (document.fullscreenElement === document.getElementById('trim-preview-wrap')) {
+        document.exitFullscreen().then(() => {
+            const route = parseRoute();
+            if (!_trimState && route.view === 'video-detail' && Number(route.id) === state.videoId) {
+                document.querySelector('#video-detail-actions [aria-label="Trim video"]')?.focus();
+            }
+        }).catch(error => {
+            showNotification(`Preview fullscreen could not close: ${error.message}`, 'error');
+        });
+    }
+    restoreModalFocus(state.returnFocus);
+}
+
+async function submitVideoTrim(event) {
+    event.preventDefault();
+    const state = _trimState;
+    if (!state?.info || state.busy || state.invalid || !state.start && !state.end) return;
+    state.busy = true;
+    state.creating = true;
+    renderVideoTrim();
+    document.getElementById('trim-video-errors').textContent = '';
+    document.getElementById('trim-video-status').textContent = 'Starting trim...';
+    document.getElementById('trim-video-preview').pause();
+    try {
+        const video = await apiRequest(`/videos/${state.videoId}/trim`, { method: 'POST', body: {
+            name: document.getElementById('trim-video-name').value,
+            trim_start_seconds: state.start, trim_end_seconds: state.end, revision: state.info.revision,
+        } });
+        if (_trimState === state) {
+            state.creating = false;
+            closeModal('trim-video-modal');
+            navigateTo(`/timelapses/${video.id}`);
+        }
+        loadVideos();
+        refreshEventsSoon();
+        showNotification('Video processing started');
+    } catch (error) {
+        if (_trimState !== state) {
+            showNotification(`Trim could not start: ${error.message}`, 'error');
+            return;
+        }
+        document.getElementById('trim-video-errors').textContent = error.message;
+        document.getElementById('trim-video-status').textContent = '';
+        if (error.status === 409) {
+            state.invalid = true;
+            state.stale = true;
+            document.getElementById('trim-video-errors').textContent += ' Close and reopen Trim to inspect the video again.';
+        }
+    } finally {
+        if (_trimState === state) {
+            state.busy = false;
+            state.creating = false;
+            renderVideoTrim();
+        }
+    }
 }
 
 function startVideoRename() {
@@ -2652,7 +3716,7 @@ async function showVideoJobPicker(videoId, currentJobId) {
         .concat(jobs.map(j => `<option value="${j.id}" ${j.id === currentJobId ? 'selected' : ''}>${escapeHtml(j.name)}</option>`));
 
     jobDd.innerHTML = `
-        <select id="video-job-select" class="form-control" style="font-size:0.8rem;padding:0.15rem 0.3rem;display:inline-block;width:auto;max-width:160px;">
+        <select id="video-job-select" aria-label="Video job" class="form-control" style="font-size:0.8rem;padding:0.15rem 0.3rem;display:inline-block;width:auto;max-width:160px;">
             ${options.join('')}
         </select>
         <button class="btn-icon" onclick="saveVideoJob(${videoId})" title="Save" style="padding:0 0.25rem;color:var(--success);vertical-align:middle;">
@@ -2682,14 +3746,14 @@ async function saveVideoJob(videoId) {
 
 async function cancelVideoBuild(videoId, videoName) {
     confirmAction(
-        `Cancel the build for "${videoName}"? The partial file will be deleted.`,
+        `Cancel processing for "${videoName}"? The partial file will be deleted.`,
         async () => {
             try {
                 await apiRequest(`/videos/${videoId}/cancel`, { method: 'POST' });
                 closeVideoDetail();
                 loadVideos();
                 refreshEventsSoon();
-                showNotification(`Build cancelled for "${videoName}"`);
+                showNotification(`Processing cancelled for "${videoName}"`);
             } catch (error) {
                 showNotification(`Failed to cancel: ${error.message}`, 'error');
             }
@@ -2709,7 +3773,7 @@ function gifPopoverHTML(videoId, videoName) {
                 <div class="gif-popover-row">
                     <span style="font-size:0.8rem;font-weight:500;">Loop</span>
                     <label class="toggle-switch">
-                        <input type="checkbox" id="gif-loop-toggle" checked>
+                        <input type="checkbox" id="gif-loop-toggle" aria-label="Loop GIF" checked>
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
@@ -2848,20 +3912,7 @@ async function openComparison() {
 }
 
 function closeComparison() {
-    const modal = document.getElementById('comparison-modal');
-    const wasActive = modal.classList.contains('active');
-    const { players, animFrame } = comparisonState;
-    players.forEach(p => { p.pause(); p.currentTime = 0; });
-    if (animFrame) cancelAnimationFrame(animFrame);
-    comparisonState.playing = false;
-    comparisonState.animFrame = null;
-    comparisonState.players = [];
-    modal.classList.remove('active');
-    
-    if (wasActive && _modalHistoryDepth > 0 && !_closingFromPopstate) {
-        _modalHistoryDepth--;
-        history.back();
-    }
+    closeModal('comparison-modal');
 }
 
 function toggleComparisonPlay() {
@@ -2927,7 +3978,7 @@ async function showProcessVideoModal(jobId, jobName) {
         // Reset form
         document.getElementById('process-video-form').reset();
         document.getElementById('use_range').checked = false;
-        document.getElementById('capture-range-fields').classList.add('disabled');
+        toggleFieldGroup('use_range', 'capture-range-fields');
         document.getElementById('video-duration-estimate').innerHTML = '<span style="color: var(--text-secondary); font-size: 0.85rem;">No job selected</span>';
         document.getElementById('available-range-info').style.display = 'none';
         // Reset text overlay
@@ -2949,14 +4000,14 @@ async function showProcessVideoModal(jobId, jobName) {
             jobSelector.style.display = 'none';
             jobSelect.removeAttribute('required');
             document.getElementById('process_job_id').value = jobId;
-            document.querySelector('#process-video-modal .modal-header h3').textContent = `Build Timelapse - ${jobName}`;
+            document.querySelector('#process-video-modal .modal-header h3').textContent = `Build - ${jobName}`;
             await populateVideoFormFromJob(jobId, jobName);
         } else {
             // Opened from Timelapses page — show job selector
             jobSelector.style.display = '';
             jobSelect.setAttribute('required', 'required');
             document.getElementById('process_job_id').value = '';
-            document.querySelector('#process-video-modal .modal-header h3').textContent = 'Build Timelapse';
+            document.querySelector('#process-video-modal .modal-header h3').textContent = 'Build';
             
             // Populate job dropdown
             await populateJobSelector();
@@ -3151,7 +4202,7 @@ async function populateVideoFormFromJob(jobId, jobName) {
     
     // Reset the use_range checkbox
     document.getElementById('use_range').checked = false;
-    document.getElementById('capture-range-fields').classList.add('disabled');
+    toggleFieldGroup('use_range', 'capture-range-fields');
     
     // Calculate and display initial duration
     updateVideoDurationEstimate();
@@ -3329,41 +4380,45 @@ function generateOverlayHTML(prefix, opts = {}) {
         : '<option value="DejaVu Sans">DejaVu Sans</option>';
 
     const controlsHtml = `
-            <div style="display:flex; gap:0.75rem; align-items:center;">
+            <div class="overlay-controls-row">
                 <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.35rem;">
-                    <div style="display:flex; gap:0.5rem; align-items:flex-end;">
+                    <div class="overlay-text-controls">
                         <div style="flex: 1 1 0; min-width:0;">
-                            <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Text</label>
+                            <label for="${prefix}-overlay-text" style="font-size:0.7rem; margin-bottom:2px; display:block;">Text</label>
                             <input type="text" id="${prefix}-overlay-text" class="form-control" value="{job_name}" placeholder="{job_name}"${inputEvent}>
                         </div>
                         <div style="flex: 0 0 163px;">
-                            <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Font</label>
+                            <label for="${prefix}-overlay-font" style="font-size:0.7rem; margin-bottom:2px; display:block;">Font</label>
                             <select id="${prefix}-overlay-font" class="form-control"${inputEvent}>${fontOpts}</select>
                         </div>
                         <div style="flex:0 0 56px;">
-                            <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Size</label>
+                            <label for="${prefix}-overlay-size" style="font-size:0.7rem; margin-bottom:2px; display:block;">Size</label>
                             <input type="number" id="${prefix}-overlay-size" class="form-control" value="5" min="1" max="20" step="1"${inputEvent}>
                         </div>
                         <div style="flex:0 0 36px;">
-                            <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Bold</label>
+                            <label for="${prefix}-overlay-bold" style="font-size:0.7rem; margin-bottom:2px; display:block;">Bold</label>
                             <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr} style="margin-top:10px; margin-left:6px;">
                         </div>
                     </div>
                     <small style="color: var(--text-secondary); font-size:0.6rem;">${renderDocLink('Variable reference')}</small>
-                    <div style="display:flex; gap:0.3rem; align-items:center;">
+                    <div class="overlay-color-controls">
+                      <div class="overlay-color-row" role="group" aria-label="Overlay text appearance">
                         <span style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">Text:</span>
-                        <input type="color" id="${prefix}-overlay-color" value="#FFFFFF" style="border:none;padding:0;height:18px;width:18px;border-radius:50%;cursor:pointer;background:none;"${inputEvent}>
-                        <input type="range" id="${prefix}-overlay-color-opacity" min="0" max="100" value="100" style="flex:1; height:14px;"${inputEvent}>
+                        <input type="color" id="${prefix}-overlay-color" aria-label="Overlay text color" value="#FFFFFF" style="border:none;padding:0;height:18px;width:18px;border-radius:50%;cursor:pointer;background:none;"${inputEvent}>
+                        <input type="range" id="${prefix}-overlay-color-opacity" aria-label="Overlay text opacity" min="0" max="100" value="100" style="flex:1; height:14px;"${inputEvent}>
                         <span id="${prefix}-overlay-color-opacity-label" style="width:30px;text-align:right;font-size:0.75rem;color:var(--text-secondary);">100%</span>
-                        <input type="checkbox" id="${prefix}-overlay-bg" checked${onchangeAttr} style="margin:0 0 0 0.25rem;">
+                      </div>
+                      <div class="overlay-color-row" role="group" aria-label="Overlay background appearance">
+                        <input type="checkbox" id="${prefix}-overlay-bg" aria-label="Enable overlay background" checked${onchangeAttr} style="margin:0 0 0 0.25rem;">
                         <span style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">Background:</span>
-                        <input type="color" id="${prefix}-overlay-bg-color" value="#000000" style="border:none;padding:0;height:18px;width:18px;border-radius:50%;cursor:pointer;background:none;"${inputEvent}>
-                        <input type="range" id="${prefix}-overlay-bg-opacity" min="0" max="100" value="50" style="flex:1; height:14px;"${inputEvent}>
+                        <input type="color" id="${prefix}-overlay-bg-color" aria-label="Overlay background color" value="#000000" style="border:none;padding:0;height:18px;width:18px;border-radius:50%;cursor:pointer;background:none;"${inputEvent}>
+                        <input type="range" id="${prefix}-overlay-bg-opacity" aria-label="Overlay background opacity" min="0" max="100" value="50" style="flex:1; height:14px;"${inputEvent}>
                         <span id="${prefix}-overlay-opacity-label" style="width:30px;text-align:right;font-size:0.75rem;color:var(--text-secondary);">50%</span>
+                      </div>
                     </div>
                 </div>
                 <div style="flex:0 0 auto;">
-                    <div class="overlay-position-grid" id="${prefix}-overlay-grid">${gridBtns}</div>
+                    <div class="overlay-position-grid" id="${prefix}-overlay-grid" role="group" aria-label="Overlay position">${gridBtns}</div>
                 </div>
             </div>`;
 
@@ -3384,11 +4439,11 @@ function generateOverlayHTML(prefix, opts = {}) {
         <div class="form-group" style="margin-top: 0.5rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <input type="checkbox" id="${prefix}-overlay-enabled"${onchangeAttr}>
-                <span>${label}</span>
+                <label for="${prefix}-overlay-enabled" style="margin:0;">${label}</label>
                 <small style="color: var(--text-secondary); font-weight: normal; font-size: 0.75rem;">Burn text into each frame during rendering</small>
             </div>
         </div>
-        <div id="${prefix}-overlay-fields" class="toggle-fields disabled">
+        <div id="${prefix}-overlay-fields" class="toggle-fields disabled" inert>
             ${fieldsInner}
         </div>`;
 }
@@ -3410,15 +4465,12 @@ function initOverlayWidget(prefix, opts = {}) {
     const cb = document.getElementById(`${prefix}-overlay-enabled`);
     const fields = document.getElementById(`${prefix}-overlay-fields`);
     if (!cb || !fields) return;
+    toggleFieldGroup(`${prefix}-overlay-enabled`, `${prefix}-overlay-fields`);
 
     // Toggle visibility
     cb.addEventListener('change', () => {
-        if (cb.checked) {
-            fields.classList.remove('disabled');
-            if (!_overlayFontsLoaded) loadOverlayFonts();
-        } else {
-            fields.classList.add('disabled');
-        }
+        toggleFieldGroup(`${prefix}-overlay-enabled`, `${prefix}-overlay-fields`);
+        if (cb.checked && !_overlayFontsLoaded) loadOverlayFonts();
         if (opts.onToggle) opts.onToggle(cb.checked);
     });
 
@@ -3476,13 +4528,7 @@ function writeOverlayConfig(prefix, config) {
     const el = id => document.getElementById(`${prefix}-overlay-${id}`);
     if (el('enabled')) el('enabled').checked = !!config.enabled;
     const fields = document.getElementById(`${prefix}-overlay-fields`);
-    if (fields) {
-        if (config.enabled) {
-            fields.classList.remove('disabled');
-        } else {
-            fields.classList.add('disabled');
-        }
-    }
+    if (fields && el('enabled')) toggleFieldGroup(`${prefix}-overlay-enabled`, `${prefix}-overlay-fields`);
     if (el('text')) el('text').value = config.text || '';
     if (el('font')) el('font').value = config.font || 'DejaVu Sans';
     if (el('size')) el('size').value = config.font_size || 5;
@@ -3607,13 +4653,15 @@ function initCreateJobOverlay() {
 
 let _editOverlayPreviewTimeout = null;
 
-function initEditJobOverlay(job) {
+function initEditJobOverlay(job, isCurrent = () => true) {
     // Store job context for preview
     window._editOverlayJob = job;
 
     const triggerEditPreview = () => {
         clearTimeout(_editOverlayPreviewTimeout);
-        _editOverlayPreviewTimeout = setTimeout(() => updateGenericOverlayPreview('edit-ab', job), 300);
+        _editOverlayPreviewTimeout = setTimeout(() => {
+            if (isCurrent()) updateGenericOverlayPreview('edit-ab', job, isCurrent);
+        }, 300);
     };
 
     mountOverlayWidget('edit-ab-overlay-container', 'edit-ab', {
@@ -3636,10 +4684,10 @@ function initEditJobOverlay(job) {
     }
 
     // Load preview image from latest capture
-    loadOverlayPreviewImage('edit-ab', job);
+    loadOverlayPreviewImage('edit-ab', job, isCurrent);
 }
 
-async function loadOverlayPreviewImage(prefix, job) {
+async function loadOverlayPreviewImage(prefix, job, isCurrent = () => true) {
     const img = document.getElementById(`${prefix}-overlay-preview-img`);
     const placeholder = document.getElementById(`${prefix}-overlay-preview-placeholder`);
     if (!img) return;
@@ -3649,6 +4697,7 @@ async function loadOverlayPreviewImage(prefix, job) {
     try {
         // Use the job's latest capture for the preview
         const capsData = await apiRequest('/captures/', { query: { job_id: job.id, page_size: 1, sort_order: 'desc' } });
+        if (!isCurrent()) return;
         if (capsData.captures && capsData.captures.length > 0) {
             const cap = capsData.captures[0];
             img._captureId = cap.id;
@@ -3659,13 +4708,16 @@ async function loadOverlayPreviewImage(prefix, job) {
             // If overlay is already enabled, render preview
             const cb = document.getElementById(`${prefix}-overlay-enabled`);
             if (cb && cb.checked) {
-                setTimeout(() => updateGenericOverlayPreview(prefix, job), 200);
+                setTimeout(() => {
+                    if (isCurrent()) updateGenericOverlayPreview(prefix, job, isCurrent);
+                }, 200);
             }
         } else {
             // No captures -- try to fetch from the job's URL
             showOverlayPreviewPlaceholder(prefix, 'No captures yet', job.url);
         }
     } catch (e) {
+        if (!isCurrent()) return;
         console.error('loadOverlayPreviewImage error:', e);
         showOverlayPreviewPlaceholder(prefix, 'Preview unavailable');
     }
@@ -3731,7 +4783,8 @@ async function fetchOverlayPreviewFromUrl(prefix) {
     }
 }
 
-async function updateOverlayFromUrl(prefix) {
+async function updateOverlayFromUrl(prefix, isCurrent = () => true) {
+    if (!isCurrent()) return;
     const config = readOverlayConfig(prefix);
     const img = document.getElementById(`${prefix}-overlay-preview-img`);
     if (!img) return;
@@ -3761,6 +4814,7 @@ async function updateOverlayFromUrl(prefix) {
         });
         if (!resp.ok) throw new Error('Preview failed');
         const blob = await resp.blob();
+        if (!isCurrent()) return;
         const url = URL.createObjectURL(blob);
         if (img._overlayUrl) URL.revokeObjectURL(img._overlayUrl);
         img._overlayUrl = url;
@@ -3768,13 +4822,14 @@ async function updateOverlayFromUrl(prefix) {
     } catch (e) { console.error('Overlay preview error:', e); }
 }
 
-async function updateGenericOverlayPreview(prefix, job) {
+async function updateGenericOverlayPreview(prefix, job, isCurrent = () => true) {
+    if (!isCurrent()) return;
     const config = readOverlayConfig(prefix);
     const img = document.getElementById(`${prefix}-overlay-preview-img`);
     if (!img) return;
     // Delegate to URL-based previewer if we have base64 but no capture
     if (!img._captureId && img._base64) {
-        return updateOverlayFromUrl(prefix);
+        return updateOverlayFromUrl(prefix, isCurrent);
     }
     if (!img._captureId) return;
     if (!config) {
@@ -3791,6 +4846,7 @@ async function updateGenericOverlayPreview(prefix, job) {
         });
         if (!resp.ok) { console.error('Overlay preview API error:', resp.status); return; }
         const blob = await resp.blob();
+        if (!isCurrent()) return;
         const url = URL.createObjectURL(blob);
         if (img._overlayUrl) URL.revokeObjectURL(img._overlayUrl);
         img._overlayUrl = url;
@@ -3833,8 +4889,6 @@ async function processVideo(event) {
     
     try {
         const video = await apiRequest('/videos/', { method: 'POST', body: formData });
-        document.getElementById('process-video-modal').classList.remove('active');
-        if (_modalHistoryDepth > 0) _modalHistoryDepth--;
         document.getElementById('process-video-form').reset();
         navigateTo(`/timelapses/${video.id}`);
         showNotification('Video processing started');
@@ -3849,11 +4903,113 @@ function navigateToJob(jobId) {
 }
 
 // Modal management
-let _modalHistoryDepth = 0;
+let _pendingModalBacks = 0;
+let _modalHistoryBackInFlight = false;
+let _modalHistoryNavigation = null;
+const _modalOpenState = new Map();
+const _modalInertState = new Map();
+
+function drainModalHistory() {
+    if (_modalHistoryBackInFlight) return;
+    if (_pendingModalBacks > 0) {
+        // Browsers may coalesce overlapping back() calls into one popstate.
+        _modalHistoryBackInFlight = true;
+        history.back();
+        return;
+    }
+    if (_modalHistoryNavigation) {
+        const navigate = _modalHistoryNavigation;
+        _modalHistoryNavigation = null;
+        navigate();
+        return;
+    }
+    // Reopened dialogs are immediately usable, but cannot push onto an index
+    // that an earlier close is still traversing. Closed deferred openings vanish.
+    let depth = 0;
+    _modalOpenState.forEach(state => {
+        depth++;
+        if (!state.historyPushed) {
+            history.pushState({ modal: true, depth }, '');
+            state.historyPushed = true;
+        }
+    });
+}
+
+function getTopModal() {
+    const active = [...document.querySelectorAll('.modal.active')];
+    // Confirmation is visually above every standard dialog regardless of DOM order.
+    const confirm = active.find(modal => modal.id === 'confirm-modal');
+    if (confirm) return confirm;
+    return [..._modalOpenState.keys()].reverse().find(modal => active.includes(modal)) ||
+        active[active.length - 1] || null;
+}
+
+function syncModalInert() {
+    _modalInertState.forEach((inert, node) => { node.inert = inert; });
+    _modalInertState.clear();
+    const top = getTopModal();
+    if (!top) return;
+    let branch = top;
+    while (branch && branch !== document.body) {
+        const parent = branch.parentElement;
+        if (!parent) break;
+        [...parent.children].forEach(node => {
+            if (node !== branch) {
+                _modalInertState.set(node, node.inert);
+                node.inert = true;
+            }
+        });
+        branch = parent;
+    }
+}
+
+function canFocusModalTarget(node) {
+    return node?.isConnected && !node.matches(':disabled') && !node.closest('[inert]') &&
+        !node.hidden && node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden';
+}
+
+function modalFocusables(modal) {
+    return [...modal.querySelectorAll(
+        'a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])'
+    )].filter(node => node.getAttribute('tabindex') !== '-1' && canFocusModalTarget(node));
+}
+
+function focusModal(modal) {
+    const preferred = modal.querySelector('[data-modal-initial-focus]');
+    const target = canFocusModalTarget(preferred) ? preferred : modalFocusables(modal)[0];
+    if (target) target.focus();
+    else {
+        modal.setAttribute('tabindex', '-1');
+        modal.focus();
+    }
+}
+
+function restoreModalFocus(target) {
+    if (canFocusModalTarget(target)) target.focus();
+    else {
+        const top = getTopModal();
+        if (top) focusModal(top);
+    }
+}
+
+function closeModalsForNavigation(traverseHistory = false) {
+    const wasClosing = _closingFromPopstate;
+    _closingFromPopstate = wasClosing || !traverseHistory;
+    try {
+        let top;
+        while ((top = getTopModal())) closeModal(top.id);
+    } finally {
+        _closingFromPopstate = wasClosing;
+    }
+}
 
 function showModal(modalId) {
     const modal = document.getElementById(modalId);
+    if (modal.classList.contains('active')) return;
+    _modalOpenState.set(modal, { returnFocus: document.activeElement, historyPushed: false });
     modal.classList.add('active');
+    syncModalInert();
+    focusModal(getTopModal());
     
     // Always scroll to top when opening any modal
     const modalContent = modal.querySelector('.modal-content');
@@ -3862,20 +5018,53 @@ function showModal(modalId) {
     }
     
     // Push history state so back button can close modal
-    _modalHistoryDepth++;
-    history.pushState({ modal: true, depth: _modalHistoryDepth }, '');
+    drainModalHistory();
 }
 
 let _closingFromPopstate = false;
 
 function closeModal(modalId) {
-    const wasActive = document.getElementById(modalId).classList.contains('active');
-    document.getElementById(modalId).classList.remove('active');
+    const modal = document.getElementById(modalId);
+    const wasActive = modal.classList.contains('active');
+    const state = _modalOpenState.get(modal);
+    const returnFocus = state?.returnFocus ||
+        (modalId === 'join-video-modal' ? _joinState?.returnFocus :
+            modalId === 'trim-video-modal' ? _trimState?.returnFocus : null);
+    if (modalId === 'join-video-modal' && _joinState?.creating) {
+        showNotification('Your confirmed join is still being submitted. Closing does not cancel it.', 'info');
+    }
+    if (modalId === 'trim-video-modal' && _trimState?.creating) {
+        showNotification('Your trim is still being submitted. Closing does not cancel it.', 'info');
+    }
+    modal.classList.remove('active');
+    _modalOpenState.delete(modal);
+    syncModalInert();
+    if (modalId === 'trim-video-modal') cleanupVideoTrim();
+
+    if (modalId === 'join-video-modal') {
+        clearTimeout(_joinSearchTimer);
+        document.removeEventListener('keydown', handleJoinModalKeydown, true);
+        clearJoinDrag();
+        _joinState = null;
+    }
+    if (modalId === 'comparison-modal') {
+        const { players, animFrame } = comparisonState;
+        players.forEach(player => { player.pause(); player.currentTime = 0; });
+        if (animFrame) cancelAnimationFrame(animFrame);
+        comparisonState.playing = false;
+        comparisonState.animFrame = null;
+        comparisonState.players = [];
+    }
+    if (modalId === 'capture-preview-modal') {
+        capturesState.currentCaptureId = null;
+        document.removeEventListener('keydown', handleCaptureNavKeys);
+    }
+    if (modalId === 'maintenance-modal') maintenanceData = null;
     
     // Pop history entry if we pushed one and this isn't from popstate
-    if (wasActive && _modalHistoryDepth > 0 && !_closingFromPopstate) {
-        _modalHistoryDepth--;
-        history.back();
+    if (wasActive && state?.historyPushed && !_closingFromPopstate) {
+        _pendingModalBacks++;
+        drainModalHistory();
     }
     
     // Clear form when closing create job modal
@@ -3915,11 +5104,37 @@ function closeModal(modalId) {
         window._overlayPreviewCaptureId = null;
         window._overlayJobName = null;
     }
+    restoreModalFocus(returnFocus);
+    if (modalId === 'confirm-modal' && confirmCallback) {
+        const callback = confirmCallback;
+        confirmCallback = null;
+        callback(false);
+    }
 }
 
-// Close the topmost active modal on Escape key
+// Join and Trim keep their capture-phase keyboard behavior; legacy dialogs share this handler.
 document.addEventListener('keydown', function(e) {
+    const topModal = getTopModal();
+    if (e.key === 'Tab' && topModal) {
+        if (['join-video-modal', 'trim-video-modal'].includes(topModal.id)) return;
+        const controls = modalFocusables(topModal);
+        const first = controls[0], last = controls[controls.length - 1];
+        if (!controls.length) {
+            e.preventDefault();
+            focusModal(topModal);
+        } else if (!topModal.contains(document.activeElement)) {
+            e.preventDefault();
+            (e.shiftKey ? last : first).focus();
+        } else if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+        }
+    }
     if (e.key === 'Escape') {
+        if (e.repeat) return;
         // Close lightbox first if open
         const lightbox = document.querySelector('.overlay-lightbox');
         if (lightbox) {
@@ -3927,17 +5142,8 @@ document.addEventListener('keydown', function(e) {
             return;
         }
         
-        // Check custom modals first (confirm dialog)
-        const confirmModal = document.getElementById('confirm-modal');
-        if (confirmModal && confirmModal.classList.contains('active')) {
-            confirmModal.classList.remove('active');
-            return;
-        }
-        
-        // Close the last opened standard modal
-        const modals = document.querySelectorAll('.modal.active');
-        if (modals.length > 0) {
-            const topModal = modals[modals.length - 1];
+        if (topModal) {
+            e.preventDefault();
             closeModal(topModal.id);
         }
     }
@@ -4143,7 +5349,7 @@ async function loadImportBrowse(path) {
         }).join('');
     } catch (error) {
         document.getElementById('import-browse-list').innerHTML =
-            `<div style="padding:1rem;text-align:center;color:var(--danger);font-size:0.85rem;">${escapeHtml(error.message || 'Failed to browse')}</div>`;
+            `<div style="padding:1rem;text-align:center;color:var(--danger-color);font-size:0.85rem;">${escapeHtml(error.message || 'Failed to browse')}</div>`;
         document.getElementById('import-scan-btn').disabled = true;
     }
 }
@@ -4210,7 +5416,7 @@ async function showImportPreview() {
             ? '<br>' + m.tags.map(t => `<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:0.75rem;background:${escapeAttr(t.color)}22;color:${escapeAttr(t.color)};border:1px solid ${escapeAttr(t.color)}44;margin:2px 2px 0 0;">${escapeHtml(t.name)}</span>`).join('')
             : '';
         metaBanner.innerHTML = `
-            <div class="info-box" style="margin-bottom:0.75rem;border-left:3px solid var(--primary);">
+            <div class="info-box" style="margin-bottom:0.75rem;border-left:3px solid var(--primary-color);">
                 <strong>ChronoSnap Export Detected</strong><br>
                 <small style="color:var(--text-secondary);">
                     Original job: "${escapeHtml(m.name || 'Unknown')}"${details.length ? '<br>' + details.join(' · ') : ''}
@@ -4287,14 +5493,14 @@ async function showImportPreview() {
                         ? `<img src="${thumbUrl}" alt="" style="width:60px;height:44px;object-fit:cover;border-radius:4px;flex-shrink:0;">`
                         : '<span style="font-size:1.5rem;flex-shrink:0;">🎬</span>'}
                     <div class="video-meta" style="flex:1;min-width:0;">
-                        <input type="text" class="form-control" value="${escapeAttr(baseName)}" data-file="${escapeAttr(v.file_name)}" style="font-size:0.85rem;padding:0.25rem 0.5rem;margin-bottom:0.25rem;">
-                        <select class="form-control import-video-job" data-file="${escapeAttr(v.file_name)}" style="font-size:0.75rem;padding:0.15rem 0.3rem;margin-bottom:0.25rem;">
+                        <input type="text" class="form-control" aria-label="Imported video name: ${escapeAttr(baseName)}" value="${escapeAttr(baseName)}" data-file="${escapeAttr(v.file_name)}" style="font-size:0.85rem;padding:0.25rem 0.5rem;margin-bottom:0.25rem;">
+                        <select class="form-control import-video-job" aria-label="Job for ${escapeAttr(baseName)}" data-file="${escapeAttr(v.file_name)}" style="font-size:0.75rem;padding:0.15rem 0.3rem;margin-bottom:0.25rem;">
                             <option value="">No job (Imported)</option>
                             ${_importJobs.map(j => `<option value="${j.id}">${escapeHtml(j.name)}</option>`).join('')}
                         </select>
                         <small>${[res, dur, formatBytes(v.file_size), v.codec].filter(Boolean).join(' · ')}</small>
                     </div>
-                    <button class="btn-icon" onclick="removeImportVideo(this)" title="Remove" style="flex-shrink:0;color:var(--danger);padding:0.25rem;">
+                    <button class="btn-icon" onclick="removeImportVideo(this)" title="Remove" style="flex-shrink:0;color:var(--danger-color);padding:0.25rem;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                 </div>`;
@@ -4467,7 +5673,7 @@ function showNamingValidation(previewEl, pattern) {
     if (!previewEl) return;
     const err = validateNamingPattern(pattern);
     if (err) {
-        previewEl.innerHTML = `<span style="color:var(--danger,#ef4444);">${err}</span>`;
+        previewEl.innerHTML = `<span style="color:var(--danger-color);">${err}</span>`;
     }
 }
 
@@ -4485,7 +5691,7 @@ function updateSettingsNamingPreview() {
     const el = document.getElementById('settings-naming-preview');
     if (el) el.textContent = `Example: ${buildNamingExample(pattern, 'MyJob')}.jpg`;
     const err = validateNamingPattern(raw);
-    if (err && el) el.innerHTML = `<span style="color:var(--danger,#ef4444);">${err}</span>`;
+    if (err && el) el.innerHTML = `<span style="color:var(--danger-color);">${err}</span>`;
     const btn = document.getElementById('save-naming-pattern-btn');
     if (btn) btn.disabled = !!err || raw === _savedNamingPattern || !raw.trim();
 }
@@ -4520,11 +5726,11 @@ async function showCreateJobModal() {
     
     // Reset time window
     document.getElementById('time_window_enabled').checked = false;
-    document.getElementById('time-window-fields').classList.add('disabled');
+    toggleTimeWindow();
     
     // Reset auto-build
     document.getElementById('auto_build_enabled').checked = false;
-    document.getElementById('auto-build-fields').classList.add('disabled');
+    toggleAutoBuildFields();
     
     showModal('create-job-modal');
     
@@ -4634,10 +5840,8 @@ async function duplicateJob(jobId) {
         
         // Copy time window settings
         const twEnabled = document.getElementById('time_window_enabled');
-        const twFields = document.getElementById('time-window-fields');
         if (job.time_window_enabled) {
             twEnabled.checked = true;
-            twFields.classList.remove('disabled');
             if (job.time_window_start) {
                 document.getElementById('time_window_start_time').value = job.time_window_start;
                 document.getElementById('time_window_start_time').dispatchEvent(new Event('change'));
@@ -4648,15 +5852,13 @@ async function duplicateJob(jobId) {
             }
         } else {
             twEnabled.checked = false;
-            twFields.classList.add('disabled');
         }
+        toggleTimeWindow();
         
         // Copy auto-build settings
         const abEnabled = document.getElementById('auto_build_enabled');
-        const abFields = document.getElementById('auto-build-fields');
         if (job.auto_build_enabled) {
             abEnabled.checked = true;
-            abFields.classList.remove('disabled');
             document.getElementById('auto_build_interval_hours').value = job.auto_build_interval_hours || 168;
             document.getElementById('auto_build_fps').value = job.auto_build_fps || 30;
             document.getElementById('auto_build_quality').value = job.auto_build_quality || 'medium';
@@ -4678,8 +5880,8 @@ async function duplicateJob(jobId) {
             }
         } else {
             abEnabled.checked = false;
-            abFields.classList.add('disabled');
         }
+        toggleAutoBuildFields();
         
         updateEndDateMin();
         showModal('create-job-modal');
@@ -4719,49 +5921,6 @@ function getStreamHost(url) {
 }
 
 // ===== DateTime Utility Functions =====
-// 
-// TIMEZONE APPROACH:
-// - Backend stores datetimes in ISO format with timezone (e.g., "2025-12-22T14:30:00-06:00")
-// - Frontend custom pickers work in user's local browser time
-// - When sending to backend: browser Date objects automatically include timezone
-// - When displaying from backend: formatDateTime() parses ISO string and displays in browser's local time
-// - This ensures timestamps are always shown in the user's local time while maintaining timezone info
-//
-// DATETIME FORMAT:
-// - Always use 24-hour format for display (00:00 - 23:59)
-// - Custom pickers use dropdowns (date picker + hour/minute selects) to avoid locale issues
-// - Hidden inputs store values in ISO format for API submission
-
-function toUTCString(localDateTimeString) {
-    // Convert datetime-local format (YYYY-MM-DDTHH:mm) to ISO string format
-    // Note: Backend stores in local time, not UTC, so we format as local ISO
-    // Seconds are set to :00 for start times (schedule grid alignment)
-    // and :59 for end times to be more inclusive
-    if (!localDateTimeString) return null;
-    const date = new Date(localDateTimeString);
-    // Format as ISO but without timezone info to match backend's datetime.now() format
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
-}
-
-function toISOStringForQuery(localDateTimeString, isEndTime) {
-    // Convert datetime-local format to ISO string for database queries
-    // For end times, add 59 seconds to include the entire minute
-    if (!localDateTimeString) return null;
-    const date = new Date(localDateTimeString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = isEndTime ? '59' : '00';  // Use 59 for end times to be inclusive
-    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
-}
 
 function formatDateTime(isoString, { showSeconds = true } = {}) {
     if (!isoString) return 'N/A';
@@ -5021,8 +6180,9 @@ window.addEventListener('mouseup', function(e) {
     if (_modalMouseDownTarget &&
         _modalMouseDownTarget === e.target &&
         e.target.classList.contains('modal') &&
-        e.target.id !== 'confirm-modal') {
-        e.target.classList.remove('active');
+        e.target.id !== 'confirm-modal' &&
+        e.target === getTopModal()) {
+        closeModal(e.target.id);
     }
     _modalMouseDownTarget = null;
 }, true);
@@ -5089,10 +6249,10 @@ async function performMaintenanceScan(jobId, jobName) {
         console.error('Maintenance scan failed:', error);
         content.innerHTML = `
             <div style="text-align: center; padding: 2rem;">
-                <div style="font-size: 2rem; margin-bottom: 1rem; color: var(--danger);">
+                <div style="font-size: 2rem; margin-bottom: 1rem; color: var(--danger-color);">
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                 </div>
-                <p style="color: var(--danger);">Failed to scan captures</p>
+                <p style="color: var(--danger-color);">Failed to scan captures</p>
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
                 </p>
@@ -5120,7 +6280,7 @@ function displayMaintenanceResults(jobId, jobName) {
     } else {
         // Issues found - show details
         const missingList = data.missing_files && data.missing_files.length > 0 ? data.missing_files.map(file => `
-            <div style="padding: 0.4rem 0.5rem; background: var(--card-bg); border-radius: 3px; margin-bottom: 0.25rem; border-left: 2px solid var(--danger);">
+            <div style="padding: 0.4rem 0.5rem; background: var(--card-bg); border-radius: 3px; margin-bottom: 0.25rem; border-left: 2px solid var(--danger-color);">
                 <div style="font-size: 0.8rem; color: var(--text-primary); word-break: break-all; font-family: monospace; line-height: 1.3;">
                     ${escapeHtml(file.file_path)}
                 </div>
@@ -5136,7 +6296,7 @@ function displayMaintenanceResults(jobId, jobName) {
                     <h3 style="margin-bottom: 0.5rem;">Sync Results</h3>
                 </div>
                 
-                <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                <div style="background: var(--bg-subtle); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
                         <div>
                             <div style="font-size: 0.875rem; color: var(--text-secondary);">DB Records</div>
@@ -5144,7 +6304,7 @@ function displayMaintenanceResults(jobId, jobName) {
                         </div>
                         <div>
                             <div style="font-size: 0.875rem; color: var(--text-secondary);">Records Without Files</div>
-                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--danger);">${data.missing_count}</div>
+                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--danger-color);">${data.missing_count}</div>
                         </div>
                         <div>
                             <div style="font-size: 0.875rem; color: var(--text-secondary);">Files Without Records</div>
@@ -5273,7 +6433,7 @@ async function performMaintenanceActions(jobId, jobName) {
             <div style="text-align: center; padding: 2rem;">
                 <h3 style="margin-bottom: 0.5rem;">Maintenance Complete</h3>
                 <p style="color: var(--text-secondary); margin-bottom: 1rem;">Successfully processed all actions</p>
-                <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; display: inline-block; text-align: left;">
+                <div style="background: var(--bg-subtle); padding: 1rem; border-radius: 8px; display: inline-block; text-align: left;">
         `;
         
         if (cleanupResult) {
@@ -5318,7 +6478,7 @@ async function performMaintenanceActions(jobId, jobName) {
         console.error('Maintenance failed:', error);
         content.innerHTML = `
             <div style="text-align: center; padding: 2rem;">
-                <p style="color: var(--danger);">Failed to complete maintenance</p>
+                <p style="color: var(--danger-color);">Failed to complete maintenance</p>
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
                 </p>
@@ -5329,125 +6489,8 @@ async function performMaintenanceActions(jobId, jobName) {
     }
 }
 
-async function performMaintenanceImport(jobId, jobName) {
-    const content = document.getElementById('maintenance-content');
-    
-    content.innerHTML = `
-        <div style="text-align: center; padding: 2rem;">
-            <div style="font-size: 2rem; margin-bottom: 1rem;">📥</div>
-            <p>Importing orphaned files...</p>
-        </div>
-    `;
-    
-    try {
-        const result = await apiRequest(`/jobs/${jobId}/maintenance/import`, {
-            method: 'POST',
-            body: { orphaned_files: maintenanceData.orphaned_files }
-        });
-        
-        // Show success
-        content.innerHTML = `
-            <div style="text-align: center; padding: 2rem;">
-                <h3 style="margin-bottom: 0.5rem;">Import Complete</h3>
-                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                    Imported ${result.imported_count} file(s) into the database
-                </p>
-                <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; display: inline-block; text-align: left;">
-                    <div style="margin-bottom: 0.5rem;">
-                        <strong>Files imported:</strong> ${result.imported_count}
-                    </div>
-                    <div style="margin-bottom: 0.5rem;">
-                        <strong>Total captures:</strong> ${result.new_capture_count}
-                    </div>
-                    <div>
-                        <strong>Total storage:</strong> ${formatBytes(result.new_storage_size)}
-                    </div>
-                </div>
-                <div style="margin-top: 1.5rem;">
-                    <button class="btn btn-primary" onclick="closeMaintenance(); loadJobs()">Close</button>
-                </div>
-            </div>
-        `;
-        
-        showNotification(`Successfully imported ${result.imported_count} file(s) for "${jobName}"`, 'success');
-        
-    } catch (error) {
-        console.error('Maintenance import failed:', error);
-        content.innerHTML = `
-            <div style="text-align: center; padding: 2rem;">
-                <p style="color: var(--danger);">Failed to import files</p>
-                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
-                    ${escapeHtml(error.message)}
-                </p>
-                <button class="btn btn-secondary mt-lg" onclick="closeMaintenance()">Close</button>
-            </div>
-        `;
-        showNotification('Maintenance import failed', 'error');
-    }
-}
-
-async function performMaintenanceCleanup(jobId, jobName) {
-    const content = document.getElementById('maintenance-content');
-    
-    // Show cleaning message
-    content.innerHTML = `
-        <div style="text-align: center; padding: 2rem;">
-            <p>Cleaning up database records...</p>
-        </div>
-    `;
-    
-    try {
-        const captureIds = maintenanceData.missing_files.map(f => f.id);
-        
-        const result = await apiRequest(`/jobs/${jobId}/maintenance/cleanup`, {
-            method: 'POST',
-            body: { capture_ids: captureIds }
-        });
-        
-        // Show success
-        content.innerHTML = `
-            <div style="text-align: center; padding: 2rem;">
-                <h3 style="margin-bottom: 0.5rem;">Cleanup Complete</h3>
-                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                    Removed ${result.deleted_count} database record(s)
-                </p>
-                <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; display: inline-block; text-align: left;">
-                    <div style="margin-bottom: 0.5rem;">
-                        <strong>Size recovered:</strong> ${formatBytes(result.size_recovered)}
-                    </div>
-                    <div style="margin-bottom: 0.5rem;">
-                        <strong>Remaining captures:</strong> ${result.new_capture_count}
-                    </div>
-                    <div>
-                        <strong>Current storage:</strong> ${formatBytes(result.new_storage_size)}
-                    </div>
-                </div>
-                <div style="margin-top: 1.5rem;">
-                    <button class="btn btn-primary" onclick="closeMaintenance(); loadJobs()">Close</button>
-                </div>
-            </div>
-        `;
-        
-        showNotification(`Successfully cleaned up ${result.deleted_count} missing file record(s)`, 'success');
-        
-    } catch (error) {
-        console.error('Maintenance cleanup failed:', error);
-        content.innerHTML = `
-            <div style="text-align: center; padding: 2rem;">
-                <p style="color: var(--danger);">Failed to cleanup records</p>
-                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
-                    ${escapeHtml(error.message)}
-                </p>
-                <button class="btn btn-secondary mt-lg" onclick="closeMaintenance()">Close</button>
-            </div>
-        `;
-    }
-}
-
 function closeMaintenance() {
-    const modal = document.getElementById('maintenance-modal');
-    modal.classList.remove('active');
-    maintenanceData = null;
+    closeModal('maintenance-modal');
 }
 
 // ===== Custom 24-Hour Time Picker Functions =====
@@ -5482,33 +6525,6 @@ function setupTimeInputSync(baseId) {
     };
     
     timeInput.addEventListener('change', syncValue);
-}
-
-function setupDateTimePickerSync(baseId, hiddenId) {
-    const dateInput = document.getElementById(`${baseId}_date`);
-    const hourSelect = document.getElementById(`${baseId}_hour`);
-    const minuteSelect = document.getElementById(`${baseId}_minute`);
-    const hiddenInput = document.getElementById(hiddenId || `${baseId}_datetime`);
-    
-    if (!dateInput || !hourSelect || !minuteSelect || !hiddenInput) return;
-    
-    const syncValue = () => {
-        const date = dateInput.value;
-        const hour = hourSelect.value;
-        const minute = minuteSelect.value;
-        
-        if (date && hour && minute) {
-            hiddenInput.value = `${date}T${hour}:${minute}`;
-        } else {
-            hiddenInput.value = '';
-        }
-        // Dispatch change event so listeners on hidden input get notified
-        hiddenInput.dispatchEvent(new Event('change'));
-    };
-    
-    dateInput.addEventListener('change', syncValue);
-    hourSelect.addEventListener('change', syncValue);
-    minuteSelect.addEventListener('change', syncValue);
 }
 
 function setDefaultStartTime() {
@@ -5548,30 +6564,6 @@ function setTimeInputValue(baseId, timeString) {
         timeInput.value = timeString;
         timeInput.dispatchEvent(new Event('change'));
     }
-}
-
-function setDateTimePickerValue(baseId, datetimeString, hiddenId) {
-    if (!datetimeString) return;
-    
-    const dt = new Date(datetimeString);
-    // Use local date components to avoid UTC conversion issues
-    const year = dt.getFullYear();
-    const month = String(dt.getMonth() + 1).padStart(2, '0');
-    const day = String(dt.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
-    const hour = dt.getHours().toString().padStart(2, '0');
-    const minute = dt.getMinutes().toString().padStart(2, '0');
-    
-    const dateInput = document.getElementById(`${baseId}_date`);
-    const hourSelect = document.getElementById(`${baseId}_hour`);
-    const minuteSelect = document.getElementById(`${baseId}_minute`);
-    
-    if (dateInput) dateInput.value = dateStr;
-    if (hourSelect) hourSelect.value = hour;
-    if (minuteSelect) minuteSelect.value = minute;
-    
-    // Trigger sync
-    if (dateInput) dateInput.dispatchEvent(new Event('change'));
 }
 
 // Initialize time pickers on page load
@@ -6181,10 +7173,7 @@ function renderTagList() {
 
     container.innerHTML = allTags.map(tag => `
         <div class="tag-list-item" data-tag-id="${tag.id}">
-            <span class="tag-chip" style="background: ${tag.color}22; color: ${tag.color}; border: 1px solid ${tag.color}44;">
-                <span style="width:8px;height:8px;border-radius:50%;background:${tag.color};display:inline-block;"></span>
-                ${escapeHtml(tag.name)}
-            </span>
+            ${tagChipHTML(tag)}
             <span class="tag-usage">${tag.job_count} job${tag.job_count !== 1 ? 's' : ''}, ${tag.video_count} video${tag.video_count !== 1 ? 's' : ''}</span>
             <span class="tag-actions">
                 <button onclick="editTagInline(${tag.id})" title="Edit" class="tag-action-btn">
@@ -6227,7 +7216,7 @@ function editTagInline(tagId) {
     if (!item) return;
 
     item.innerHTML = `
-        <input type="text" class="form-control" value="${escapeAttr(tag.name)}" id="tag-edit-name-${tagId}" style="flex:1;max-width:150px;font-size:0.85rem;padding:0.25rem 0.5rem;">
+        <input type="text" class="form-control" aria-label="Tag name" value="${escapeAttr(tag.name)}" id="tag-edit-name-${tagId}" style="flex:1;max-width:150px;font-size:0.85rem;padding:0.25rem 0.5rem;">
         ${colorSwatchHTML(`tag-edit-swatches-${tagId}`, tag.color)}
         <button class="btn btn-sm btn-accent" onclick="saveTagEdit(${tagId})">Save</button>
         <button class="btn btn-sm btn-secondary" onclick="renderTagList()">Cancel</button>
@@ -6269,8 +7258,7 @@ async function deleteTag(tagId, tagName) {
 // Tag chip HTML helper
 function tagChipHTML(tag, small = false) {
     const sizeStyle = small ? 'font-size:0.6rem;padding:0.1rem 0.4rem;' : '';
-    return `<span class="tag-chip" style="${sizeStyle}background:${tag.color}22;color:${tag.color};border:1px solid ${tag.color}44;">
-        <span style="width:6px;height:6px;border-radius:50%;background:${tag.color};display:inline-block;"></span>
+    return `<span class="tag-chip" style="${sizeStyle}--tag-color:${escapeAttr(tag.color)};">
         ${escapeHtml(tag.name)}</span>`;
 }
 
@@ -6285,11 +7273,10 @@ function renderTagPicker(containerId, selectedTagIds = [], onToggle = null) {
 
     container.innerHTML = allTags.map(tag => {
         const isSelected = selectedTagIds.includes(tag.id);
-        return `<span class="tag-chip ${isSelected ? 'selected' : ''}" data-tag-id="${tag.id}"
-            style="background:${tag.color}22;color:${tag.color};border:1px solid ${tag.color}44;cursor:pointer;opacity:${isSelected ? '1' : '0.4'};"
+        return `<button type="button" class="tag-chip ${isSelected ? 'selected' : ''}" data-tag-id="${tag.id}" aria-pressed="${isSelected}"
+            style="--tag-color:${escapeAttr(tag.color)};"
             onclick="toggleTagInPicker(this)">
-            <span style="width:6px;height:6px;border-radius:50%;background:${tag.color};display:inline-block;"></span>
-            ${escapeHtml(tag.name)}</span>`;
+            ${escapeHtml(tag.name)}</button>`;
     }).join('');
 
     // Render footer: form always in flow (reserves height), button overlays it
@@ -6303,9 +7290,9 @@ function renderTagPicker(containerId, selectedTagIds = [], onToggle = null) {
         `<span class="color-swatch${c === '#6366f1' ? ' selected' : ''}" style="background:${c};" data-color="${c}" onclick="selectSwatch(this)"></span>`
     ).join('');
     footer.innerHTML = `
-        <span class="tag-create-btn" onclick="showInlineTagCreate('${containerId}')" title="Create new tag">＋ New Tag</span>
+        <button type="button" class="tag-create-btn" onclick="showInlineTagCreate('${containerId}')" title="Create new tag">＋ New Tag</button>
         <div class="tag-inline-form" style="visibility:hidden;">
-            <input type="text" class="form-control" placeholder="New tag name..." maxlength="50" tabindex="-1">
+            <input type="text" class="form-control" aria-label="New tag name" placeholder="New tag name..." maxlength="50" tabindex="-1">
             <div class="color-swatch-row">${swatchesHTML}</div>
             <button type="button" class="btn btn-accent btn-sm" tabindex="-1">Add Tag</button>
             <button type="button" class="btn btn-secondary btn-sm" tabindex="-1">Cancel</button>
@@ -6382,7 +7369,7 @@ async function submitInlineTag(containerId) {
 
 function toggleTagInPicker(el) {
     el.classList.toggle('selected');
-    el.style.opacity = el.classList.contains('selected') ? '1' : '0.4';
+    el.setAttribute('aria-pressed', String(el.classList.contains('selected')));
     // Fire auto-save callback if present
     const container = el.closest('.tag-picker');
     if (container?._tagOnToggle) {
@@ -6412,7 +7399,7 @@ function renderTagFilter(wrapId, onChange) {
         </div>
         <div class="tag-filter-dropdown" id="${wrapId}-dropdown">
             <div class="tag-filter-search">
-                <input type="text" placeholder="Search tags..." oninput="filterTagDropdown('${wrapId}', this.value)">
+                <input type="text" aria-label="Search tags" placeholder="Search tags..." oninput="filterTagDropdown('${wrapId}', this.value)">
             </div>
             <div class="tag-filter-list" id="${wrapId}-list"></div>
         </div>
@@ -6528,7 +7515,7 @@ const JOB_STATUSES = [
     { value: 'sleeping', label: 'Sleeping', color: 'var(--primary-color)' },
     { value: 'warning', label: 'Warning', color: 'var(--warning-color)' },
     { value: 'completed', label: 'Completed', color: 'var(--text-secondary)' },
-    { value: 'disabled', label: 'Disabled', color: 'var(--text-muted, #666)' },
+    { value: 'disabled', label: 'Disabled', color: 'var(--text-secondary)' },
 ];
 
 function renderStatusFilter(wrapId, onChange) {
@@ -6678,11 +7665,17 @@ const captureSelection = new SelectionManager({
 });
 
 async function loadCaptures() {
+    const version = ++_capturesLoadVersion;
+    const routeVersion = _routeVersion;
+    const isCurrent = () => version === _capturesLoadVersion && routeVersion === _routeVersion &&
+        currentView === 'captures' && parseRoute().view === 'captures';
+    if (!isCurrent()) return;
     try {
         // Load job filter options first time
         const jobSelect = document.getElementById('captures-job-filter');
         if (jobSelect.options.length === 1) {
             const jobs = await apiRequest('/jobs/');
+            if (!isCurrent()) return;
             jobs.forEach(job => {
                 const option = document.createElement('option');
                 option.value = job.id;
@@ -6699,6 +7692,7 @@ async function loadCaptures() {
         
         await loadCapturesPage();
     } catch (error) {
+        if (!isCurrent()) return;
         console.error('Failed to load captures:', error);
         showNotification('Failed to load captures', 'error');
     }
@@ -6709,7 +7703,7 @@ async function scanOrphanedCaptures() {
     const title = document.getElementById('maintenance-title');
     const content = document.getElementById('maintenance-content');
     
-    title.textContent = 'Captures Cleanup';
+    title.textContent = 'Cleanup';
     content.innerHTML = `
         <div style="text-align: center; padding: 2rem;">
             <div style="font-size: 2rem; margin-bottom: 1rem;">🔍</div>
@@ -6728,10 +7722,10 @@ async function scanOrphanedCaptures() {
         console.error('Orphaned scan failed:', error);
         content.innerHTML = `
             <div style="text-align: center; padding: 2rem;">
-                <div style="font-size: 2rem; margin-bottom: 1rem; color: var(--danger);">
+                <div style="font-size: 2rem; margin-bottom: 1rem; color: var(--danger-color);">
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                 </div>
-                <p style="color: var(--danger);">Failed to scan for orphaned captures</p>
+                <p style="color: var(--danger-color);">Failed to scan for orphaned captures</p>
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
                 </p>
@@ -6885,6 +7879,18 @@ async function deleteAllOrphanedCaptures() {
 }
 
 async function loadCapturesPage() {
+    const version = ++_capturesPageRequestVersion;
+    const routeVersion = _routeVersion;
+    // This gallery uses replacement pagination, never an append response.
+    const filterSnapshot = () => JSON.stringify([
+        capturesState.currentPage, capturesState.pageSize, capturesState.sortOrder,
+        capturesState.jobFilter, capturesState.startTime, capturesState.endTime,
+        capturesState.favoritesOnly, capturesState.tagFilter
+    ]);
+    const filters = filterSnapshot();
+    const isCurrent = () => version === _capturesPageRequestVersion && routeVersion === _routeVersion &&
+        currentView === 'captures' && parseRoute().view === 'captures' && filters === filterSnapshot();
+    if (!isCurrent()) return;
     try {
         const query = {
             page: capturesState.currentPage,
@@ -6913,6 +7919,7 @@ async function loadCapturesPage() {
         }
         
         const data = await apiRequest('/captures/', { query });
+        if (!isCurrent()) return;
         
         const countEl = document.getElementById('captures-count');
         countEl.textContent = `${data.total} captures`;
@@ -6922,6 +7929,7 @@ async function loadCapturesPage() {
         renderPagination(data);
         captureSelection.updateControls();
     } catch (error) {
+        if (!isCurrent()) return;
         console.error('Failed to load captures page:', error);
         showNotification('Failed to load captures', 'error');
     }
@@ -6942,8 +7950,10 @@ function renderCaptures(captures) {
              onclick="captureSelection.handleCardClick(${capture.id}, event, showCapturePreview)">
             <input type="checkbox" 
                    class="capture-checkbox" 
+                   aria-label="Select capture ${capture.id}"
                    ${captureSelection.has(capture.id) ? 'checked' : ''}
                    onclick="event.stopPropagation(); captureSelection.toggle(${capture.id}, event)">
+            <span class="gallery-checkbox-indicator" aria-hidden="true"></span>
             <button class="card-fav-btn ${capture.is_favorite ? 'favorited' : ''}" 
                     onclick="event.stopPropagation(); toggleFavorite('captures', ${capture.id}, ${capture.is_favorite ? 'true' : 'false'})"
                     title="${capture.is_favorite ? 'Remove from favorites' : 'Add to favorites'}">
@@ -7105,13 +8115,11 @@ function showNextCapture() {
 }
 
 function closeCapturePreview() {
-    document.getElementById('capture-preview-modal').classList.remove('active');
-    capturesState.currentCaptureId = null;
-    document.removeEventListener('keydown', handleCaptureNavKeys);
+    closeModal('capture-preview-modal');
 }
 
 function handleCaptureNavKeys(e) {
-    if (!document.getElementById('capture-preview-modal').classList.contains('active')) return;
+    if (getTopModal()?.id !== 'capture-preview-modal') return;
     if (e.key === 'ArrowLeft') { e.preventDefault(); showPrevCapture(); }
     if (e.key === 'ArrowRight') { e.preventDefault(); showNextCapture(); }
 }
@@ -7336,12 +8344,12 @@ function buildVideoCardHtml(v, extraClass) {
     return `
         <div class="homepage-capture-card${extraClass ? ' ' + extraClass : ''}" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeAttr(v.name)}">
             ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy">` :
-                `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-muted);position:absolute;inset:0;">
+                `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-secondary);position:absolute;inset:0;">
                     ${VIDEO_PLACEHOLDER_SVG}
                 </div>`}
             <div class="homepage-card-overlay">
                 <div class="homepage-card-title">${escapeHtml(v.name)}</div>
-                <div class="homepage-card-sub">${v.duration_seconds ? formatDuration(v.duration_seconds) : ''} ${v.job_name ? '· ' + escapeHtml(v.job_name) : ''}</div>
+                <div class="homepage-card-sub">${v.duration_seconds ? formatDuration(v.duration_seconds) : ''} ${v.job_name ? '· ' + escapeHtml(v.job_name) : ''}${v.build_source === 'joined' ? ' · Joined' : ''}${v.build_source === 'trimmed' ? ' · Trimmed' : ''}</div>
             </div>
         </div>`;
 }
@@ -7460,7 +8468,7 @@ function renderHomepageSpotlight(captureData, allVideos) {
                 </svg>
                 <p>Nothing here yet!</p>
                 <span>Set up your first capture job to start building your timelapse library.</span>
-                <button class="btn btn-accent btn-sm" onclick="showCreateJobModal()">+ Create Job</button>
+                <button class="btn btn-accent btn-sm" onclick="showCreateJobModal()">Create</button>
             </div>`;
         return;
     }
@@ -7484,7 +8492,7 @@ function renderHomepageSpotlight(captureData, allVideos) {
                     <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
                 </svg>
                 <p>No captures yet</p>
-                <button class="btn btn-accent btn-sm" onclick="showCreateJobModal()">+ Create Job</button>
+                <button class="btn btn-accent btn-sm" onclick="showCreateJobModal()">Create</button>
             </div>`;
     }
 
@@ -7496,7 +8504,7 @@ function renderHomepageSpotlight(captureData, allVideos) {
             <div class="homepage-spotlight-card" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeAttr(v.name)}">
                 <div class="homepage-spotlight-badge">Timelapse</div>
                 ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy">` :
-                    `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-muted);position:absolute;inset:0;">
+                    `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-secondary);position:absolute;inset:0;">
                         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
                     </div>`}
                 <div class="homepage-card-overlay">
@@ -7511,7 +8519,7 @@ function renderHomepageSpotlight(captureData, allVideos) {
                     <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
                 </svg>
                 <p>No timelapses yet</p>
-                <button class="btn btn-accent btn-sm" onclick="navigateTo('/timelapses'); setTimeout(() => showProcessVideoModal(), 300)">+ Build Timelapse</button>
+                <button class="btn btn-accent btn-sm" onclick="navigateTo('/timelapses'); setTimeout(() => showProcessVideoModal(), 300)">Build</button>
             </div>`;
     }
 
