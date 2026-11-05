@@ -169,6 +169,55 @@ services:
 | `/app/data` | SQLite database and application settings |
 | `/imports` | Server-side directory for bulk imports |
 
+### Directory Ownership and NFS
+
+With non-zero `PUID`/`PGID` configured, startup recursively prepares ownership
+of the app-managed `/app/data` and `/app/import-staging` directories, including
+existing database and temporary import files. Keep these directories on local
+storage: SQLite locking is not reliable over NFS/SMB, and pending imports can
+make staging large enough to slow recursive ownership preparation.
+
+For `/captures`, `/timelapses`, and `/imports`, startup adjusts only the
+top-level directory, skipping it when its owner already matches. It never walks
+existing media files or subdirectories. Ownership failures (for example, on
+root-squashed NFS or read-only mounts) are logged as warnings rather than
+preventing execution of the application; startup or later operations can still
+fail if the application lacks the required access.
+
+Existing captures, videos, and their subdirectories must already have
+permissions suitable for the configured user. If changing `PUID`/`PGID` or
+migrating a media archive, arrange any required ownership changes once on the
+host or NFS server, not on every container restart. Import sources only need
+read and directory traversal access and can be mounted read-only.
+
+For NFS installations with permissions managed on the server, Compose can run
+the application directly as a numeric user instead:
+
+```yaml
+services:
+  chronosnap:
+    user: "3007:3007"
+    environment:
+      - TZ=America/Chicago
+      # Remove PUID and PGID from the service's environment.
+    volumes:
+      - ./data:/app/data
+      - ./captures:/captures
+      - ./timelapses:/timelapses
+      - ./import-staging:/app/import-staging
+      # - ./imports:/imports:ro
+```
+
+Apply this to the existing Compose service, retaining its other settings.
+Pre-create the host directories and grant that UID/GID write and directory
+traversal access to data, captures, timelapses, and import staging, including
+existing files that the app must update. The staging mount is required here
+because direct-user startup skips ownership preparation, and the image's
+staging directory is root-owned. For USB cameras, also add the host device's
+numeric group ID through Compose `group_add`; direct-user startup does not
+add supplementary camera groups automatically. No startup log or permission
+check can make an unavailable NFS server responsive.
+
 ### Environment Variables
 
 | Variable | Default | Required | Description |

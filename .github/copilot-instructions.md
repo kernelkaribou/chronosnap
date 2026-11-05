@@ -213,12 +213,13 @@ Full history is in git tags/release notes, not here — this section only tracks
 the current and immediately prior release so past work isn't accidentally
 re-suggested as new. Trim to the last 2 entries when adding a new one.
 
+- **v3.9.0** — Timelapse joining and trimming, UI/accessibility refinements,
+  locally served system fonts, and Pillow 13.0.0 image-decoding remediation.
 - **v3.8.0** — `VERSION_CHECK` env var to opt out of the GitHub release check,
   resource-limits documentation, security hardening (path traversal, ffmpeg
   concat escaping, frontend XSS, stream credential log leaks, 7z import
   crash/decompression-bomb fix), async offload for blocking routes, ffmpeg
   build stall watchdog.
-- **v3.7.0** — Removed the share-link feature.
 
 ---
 

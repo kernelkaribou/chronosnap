@@ -21,11 +21,18 @@ applyTo: "Dockerfile,**/docker-compose*.yml,**/docker-compose*.yaml,entrypoint.s
   only *enforces* `deploy.resources` with `--compatibility`; Compose v2
   enforces them natively. Don't assume the limits apply without checking which
   Compose version is in play.
-- **NFSv3 caveat:** production hosts mount data directories over NFSv3, which
-  doesn't support `chmod` the way local filesystems do. Don't add `chmod` calls
-  in the Dockerfile/entrypoint that target volume-mounted directories
-  (`/app/data`, `/captures`, `/timelapses`) — `entrypoint.sh`'s `chown` calls
-  already tolerate failures there (`|| true`) for this reason.
+- **NFSv3 caveat:** production hosts mount media directories over NFSv3. Never
+  recursively change ownership or permissions of `/captures`, `/timelapses`,
+  or `/imports` at startup, and don't add `chmod` calls targeting mounted
+  directories. `entrypoint.sh` only adjusts their top-level ownership when it
+  differs; existing media permissions are operator-managed. It recursively
+  prepares `/app/data` and `/app/import-staging` ownership to preserve access
+  to existing app-managed files. Keep both app directories on local storage;
+  pending imports can make staging large. Ownership failures are logged as
+  warnings, not hidden; the application still requires suitable access.
+  Compose `user:` with `PUID`/`PGID` unset skips ownership preparation; it also
+  needs a preconfigured writable `/app/import-staging` mount and explicit
+  supplementary device groups where necessary. Keep SQLite data on local storage.
 - **Volumes:** `/app/data` (SQLite DB + settings), `/captures`, `/timelapses`
   are separate top-level mounts, not nested under one directory.
 - **Fixed test port:** any Docker container/compose setup used for manual or

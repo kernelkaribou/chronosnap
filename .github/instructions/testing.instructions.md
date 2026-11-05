@@ -82,6 +82,21 @@ Always `127.0.0.1:28080` for anything under `tests/e2e/` — bound to loopback
 only, never exposed on all interfaces, and never a different/incrementing
 port per run. See the root `copilot-instructions.md` Testing section.
 
+# Container Startup Regression Tests (`tests/docker/`)
+
+Run `./tests/docker/run.sh` to build the real application image and exercise
+its entrypoint in an ephemeral container under the production capability
+restrictions. It verifies recursive app-data/staging ownership, top-level-only
+media ownership without touching existing media, media ownership no-ops on
+restart even while app-file ownership is repaired, visible ownership-change
+and ownership-lookup failure warnings,
+and root/direct-user execution, then starts the real application in both
+PUID/PGID and explicit-user modes with read-only imports and checks `/health`
+inside each container. All fixtures live in disposable containers; only the
+test scripts are bind-mounted, read-only. No host port is published. This
+simulates denied ownership changes, not a real NFS server; live NFS availability
+and server-side permissions need operator verification.
+
 # Backend Unit Test Suite (`tests/unit/`)
 
 ## What this suite is for
