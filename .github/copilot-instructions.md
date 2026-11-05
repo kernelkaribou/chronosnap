@@ -143,7 +143,8 @@ camera footage.
 - **Data minimization:** don't log API keys, full stream URLs with embedded
   credentials, or capture image contents. Don't add telemetry or outbound calls
   beyond what's documented (the optional, opt-out-able GitHub release version
-  check) without calling it out explicitly in the README's data-privacy section.
+  check and external assets for the optional `/docs` API documentation) without
+  calling it out explicitly in the README's data-privacy section.
 - **Test data must never be real footage.** The e2e suite (see Testing) uses only
   `https://picsum.photos` (public placeholder images) as its capture source —
   never point automated tests at a real camera, RTSP stream, or any data that

@@ -40,5 +40,6 @@ Thumbs.db
 
 # Documentation and CI (not needed in image)
 README.md
+docs/screenshots/
 LICENSE
 .github

@@ -13,10 +13,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="stylesheet" href="/static/css/style.css?v=__APP_VERSION__">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
     <!-- Shared SVG gradient for favorite hearts -->
@@ -74,7 +70,7 @@
             <div class="event-panel" id="event-panel" style="display:none;">
                 <div class="event-panel-header">
                     <span>Event Log</span>
-                    <button class="event-panel-close" onclick="toggleEventPanel()">&times;</button>
+                    <button class="event-panel-close" onclick="toggleEventPanel()" aria-label="Close event log">&times;</button>
                 </div>
                 <div class="event-panel-body" id="event-panel-body">
                     <div class="event-empty">No events yet</div>
@@ -96,17 +92,17 @@
                     </div>
                     <div class="homepage-section">
                         <div class="homepage-section-header">
-                            <h3>Recent Captures</h3>
+                            <h3 id="homepage-captures-title">Recent Captures</h3>
                             <a href="/captures" class="homepage-view-all" onclick="event.preventDefault(); navigateTo('/captures')">View All →</a>
                         </div>
-                        <div class="homepage-grid" id="homepage-captures"></div>
+                        <div class="homepage-grid" id="homepage-captures" tabindex="0" role="region" aria-labelledby="homepage-captures-title"></div>
                     </div>
                     <div class="homepage-section">
                         <div class="homepage-section-header">
-                            <h3>Recent Timelapses</h3>
+                            <h3 id="homepage-videos-title">Recent Timelapses</h3>
                             <a href="/timelapses" class="homepage-view-all" onclick="event.preventDefault(); navigateTo('/timelapses')">View All →</a>
                         </div>
-                        <div class="homepage-grid" id="homepage-videos"></div>
+                        <div class="homepage-grid" id="homepage-videos" tabindex="0" role="region" aria-labelledby="homepage-videos-title"></div>
                     </div>
                 </div>
             </div>
@@ -118,12 +114,12 @@
                     <button class="btn btn-accent" onclick="showCreateJobModal()">Create</button>
                 </div>
                 <div class="gallery-filters" id="job-filter-bar">
-                    <input type="text" class="gallery-search" id="job-search" placeholder="Search jobs..." oninput="filterJobs()">
+                    <input type="text" class="gallery-search" id="job-search" aria-label="Search jobs" placeholder="Search jobs..." oninput="filterJobs()">
                     <div class="tag-filter-wrap" id="job-status-filter-wrap"></div>
                     <div class="tag-filter-wrap" id="job-tag-filter-wrap"></div>
                     <button class="btn btn-secondary btn-sm" id="job-filter-reset" onclick="resetJobFilters()" style="display:none;">Reset</button>
                     <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;">
-                        <select class="gallery-filter-select" id="job-sort" onchange="filterJobs()">
+                        <select class="gallery-filter-select" id="job-sort" aria-label="Sort jobs" onchange="filterJobs()">
                             <option value="created_desc">Newest</option>
                             <option value="created_asc">Oldest</option>
                             <option value="name_asc">Name A-Z</option>
@@ -162,14 +158,14 @@
                     </div>
                 </div>
                 <div class="gallery-filters">
-                    <input type="text" class="gallery-search" id="video-search" placeholder="Search..." oninput="filterVideos()">
-                    <select class="gallery-filter-select" id="video-year-filter" onchange="onYearFilterChange()">
+                    <input type="text" class="gallery-search" id="video-search" aria-label="Search timelapses" placeholder="Search..." oninput="filterVideos()">
+                    <select class="gallery-filter-select" id="video-year-filter" aria-label="Filter timelapses by year" onchange="onYearFilterChange()">
                         <option value="">Year</option>
                     </select>
-                    <select class="gallery-filter-select" id="video-month-filter" onchange="filterVideos()" disabled>
+                    <select class="gallery-filter-select" id="video-month-filter" aria-label="Filter timelapses by month" onchange="filterVideos()" disabled>
                         <option value="">Month</option>
                     </select>
-                    <select class="gallery-filter-select" id="video-job-filter" onchange="filterVideos()" style="flex:1;min-width:0;">
+                    <select class="gallery-filter-select" id="video-job-filter" aria-label="Filter timelapses by job" onchange="filterVideos()" style="flex:1;min-width:0;">
                         <option value="">All Jobs</option>
                     </select>
                     <div style="margin-left:auto;">
@@ -190,7 +186,7 @@
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
                     </button>
                     <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;">
-                        <select class="gallery-filter-select" id="video-sort" onchange="filterVideos()">
+                        <select class="gallery-filter-select" id="video-sort" aria-label="Sort timelapses" onchange="filterVideos()">
                             <option value="created_desc">Newest</option>
                             <option value="created_asc">Oldest</option>
                             <option value="name_asc">Name A-Z</option>
@@ -244,7 +240,7 @@
                             <button id="video-rename-btn" class="btn-icon" title="Rename" onclick="startVideoRename()" style="padding:0.2rem;margin-left:0.4rem;">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                             </button>
-                            <input type="text" id="video-rename-input" class="form-control" style="display:none;font-size:1rem;padding:0.2rem 0.5rem;max-width:20rem;">
+                            <input type="text" id="video-rename-input" class="form-control" aria-label="Timelapse name" style="display:none;font-size:1rem;padding:0.2rem 0.5rem;max-width:20rem;">
                             <button id="video-rename-save" class="btn btn-sm btn-accent" style="display:none;" onclick="saveVideoRename()">Save</button>
                             <button id="video-rename-cancel" class="btn btn-sm btn-secondary" style="display:none;" onclick="cancelVideoRename()">Cancel</button>
                         </h2>
@@ -285,7 +281,7 @@
                         <label class="gallery-date-label" for="captures-end-time">To</label>
                         <input type="datetime-local" class="gallery-filter-input" id="captures-end-time" onchange="applyCaptureSortAndFilter()" title="To">
                     </div>
-                    <select class="gallery-filter-select" id="captures-job-filter" onchange="applyCaptureSortAndFilter()" style="flex:1;min-width:0;">
+                    <select class="gallery-filter-select" id="captures-job-filter" aria-label="Filter captures by job" onchange="applyCaptureSortAndFilter()" style="flex:1;min-width:0;">
                         <option value="">All Jobs</option>
                     </select>
                     <div style="margin-left:auto;">
@@ -300,11 +296,11 @@
                         <svg class="fav-heart-icon" viewBox="0 0 24 24" width="16" height="16"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                     </button>
                     <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;">
-                        <select class="gallery-filter-select" id="captures-sort-order" onchange="applyCaptureSortAndFilter()">
+                        <select class="gallery-filter-select" id="captures-sort-order" aria-label="Sort captures" onchange="applyCaptureSortAndFilter()">
                             <option value="desc">Newest</option>
                             <option value="asc">Oldest</option>
                         </select>
-                        <select class="gallery-filter-select" id="captures-page-size" onchange="applyCaptureSortAndFilter()">
+                        <select class="gallery-filter-select" id="captures-page-size" aria-label="Captures per page" onchange="applyCaptureSortAndFilter()">
                             <option value="16" selected>16</option>
                             <option value="32">32</option>
                             <option value="64">64</option>
@@ -415,9 +411,9 @@
                 <div class="settings-content">
                     <!-- Theme Section -->
                     <div class="settings-section">
-                        <h3>Theme</h3>
+                        <h3 id="theme-settings-title">Theme</h3>
                         <p class="settings-description">Choose a color scheme. Dark/light mode toggle is in the top navigation bar.</p>
-                        <div id="theme-preset-grid" class="theme-preset-grid">
+                        <div id="theme-preset-grid" class="theme-preset-grid" role="radiogroup" aria-labelledby="theme-settings-title">
                             <!-- Populated by JS -->
                         </div>
                     </div>
@@ -427,15 +423,15 @@
                         <h3>Display</h3>
                         <p class="settings-description">Configure how dates and times are displayed throughout the application.</p>
                         <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem;">
-                            <label style="color: var(--text-secondary); font-size: 0.9rem;">Time Format</label>
-                            <div class="time-format-toggle">
+                            <span id="time-format-label" style="color: var(--text-secondary); font-size: 0.9rem;">Time Format</span>
+                            <div class="time-format-toggle" role="group" aria-labelledby="time-format-label">
                                 <button id="time-format-24" class="btn btn-sm" onclick="toggleTimeFormat('24')">24-hour</button>
                                 <button id="time-format-12" class="btn btn-sm" onclick="toggleTimeFormat('12')">12-hour</button>
                             </div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap;">
-                            <label style="color: var(--text-secondary); font-size: 0.9rem;">Date Format</label>
-                            <div class="time-format-toggle">
+                            <span id="date-format-label" style="color: var(--text-secondary); font-size: 0.9rem;">Date Format</span>
+                            <div class="time-format-toggle" role="group" aria-labelledby="date-format-label">
                                 <button id="date-format-auto" class="btn btn-sm" onclick="toggleDateFormat('auto')" title="Use your browser's regional format">Auto</button>
                                 <button id="date-format-us" class="btn btn-sm" onclick="toggleDateFormat('us')" title="Month/Day/Year">MM/DD/YYYY</button>
                                 <button id="date-format-eu" class="btn btn-sm" onclick="toggleDateFormat('eu')" title="Day/Month/Year">DD/MM/YYYY</button>
@@ -450,7 +446,7 @@
                         <p class="settings-description">Create and manage tags to categorize jobs and timelapses. Tags assigned to a job are automatically inherited by its captures and timelapse builds.</p>
                         <div class="tag-manager">
                             <div class="tag-create-row">
-                                <input type="text" id="tag-create-name" class="form-control" placeholder="New tag name..." maxlength="50">
+                                <input type="text" id="tag-create-name" class="form-control" aria-label="New tag name" placeholder="New tag name..." maxlength="50">
                                 <div class="color-swatch-row" id="tag-create-swatches"></div>
                                 <button class="btn btn-accent btn-sm" onclick="createTag()">Add Tag</button>
                             </div>
@@ -464,8 +460,8 @@
                     <div class="settings-section">
                         <h3>Default Naming Pattern</h3>
                                                 <p class="settings-description">Default file naming pattern for new capture jobs. Available tokens: <span id="settings-naming-vars"></span></p>
-                        <div style="display:flex;gap:0.75rem;align-items:center;margin-top:0.75rem;">
-                            <input type="text" id="default-naming-pattern" class="form-control" style="max-width:20rem;" placeholder="{job_name}_{count}_{timestamp}" oninput="updateSettingsNamingPreview()">
+                        <div class="settings-naming-controls">
+                            <input type="text" id="default-naming-pattern" class="form-control" aria-label="Default capture naming pattern" style="max-width:20rem;" placeholder="{job_name}_{count}_{timestamp}" oninput="updateSettingsNamingPreview()">
                             <button id="save-naming-pattern-btn" class="btn btn-sm btn-accent" onclick="saveNamingPattern()" disabled>Save</button>
                             <span id="settings-naming-preview" style="font-size:0.7rem;font-family:monospace;color:var(--text-secondary);"></span>
                         </div>
@@ -479,7 +475,7 @@
                         </p>
                         <div class="webhook-settings">
                             <div class="webhook-row">
-                                <label class="webhook-label">Enabled</label>
+                                <label class="webhook-label" for="webhook-enabled">Enabled</label>
                                 <label class="toggle-switch">
                                     <input type="checkbox" id="webhook-enabled" onchange="markWebhookDirty()">
                                     <span class="toggle-slider"></span>
@@ -498,8 +494,8 @@
                                 </div>
                             </div>
                             <div class="webhook-row">
-                                <label class="webhook-label">Events</label>
-                                <div class="webhook-events" style="display:flex; flex-wrap:wrap; gap:0.5rem 1rem;">
+                                <span class="webhook-label" id="webhook-events-label">Events</span>
+                                <div class="webhook-events" role="group" aria-labelledby="webhook-events-label" style="display:flex; flex-wrap:wrap; gap:0.5rem 1rem;">
                                     <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;">
                                         <input type="checkbox" class="webhook-event-cb" value="warning" onchange="markWebhookDirty()"> Capture Warnings
                                     </label>
@@ -533,7 +529,7 @@
                             </a>
                         </p>
                         <div class="api-key-container">
-                            <input type="text" id="api-key-display" class="form-control api-key-input" readonly>
+                            <input type="text" id="api-key-display" class="form-control api-key-input" aria-label="API key" readonly>
                             <button class="btn-icon" onclick="copyApiKey()" title="Copy" style="padding: 0.4rem;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                             </button>
@@ -544,7 +540,7 @@
                     <div style="margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between;">
                         <div style="display:flex;align-items:center;gap:0.5rem;">
                             <span style="font-size:0.75rem;color:var(--text-secondary);" id="app-version"></span>
-                            <a id="update-badge" href="#" target="_blank" rel="noopener" style="display:none;font-size:0.65rem;background:var(--primary);color:#fff;padding:0.15rem 0.5rem;border-radius:999px;text-decoration:none;">Update available</a>
+                            <a id="update-badge" href="#" target="_blank" rel="noopener" style="display:none;font-size:0.65rem;background:var(--primary-color);color:var(--primary-text-on);padding:0.15rem 0.5rem;border-radius:999px;text-decoration:none;">Update available</a>
                         </div>
                         <a href="https://github.com/kernelkaribou/chronosnap" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--text-secondary);text-decoration:none;display:inline-flex;align-items:center;gap:0.3rem;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
@@ -563,15 +559,16 @@
     </div>
 
     <!-- Confirmation Modal -->
-    <div id="confirm-modal" class="modal">
+    <div id="confirm-modal" class="modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
-                <h3>Confirm Action</h3>
+                <h3 id="confirm-title">Confirm Action</h3>
+                <button type="button" class="close" onclick="closeConfirmModal(false)" aria-label="Cancel confirmation">&times;</button>
             </div>
             <div style="padding: 1.5rem;">
                 <p id="confirm-message" style="margin-bottom: 1.5rem;"></p>
                 <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                    <button class="btn btn-secondary" onclick="closeConfirmModal(false)">Cancel</button>
+                    <button class="btn btn-secondary" data-modal-initial-focus onclick="closeConfirmModal(false)">Cancel</button>
                     <button class="btn btn-danger" onclick="closeConfirmModal(true)">Confirm</button>
                 </div>
             </div>
@@ -579,16 +576,16 @@
     </div>
 
     <!-- Create Job Modal -->
-    <div id="create-job-modal" class="modal">
+    <div id="create-job-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="create-job-title">
         <div class="modal-content large">
             <div class="modal-header">
-                <h3>Create</h3>
-                <span class="close" onclick="closeModal('create-job-modal')">&times;</span>
+                <h3 id="create-job-title">Create</h3>
+                <button type="button" class="close" onclick="closeModal('create-job-modal')" aria-label="Close create job">&times;</button>
             </div>
             <form id="create-job-form" onsubmit="createJob(event)">
                 <div class="form-group" style="margin-bottom: 1.25rem;">
-                    <label>Job Name *</label>
-                    <input type="text" id="job_name" class="form-control" required maxlength="100" oninput="updateNamingPreview()">
+                    <label for="job_name">Job Name *</label>
+                    <input type="text" id="job_name" class="form-control" data-modal-initial-focus required maxlength="100" oninput="updateNamingPreview()">
                 </div>
 
                 <div class="form-section">
@@ -610,8 +607,8 @@
                                     </svg>
                                 </button>
                             </div>
-                            <input type="text" id="job_url" class="form-control" placeholder="http:// or rtsp://" required style="flex: 1; min-width: 0;">
-                            <select id="device_path" class="form-control" style="flex: 1; min-width: 0; display: none;">
+                            <input type="text" id="job_url" class="form-control" aria-label="Stream URL" placeholder="http:// or rtsp://" required style="flex: 1; min-width: 0;">
+                            <select id="device_path" class="form-control" aria-label="Local camera" style="flex: 1; min-width: 0; display: none;">
                                 <option value="">No devices</option>
                             </select>
                             <button type="button" id="device-refresh-btn" class="compare-btn" onclick="refreshDevices('device_path')" title="Refresh devices" style="display: none;">
@@ -629,7 +626,7 @@
                                 Preview
                             </button>
                             <div class="warn-after-group">
-                                <label>Warn After</label>
+                                <label for="warning_threshold">Warn After</label>
                                 <input type="number" id="warning_threshold" class="form-control" min="1" max="50" value="3">
                             </div>
                         </div>
@@ -639,7 +636,7 @@
 
                     <div id="capture-settings-row" class="form-row" style="margin-top: 0.75rem;">
                         <div class="form-group flex-1">
-                            <label>Capture Quality</label>
+                            <label for="capture_quality">Capture Quality</label>
                             <select id="capture_quality" class="form-control">
                                 <option value="maximum" selected>Maximum</option>
                                 <option value="high">High</option>
@@ -648,7 +645,7 @@
                             </select>
                         </div>
                         <div class="form-group flex-1">
-                            <label>Capture Resolution</label>
+                            <label for="capture_resolution">Capture Resolution</label>
                             <select id="capture_resolution" class="form-control">
                                 <option value="native" selected>Native</option>
                             </select>
@@ -663,11 +660,11 @@
                     <div class="form-section-title">Schedule</div>
                     <div class="form-row">
                         <div class="form-group flex-1">
-                            <label>Start Date & Time *</label>
+                            <label for="start_datetime">Start Date & Time *</label>
                             <input type="datetime-local" id="start_datetime" class="form-control" required>
                         </div>
                         <div class="form-group flex-1">
-                            <label style="display:flex;align-items:baseline;gap:0.5rem;">End Date & Time <small style="color:var(--text-secondary);font-weight:normal;font-size:0.75rem;">Leave empty for ongoing</small></label>
+                            <label for="end_datetime" style="display:flex;align-items:baseline;gap:0.5rem;">End Date & Time <small style="color:var(--text-secondary);font-weight:normal;font-size:0.75rem;">Leave empty for ongoing</small></label>
                             <input type="datetime-local" id="end_datetime" class="form-control">
                         </div>
                     </div>
@@ -678,13 +675,13 @@
                                 <input type="checkbox" id="time_window_enabled" style="cursor: pointer;" onchange="toggleTimeWindow()">
                                 <span><strong>Daily Time Window</strong></span>
                             </label>
-                            <div id="time-window-fields" class="toggle-fields disabled" style="display: flex; align-items: center; gap: 0.5rem;">
-                                <label style="font-size: 0.8rem; margin: 0;">Start</label>
+                            <div id="time-window-fields" class="toggle-fields disabled" inert style="display: flex; align-items: center; gap: 0.5rem;">
+                                <label for="time_window_start_time" style="font-size: 0.8rem; margin: 0;">Start</label>
                                 <div class="time-picker-container" style="margin: 0;">
                                     <input type="time" id="time_window_start_time" class="form-control" style="padding: 0.3rem 0.5rem;">
                                 </div>
                                 <input type="hidden" id="time_window_start">
-                                <label style="font-size: 0.8rem; margin: 0;">End</label>
+                                <label for="time_window_end_time" style="font-size: 0.8rem; margin: 0;">End</label>
                                 <div class="time-picker-container" style="margin: 0;">
                                     <input type="time" id="time_window_end_time" class="form-control" style="padding: 0.3rem 0.5rem;">
                                 </div>
@@ -693,18 +690,18 @@
                         </div>
                     </div>
 
-                    <div style="display: flex; gap: 0.75rem; align-items: stretch;">
-                        <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 0.5rem;">
+                    <div class="schedule-summary-row">
+                        <div class="schedule-inputs">
                             <div class="form-group" style="margin-bottom: 0;">
-                                <label>Capture Interval (s) *</label>
-                                <input type="number" id="interval_seconds" class="form-control" min="10" value="60" required onchange="updateDurationEstimate()" style="width: 120px;">
+                                <label for="interval_seconds">Capture Interval (s) *</label>
+                                <input type="number" id="interval_seconds" class="form-control" min="10" value="60" required onchange="updateDurationEstimate()">
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
-                                <label>Timelapse FPS</label>
-                                <input type="number" id="framerate" class="form-control" min="1" max="120" value="30" style="width: 120px;">
+                                <label for="framerate">Timelapse FPS</label>
+                                <input type="number" id="framerate" class="form-control" min="1" max="120" value="30">
                             </div>
                         </div>
-                        <div class="duration-estimate" id="duration-estimate" style="flex: 1; margin: 0;"></div>
+                        <div class="duration-estimate" id="duration-estimate" style="margin: 0;"></div>
                     </div>
                 </div>
 
@@ -718,9 +715,9 @@
                         </label>
                     </div>
 
-                    <div id="auto-build-fields" class="toggle-fields disabled" style="margin-bottom: 1rem; margin-left: 1.5rem;">
+                    <div id="auto-build-fields" class="toggle-fields disabled" inert style="margin-bottom: 1rem;">
                         <div class="form-group" style="margin-bottom: 0.75rem;">
-                            <label>Build Interval</label>
+                            <label for="auto_build_interval_hours">Build Interval</label>
                             <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                                 <input type="number" id="auto_build_interval_hours" class="form-control" min="1" max="8760" value="168" style="width: 100px;">
                                 <small style="color: var(--text-secondary);">hours</small>
@@ -734,11 +731,11 @@
                         </div>
                         <div class="form-row">
                             <div class="form-group flex-1">
-                                <label>FPS</label>
+                                <label for="auto_build_fps">FPS</label>
                                 <input type="number" id="auto_build_fps" class="form-control" min="1" max="120" value="30">
                             </div>
                             <div class="form-group flex-1">
-                                <label>Quality</label>
+                                <label for="auto_build_quality">Quality</label>
                                 <select id="auto_build_quality" class="form-control">
                                     <option value="low">Low</option>
                                     <option value="medium" selected>Medium</option>
@@ -747,7 +744,7 @@
                                 </select>
                             </div>
                             <div class="form-group flex-1">
-                                <label>Resolution</label>
+                                <label for="auto_build_resolution">Resolution</label>
                                 <select id="auto_build_resolution" class="form-control">
                                     <option value="3840x2160">4K (3840x2160)</option>
                                     <option value="1920x1080" selected>Full HD (1920x1080)</option>
@@ -763,7 +760,7 @@
                 <div class="form-section">
                     <div class="form-section-title">Tags</div>
                     <div class="form-group">
-                        <div class="tag-picker" id="create-job-tags"></div>
+                        <div class="tag-picker" id="create-job-tags" role="group" aria-label="Job tags"></div>
                     </div>
                 </div>
 
@@ -771,7 +768,7 @@
                     <div class="form-section-title">Storage</div>
                     <div style="display:flex;gap:1rem;">
                         <div class="form-group" style="flex:1;min-width:0;">
-                            <label>Naming Pattern</label>
+                            <label for="naming_pattern">Naming Pattern</label>
                             <input type="text" id="naming_pattern" class="form-control" oninput="updateNamingPreview()">
                             <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.25rem;display:flex;align-items:baseline;gap:0.5rem;flex-wrap:wrap;">
                                 <span id="job-naming-vars"></span>
@@ -793,7 +790,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3 id="trim-video-title">Trim</h3>
-                <button type="button" class="btn-icon" aria-label="Close trim dialog" onclick="closeModal('trim-video-modal')">&times;</button>
+                <button type="button" class="close" aria-label="Close trim dialog" onclick="closeModal('trim-video-modal')">&times;</button>
             </div>
             <form class="trim-body" onsubmit="submitVideoTrim(event)">
                 <div id="trim-video-errors" class="join-error" role="alert"></div>
@@ -852,7 +849,6 @@
                         <label for="trim-video-name">New video name</label>
                         <input id="trim-video-name" class="form-control" required maxlength="100" autocomplete="off">
                     </div>
-                    <p class="trim-hint">The original stays unchanged. Safe regions are copied; cut regions may be re-encoded at High quality. Some selections need full re-encoding.</p>
                 </fieldset>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" onclick="closeModal('trim-video-modal')">Close</button>
@@ -866,7 +862,7 @@
         <div class="modal-content large">
             <div class="modal-header">
                 <h3 id="join-video-title">Join</h3>
-                <button type="button" class="btn-icon" aria-label="Close join dialog" onclick="closeModal('join-video-modal')">&times;</button>
+                <button type="button" class="close" aria-label="Close join dialog" onclick="closeModal('join-video-modal')">&times;</button>
             </div>
             <form onsubmit="submitVideoJoin(event)">
                 <div id="join-video-errors" class="join-error" role="alert"></div>
@@ -929,31 +925,31 @@
     </div>
 
     <!-- Process Video Modal -->
-    <div id="process-video-modal" class="modal">
+    <div id="process-video-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="process-video-title">
         <div class="modal-content large">
             <div class="modal-header">
-                <h3>Build</h3>
-                <span class="close" onclick="closeModal('process-video-modal')">&times;</span>
+                <h3 id="process-video-title">Build</h3>
+                <button type="button" class="close" onclick="closeModal('process-video-modal')" aria-label="Close build timelapse">&times;</button>
             </div>
             <form id="process-video-form" onsubmit="processVideo(event)">
                 <input type="hidden" id="process_job_id">
 
                 <div class="form-row">
                     <div class="form-group flex-1" id="job-selector-group">
-                        <label>Job *</label>
-                        <select id="process_job_select" class="form-control" required onchange="onJobSelectChange()">
+                        <label for="process_job_select">Job *</label>
+                        <select id="process_job_select" class="form-control" data-modal-initial-focus required onchange="onJobSelectChange()">
                             <option value="">Select a job...</option>
                         </select>
                     </div>
                     <div class="form-group flex-1">
-                        <label>Video Name *</label>
+                        <label for="video_name">Video Name *</label>
                         <input type="text" id="video_name" class="form-control" required>
                     </div>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group flex-1">
-                        <label>Resolution *</label>
+                        <label for="video_resolution">Resolution *</label>
                         <select id="video_resolution" class="form-control" required onchange="toggleCustomResolution()">
                             <option value="3840x2160">4K (3840x2160)</option>
                             <option value="1920x1080" selected>Full HD (1920x1080)</option>
@@ -963,7 +959,7 @@
                         </select>
                     </div>
                     <div class="form-group" style="flex: 0.75;">
-                        <label>Quality *</label>
+                        <label for="video_quality">Quality *</label>
                         <select id="video_quality" class="form-control" required>
                             <option value="low">Low</option>
                             <option value="medium">Medium</option>
@@ -972,22 +968,22 @@
                         </select>
                     </div>
                     <div class="form-group" style="flex: 0.75;">
-                        <label>Framerate (FPS) *</label>
+                        <label for="video_framerate">Framerate (FPS) *</label>
                         <input type="number" id="video_framerate" class="form-control" min="1" value="30" required>
                     </div>
                     <div class="form-group" style="flex: 1.5;">
-                        <label>Estimated Duration</label>
-                        <div class="duration-estimate duration-estimate-inline" id="video-duration-estimate" style="margin-top: 0.2rem;"></div>
+                        <span class="form-label" id="video-duration-label">Estimated Duration</span>
+                        <div class="duration-estimate duration-estimate-inline" id="video-duration-estimate" role="group" aria-labelledby="video-duration-label" style="margin-top: 0.2rem;"></div>
                     </div>
                 </div>
 
                 <div id="custom-resolution" class="form-row" style="display: none;">
                     <div class="form-group flex-1">
-                        <label>Width (pixels) *</label>
+                        <label for="custom_width">Width (pixels) *</label>
                         <input type="number" id="custom_width" class="form-control" min="1" placeholder="1920">
                     </div>
                     <div class="form-group flex-1">
-                        <label>Height (pixels) *</label>
+                        <label for="custom_height">Height (pixels) *</label>
                         <input type="number" id="custom_height" class="form-control" min="1" placeholder="1080">
                     </div>
                 </div>
@@ -998,10 +994,10 @@
                             <input type="checkbox" id="use_range" style="cursor: pointer;" onchange="toggleFieldGroup('use_range', 'capture-range-fields')">
                             <span><strong>Custom Time Range</strong></span>
                         </label>
-                        <div id="capture-range-fields" class="toggle-fields disabled" style="display: flex; align-items: center; gap: 0.5rem;">
-                            <label style="font-size: 0.8rem; margin: 0;">Start</label>
+                        <div id="capture-range-fields" class="toggle-fields disabled" inert style="display: flex; align-items: center; gap: 0.5rem;">
+                            <label for="video_start_datetime" style="font-size: 0.8rem; margin: 0;">Start</label>
                             <input type="datetime-local" id="video_start_datetime" class="form-control" style="padding: 0.3rem 0.5rem;">
-                            <label style="font-size: 0.8rem; margin: 0;">End</label>
+                            <label for="video_end_datetime" style="font-size: 0.8rem; margin: 0;">End</label>
                             <input type="datetime-local" id="video_end_datetime" class="form-control" style="padding: 0.3rem 0.5rem;">
                         </div>
                     </div>
@@ -1029,8 +1025,8 @@
                 <div id="build-overlay-container"></div>
 
                 <div class="form-group" style="margin-top: 0.75rem;">
-                    <label>Tags</label>
-                    <div class="tag-picker" id="build-video-tags"></div>
+                    <span class="form-label" id="build-video-tags-label">Tags</span>
+                    <div class="tag-picker" id="build-video-tags" role="group" aria-labelledby="build-video-tags-label"></div>
                 </div>
 
                 <div class="modal-footer">
@@ -1042,31 +1038,31 @@
     </div>
 
     <!-- Comparison Modal -->
-    <div id="comparison-modal" class="modal">
+    <div id="comparison-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="comparison-title">
         <div class="modal-content comparison-modal-content">
             <div class="modal-header">
-                <h3>Compare Timelapses</h3>
-                <span class="close" onclick="closeComparison()">&times;</span>
+                <h3 id="comparison-title">Compare Timelapses</h3>
+                <button type="button" class="close" onclick="closeComparison()" aria-label="Close timelapse comparison">&times;</button>
             </div>
             <div class="comparison-players" id="comparison-players"></div>
             <div class="comparison-controls">
-                <button class="btn-compare-play" id="compare-play-btn" onclick="toggleComparisonPlay()">
+                <button class="btn-compare-play" id="compare-play-btn" onclick="toggleComparisonPlay()" aria-label="Play or pause comparison">
                     <svg id="compare-play-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                     <svg id="compare-pause-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
                 </button>
                 <span class="compare-time" id="compare-time-current">0:00</span>
-                <input type="range" id="compare-scrubber" class="compare-scrubber" min="0" max="1000" value="0" oninput="scrubComparison(this.value)">
+                <input type="range" id="compare-scrubber" class="compare-scrubber" aria-label="Comparison playback position" min="0" max="1000" value="0" oninput="scrubComparison(this.value)">
                 <span class="compare-time" id="compare-time-duration">0:00</span>
             </div>
         </div>
     </div>
 
     <!-- Maintenance Modal -->
-    <div id="maintenance-modal" class="modal">
+    <div id="maintenance-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="maintenance-title">
         <div class="modal-content large">
             <div class="modal-header">
                 <h3 id="maintenance-title">Capture Sync</h3>
-                <span class="close" onclick="closeMaintenance()">&times;</span>
+                <button type="button" class="close" onclick="closeMaintenance()" aria-label="Close capture sync">&times;</button>
             </div>
             <div id="maintenance-content" style="padding: 1.5rem;">
                 <!-- Content will be populated dynamically -->
@@ -1075,16 +1071,16 @@
     </div>
 
     <!-- Capture Comparison Modal -->
-    <div id="compare-modal" class="modal">
+    <div id="compare-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="compare-captures-title">
         <div class="modal-content xlarge">
             <div class="modal-header">
-                <h3>Compare Captures</h3>
-                <span class="close" onclick="closeModal('compare-modal')">&times;</span>
+                <h3 id="compare-captures-title">Compare Captures</h3>
+                <button type="button" class="close" onclick="closeModal('compare-modal')" aria-label="Close capture comparison">&times;</button>
             </div>
             <div style="padding: 1.5rem;">
                 <!-- Job selector -->
                 <div class="form-group" id="compare-job-selector">
-                    <label>Select Job</label>
+                    <label for="compare-job-select">Select Job</label>
                     <select id="compare-job-select" class="form-control" onchange="onCompareJobSelected()">
                         <option value="">Choose a job...</option>
                     </select>
@@ -1095,11 +1091,11 @@
                     <div class="compare-toolbar">
                         <button class="btn btn-secondary btn-sm" onclick="compareFirstLast()">First vs Last</button>
                         <div class="compare-date-inline">
-                            <label>Capture A</label>
+                            <label for="compare-date-a">Capture A</label>
                             <input type="datetime-local" id="compare-date-a" class="form-control form-control-sm" onchange="onCompareDateChanged('a')">
                         </div>
                         <div class="compare-date-inline">
-                            <label>Capture B</label>
+                            <label for="compare-date-b">Capture B</label>
                             <input type="datetime-local" id="compare-date-b" class="form-control form-control-sm" onchange="onCompareDateChanged('b')">
                         </div>
                         <div style="margin-left: auto; display: flex; gap: 0.25rem;">
@@ -1154,18 +1150,18 @@
     </div>
 
     <!-- Capture Preview Modal -->
-    <div id="capture-preview-modal" class="modal">
+    <div id="capture-preview-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="capture-preview-title">
         <div class="modal-content xlarge">
             <div class="modal-header">
-                <h3>Capture Details</h3>
-                <span class="close" onclick="closeCapturePreview()">&times;</span>
+                <h3 id="capture-preview-title">Capture Details</h3>
+                <button type="button" class="close" onclick="closeCapturePreview()" aria-label="Close capture details">&times;</button>
             </div>
             <div style="padding: 1.5rem;">
                 <div style="position:relative;text-align:center;margin-bottom:1rem;">
                     <button id="capture-nav-prev" class="capture-nav-btn capture-nav-prev" onclick="showPrevCapture()" title="Previous">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                     </button>
-                    <img id="capture-preview-image" style="max-width: 100%; max-height: 75vh; background: #000; border-radius: var(--radius-md); transition: opacity 0.3s ease;">
+                    <img id="capture-preview-image" alt="Selected capture" style="max-width: 100%; max-height: 75vh; background: #000; border-radius: var(--radius-md); transition: opacity 0.3s ease;">
                     <button id="capture-nav-next" class="capture-nav-btn capture-nav-next" onclick="showNextCapture()" title="Next">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                     </button>
@@ -1198,11 +1194,11 @@
     </div>
 
     <!-- Import Modal (redesigned with split panels) -->
-    <div id="import-modal" class="modal">
+    <div id="import-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="import-title">
         <div class="modal-content" style="max-width:800px;">
             <div class="modal-header">
-                <h3>Import</h3>
-                <span class="close" onclick="closeModal('import-modal')">&times;</span>
+                <h3 id="import-title">Import</h3>
+                <button type="button" class="close" onclick="closeModal('import-modal')" aria-label="Close import">&times;</button>
             </div>
             <div style="padding:1.5rem;">
                 <!-- Source selection panels -->
@@ -1210,7 +1206,7 @@
                     <!-- Left: Server Path Browser (70%) -->
                     <div style="flex:7;display:flex;flex-direction:column;min-width:0;">
                         <h4 style="margin:0 0 0.75rem;font-size:0.9rem;color:var(--text-secondary);">Server Path</h4>
-                        <div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;flex:1;display:flex;flex-direction:column;overflow:hidden;">
+                        <div style="background:var(--bg-subtle);border:1px solid var(--border-color);border-radius:8px;flex:1;display:flex;flex-direction:column;overflow:hidden;">
                             <div style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--border-color);display:flex;align-items:center;gap:0.5rem;">
                                 <button class="btn-icon" onclick="browseImportParent()" title="Up" id="import-browse-up" style="padding:2px;">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
@@ -1246,13 +1242,13 @@
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px;"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>Folder
                                     </button>
                                 </div>
-                                <input type="file" id="import-file-input" multiple accept="image/*,video/*,.zip,.tar,.gz,.tgz,.bz2,.rar,.7z" style="display:none" onchange="handleImportFiles(this.files)">
-                                <input type="file" id="import-folder-input" webkitdirectory style="display:none" onchange="handleImportFiles(this.files)">
+                                <input type="file" id="import-file-input" aria-label="Files to import" multiple accept="image/*,video/*,.zip,.tar,.gz,.tgz,.bz2,.rar,.7z" style="display:none" onchange="handleImportFiles(this.files)">
+                                <input type="file" id="import-folder-input" aria-label="Folder to import" webkitdirectory style="display:none" onchange="handleImportFiles(this.files)">
                             </div>
                         </div>
                         <div id="import-upload-progress" style="display:none;margin-top:0.5rem;">
-                            <div style="background:var(--bg-secondary);border-radius:4px;overflow:hidden;height:6px;">
-                                <div id="import-progress-bar" style="height:100%;background:var(--purple);width:0%;transition:width 0.3s;"></div>
+                            <div style="background:var(--bg-subtle);border-radius:4px;overflow:hidden;height:6px;">
+                                <div id="import-progress-bar" style="height:100%;background:var(--purple-mid);width:0%;transition:width 0.3s;"></div>
                             </div>
                             <small id="import-progress-text" style="color:var(--text-secondary);font-size:0.75rem;">Uploading...</small>
                         </div>
@@ -1271,7 +1267,7 @@
                         <div id="import-preview-images" style="display:none;margin-bottom:1rem;">
                             <div class="info-box" id="import-images-info"></div>
                             <div class="form-group" style="margin-top:0.75rem;">
-                                <label>Job Name *</label>
+                                <label for="import-job-name">Job Name *</label>
                                 <input type="text" id="import-job-name" class="form-control" placeholder="My Timelapse">
                             </div>
                         </div>
@@ -1283,7 +1279,7 @@
 
                         <!-- Errors -->
                         <div id="import-preview-errors" style="display:none;margin-bottom:1rem;">
-                            <div class="info-box" style="border-color:var(--danger);" id="import-errors-info"></div>
+                            <div class="info-box" style="border-color:var(--danger-color);" id="import-errors-info"></div>
                         </div>
 
                         <!-- Actions -->

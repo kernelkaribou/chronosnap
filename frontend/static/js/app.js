@@ -117,13 +117,22 @@ function renderThemePresets() {
     const grid = document.getElementById('theme-preset-grid');
     if (!grid) return;
     const current = localStorage.getItem('themePreset') || 'cosmic';
+    const radios = grid.querySelectorAll('input[name="theme-preset"]');
+    if (radios.length) {
+        radios.forEach(radio => {
+            radio.checked = radio.value === current;
+            radio.closest('.theme-preset-card').classList.toggle('active', radio.checked);
+        });
+        return;
+    }
     grid.innerHTML = Object.entries(THEME_PRESETS).map(([key, preset]) => `
-        <div class="theme-preset-card ${key === current ? 'active' : ''}" onclick="setThemePreset('${key}')">
-            <div class="theme-preset-swatches">
+        <label class="theme-preset-card ${key === current ? 'active' : ''}">
+            <input type="radio" name="theme-preset" value="${key}"${key === current ? ' checked' : ''} onchange="setThemePreset(this.value)">
+            <span class="theme-preset-swatches" aria-hidden="true">
                 ${preset.colors.map(c => `<span style="background:${c};"></span>`).join('')}
-            </div>
-            <div class="theme-preset-name">${preset.name}</div>
-        </div>
+            </span>
+            <span class="theme-preset-name">${preset.name}</span>
+        </label>
     `).join('');
 }
 
@@ -262,21 +271,6 @@ function getValues(config) {
     });
     return result;
 }
-
-/**
- * Batch set values to multiple elements
- * @param {Object} values - { elementId: value }
- */
-function setValues(values) {
-    Object.entries(values).forEach(([id, value]) => {
-        setValue(id, value);
-    });
-}
-
-/**
- * Clear form elements
- * @param {string[]} ids - Array of element IDs to clear
- */
 
 // =============================================================================
 // End Universal Utilities
@@ -433,23 +427,19 @@ document.addEventListener('click', (e) => {
 
 // Confirmation system
 function showConfirm(message, callback) {
-    const modal = document.getElementById('confirm-modal');
     const messageEl = document.getElementById('confirm-message');
     
     messageEl.textContent = message;
     confirmCallback = callback;
     
-    modal.classList.add('active');
+    showModal('confirm-modal');
 }
 
 function closeConfirmModal(confirmed) {
-    const modal = document.getElementById('confirm-modal');
-    modal.classList.remove('active');
-    
-    if (confirmCallback) {
-        confirmCallback(confirmed);
-        confirmCallback = null;
-    }
+    const callback = confirmCallback;
+    confirmCallback = null;
+    closeModal('confirm-modal');
+    if (callback) callback(confirmed);
 }
 
 /**
@@ -477,6 +467,7 @@ function confirmAction(message, actionFn, opts = {}) {
 function toggleFieldGroup(checkboxId, containerId, opts = {}) {
     const enabled = document.getElementById(checkboxId).checked;
     const container = document.getElementById(containerId);
+    container.inert = !enabled;
     if (enabled) {
         container.classList.remove('disabled');
     } else {
@@ -798,6 +789,11 @@ const _viewToPath = {
     'storage': '/storage', 'settings': '/settings',
     'job-detail': '/jobs', 'video-detail': '/timelapses',
 };
+let _routeVersion = 0;
+let _jobDetailRequestVersion = 0;
+let _videoDetailRequestVersion = 0;
+let _capturesPageRequestVersion = 0;
+let _capturesLoadVersion = 0;
 
 function parseRoute(pathname) {
     pathname = pathname || window.location.pathname;
@@ -826,12 +822,16 @@ function handleRoute(pushState = false) {
 }
 
 function navigateTo(path, replace = false) {
-    if (replace) {
-        history.replaceState({ path }, '', path);
-    } else {
-        history.pushState({ path }, '', path);
-    }
-    handleRoute(false);
+    closeModalsForNavigation(true);
+    _modalHistoryNavigation = () => {
+        if (replace) {
+            history.replaceState({ path }, '', path);
+        } else {
+            history.pushState({ path }, '', path);
+        }
+        handleRoute(false);
+    };
+    drainModalHistory();
 }
 
 function setupNavigation() {
@@ -845,20 +845,20 @@ function setupNavigation() {
     
     // Handle browser back/forward buttons
     window.addEventListener('popstate', (e) => {
-        // If a modal is open, close the topmost one
-        const activeModals = document.querySelectorAll('.modal.active');
-        if (activeModals.length > 0) {
+        if (_modalHistoryBackInFlight) {
+            _modalHistoryBackInFlight = false;
+            _pendingModalBacks--;
+            drainModalHistory();
+            return;
+        }
+        const topModal = getTopModal();
+        if (topModal) {
             _closingFromPopstate = true;
-            _modalHistoryDepth = Math.max(0, _modalHistoryDepth - 1);
-            const topModal = activeModals[activeModals.length - 1];
-            if (topModal.id === 'comparison-modal') {
-                closeComparison();
-            } else if (topModal.id === 'confirm-modal') {
-                topModal.classList.remove('active');
-            } else {
+            try {
                 closeModal(topModal.id);
+            } finally {
+                _closingFromPopstate = false;
             }
-            _closingFromPopstate = false;
             return;
         }
         
@@ -867,11 +867,12 @@ function setupNavigation() {
 }
 
 function switchView(view, pushState = true) {
-    // Clean up video detail polling when leaving that view
-    if (view !== 'video-detail' && _videoDetailPollInterval) {
-        clearInterval(_videoDetailPollInterval);
-        _videoDetailPollInterval = null;
-    }
+    // Every route entry is a new lifetime, even when re-entering the same ID.
+    _routeVersion++;
+    _currentVideoDetailId = null;
+    clearTimeout(_videoDetailPollInterval);
+    _videoDetailPollInterval = null;
+    closeModalsForNavigation();
     // Clean up homepage polling when leaving
     if (view !== 'homepage') stopHomepagePoll();
     
@@ -1083,11 +1084,22 @@ function renderJobs(jobs) {
 }
 
 async function loadJobDetail(jobId) {
+    const route = parseRoute();
+    if (currentView !== 'job-detail' || route.view !== 'job-detail' || route.id !== Number(jobId)) return;
+    const version = ++_jobDetailRequestVersion;
+    const routeVersion = _routeVersion;
+    const isCurrent = () => {
+        const route = parseRoute();
+        return routeVersion === _routeVersion && version === _jobDetailRequestVersion &&
+            currentView === 'job-detail' && route.view === 'job-detail' && route.id === Number(jobId);
+    };
+    if (!isCurrent()) return;
     try {
         const [job, capturesData] = await Promise.all([
             apiRequest(`/jobs/${jobId}`),
             apiRequest('/captures/', { query: { job_id: jobId, page: 1, page_size: 1, sort_order: 'desc' } })
         ]);
+        if (!isCurrent()) return;
         
         const content = document.getElementById('job-detail-content');
         const title = document.getElementById('job-detail-title');
@@ -1105,9 +1117,9 @@ async function loadJobDetail(jobId) {
                         ${renderJobScheduleSection(job)}
                         ${renderJobAutoBuildSection(job)}
                         <div class="form-section">
-                            <div class="form-section-title">Tags</div>
+                            <div class="form-section-title" id="edit-job-tags-label">Tags</div>
                             <div class="form-group" style="margin-bottom: 1rem;">
-                                <div class="tag-picker" id="edit-job-tags"></div>
+                                <div class="tag-picker" id="edit-job-tags" role="group" aria-labelledby="edit-job-tags-label"></div>
                             </div>
                         </div>
                     </div><!-- /detail-main -->
@@ -1115,8 +1127,9 @@ async function loadJobDetail(jobId) {
                 <input type="hidden" id="edit_start_datetime" value="${job.start_datetime}">
         `;
         
-        initJobDetailPostRender(job, capturesData);
+        initJobDetailPostRender(job, capturesData, isCurrent);
     } catch (error) {
+        if (!isCurrent()) return;
         console.error('Failed to load job details:', error);
         showNotification('Failed to load job details', 'error');
         navigateTo('/jobs');
@@ -1275,7 +1288,7 @@ function renderJobTimeWindow(job) {
 
 function renderJobSourceSection(job) {
     const sourceInput = job.stream_type === 'device' ? `
-        <label>Camera Device</label>
+        <label for="edit_device_path">Camera Device</label>
         <div class="source-row">
             <select id="edit_device_path" class="form-control" style="flex: 1; min-width: 0;">
                 <option value="${escapeAttr(job.url)}" selected>${escapeHtml(job.url)}</option>
@@ -1295,12 +1308,12 @@ function renderJobSourceSection(job) {
                 Preview
             </button>
             <div class="warn-after-group">
-                <label>Warn After</label>
+                <label for="edit_warning_threshold">Warn After</label>
                 <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50">
             </div>
         </div>
     ` : `
-        <label>Stream URL *</label>
+        <label for="edit_url">Stream URL *</label>
         <div class="source-row">
             <input type="text" id="edit_url" class="form-control" value="${escapeAttr(job.url)}" required style="flex: 1; min-width: 0;">
             <button type="button" class="compare-btn" onclick="previewStream('edit_url', 'edit-preview-result', 'edit_capture_quality', 'edit_capture_resolution', 'edit-source-info', 'edit-source-dimensions')" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem;">
@@ -1311,7 +1324,7 @@ function renderJobSourceSection(job) {
                 Preview
             </button>
             <div class="warn-after-group">
-                <label>Warn After</label>
+                <label for="edit_warning_threshold">Warn After</label>
                 <input type="number" id="edit_warning_threshold" class="form-control" value="${job.warning_threshold || 3}" min="1" max="50">
             </div>
         </div>
@@ -1326,7 +1339,7 @@ function renderJobSourceSection(job) {
             </div>
             <div class="form-row-wrap" style="gap: 1rem; margin-top: 0.75rem;">
                 <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0;">
-                    <label>Capture Quality</label>
+                    <label for="edit_capture_quality">Capture Quality</label>
                     <select id="edit_capture_quality" class="form-control">
                         <option value="maximum" ${(!job.capture_quality || job.capture_quality === 'maximum') ? 'selected' : ''}>Maximum</option>
                         <option value="high" ${job.capture_quality === 'high' ? 'selected' : ''}>High</option>
@@ -1335,7 +1348,7 @@ function renderJobSourceSection(job) {
                     </select>
                 </div>
                 <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0;">
-                    <label>Capture Resolution</label>
+                    <label for="edit_capture_resolution">Capture Resolution</label>
                     <select id="edit_capture_resolution" class="form-control">
                         <option value="native" selected>Native</option>
                         ${job.capture_resolution && job.capture_resolution !== 'native' ? `<option value="${escapeAttr(job.capture_resolution)}" selected>${escapeHtml(job.capture_resolution)}</option>` : ''}
@@ -1354,7 +1367,7 @@ function renderJobScheduleSection(job) {
         <div class="form-section">
             <div class="form-section-title">Schedule</div>
             <div class="form-group" style="margin-bottom: 1rem;">
-                <label style="display:flex;align-items:baseline;gap:0.5rem;">End Date & Time <small style="color:var(--text-secondary);font-weight:normal;font-size:0.75rem;">Leave empty for ongoing</small></label>
+                <label for="edit_end_datetime" style="display:flex;align-items:baseline;gap:0.5rem;">End Date & Time <small style="color:var(--text-secondary);font-weight:normal;font-size:0.75rem;">Leave empty for ongoing</small></label>
                 <input type="datetime-local" id="edit_end_datetime" class="form-control" style="max-width: 280px;">
             </div>
             
@@ -1364,13 +1377,13 @@ function renderJobScheduleSection(job) {
                         <input type="checkbox" id="edit_time_window_enabled" ${job.time_window_enabled ? 'checked' : ''} style="cursor: pointer;" onchange="toggleEditTimeWindow()">
                         <span><strong>Daily Time Window</strong></span>
                     </label>
-                    <div id="edit-time-window-fields" class="toggle-fields form-row ${job.time_window_enabled ? '' : 'disabled'}">
-                        <label class="text-sm" style="margin: 0;">Start</label>
+                    <div id="edit-time-window-fields" class="toggle-fields form-row ${job.time_window_enabled ? '' : 'disabled'}"${job.time_window_enabled ? '' : ' inert'}>
+                        <label for="edit_time_window_start_time" class="text-sm" style="margin: 0;">Start</label>
                         <div class="time-picker-container" style="margin: 0;">
                             <input type="time" id="edit_time_window_start_time" class="form-control" style="padding: 0.3rem 0.5rem;">
                         </div>
                         <input type="hidden" id="edit_time_window_start">
-                        <label class="text-sm" style="margin: 0;">End</label>
+                        <label for="edit_time_window_end_time" class="text-sm" style="margin: 0;">End</label>
                         <div class="time-picker-container" style="margin: 0;">
                             <input type="time" id="edit_time_window_end_time" class="form-control" style="padding: 0.3rem 0.5rem;">
                         </div>
@@ -1381,12 +1394,12 @@ function renderJobScheduleSection(job) {
 
             <div class="form-row-wrap" style="gap: 1rem; align-items: flex-start;">
                 <div class="form-group" style="margin-bottom: 0;">
-                    <label>Capture Interval (s) *</label>
+                    <label for="edit_interval_seconds">Capture Interval (s) *</label>
                     <input type="number" id="edit_interval_seconds" class="form-control" value="${job.interval_seconds}" min="10" required style="width: 140px;">
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
-                    <label>Timelapse FPS</label>
-                    <input type="number" id="edit_framerate" class="form-control" value="30" min="1" max="120" required style="width: 140px;">
+                    <label for="edit_framerate">Timelapse FPS</label>
+                    <input type="number" id="edit_framerate" class="form-control" value="${job.framerate}" min="1" max="120" required style="width: 140px;">
                 </div>
                 <div class="duration-estimate" id="edit-duration-estimate" style="flex: 1; min-width: 200px; margin: 0;"></div>
             </div>
@@ -1406,9 +1419,9 @@ function renderJobAutoBuildSection(job) {
                 </label>
             </div>
 
-            <div id="edit-auto-build-fields" class="toggle-fields ${job.auto_build_enabled ? '' : 'disabled'}" style="margin-bottom: 1rem; margin-left: 1.5rem;">
+            <div id="edit-auto-build-fields" class="toggle-fields ${job.auto_build_enabled ? '' : 'disabled'}"${job.auto_build_enabled ? '' : ' inert'} style="margin-bottom: 1rem;">
                 <div class="form-group" style="margin-bottom: 0.75rem;">
-                    <label>Build Interval</label>
+                    <label for="edit_auto_build_interval_hours">Build Interval</label>
                     <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                         <input type="number" id="edit_auto_build_interval_hours" class="form-control" min="1" max="8760" value="${job.auto_build_interval_hours || 168}" style="width: 100px;">
                         <small style="color: var(--text-secondary);">hours</small>
@@ -1422,11 +1435,11 @@ function renderJobAutoBuildSection(job) {
                 </div>
                 <div class="form-row">
                     <div class="form-group flex-1">
-                        <label>FPS</label>
+                        <label for="edit_auto_build_fps">FPS</label>
                         <input type="number" id="edit_auto_build_fps" class="form-control" min="1" max="120" value="${job.auto_build_fps || 30}">
                     </div>
                     <div class="form-group flex-1">
-                        <label>Quality</label>
+                        <label for="edit_auto_build_quality">Quality</label>
                         <select id="edit_auto_build_quality" class="form-control">
                             <option value="low" ${job.auto_build_quality === 'low' ? 'selected' : ''}>Low</option>
                             <option value="medium" ${(!job.auto_build_quality || job.auto_build_quality === 'medium') ? 'selected' : ''}>Medium</option>
@@ -1435,7 +1448,7 @@ function renderJobAutoBuildSection(job) {
                         </select>
                     </div>
                     <div class="form-group flex-1">
-                        <label>Resolution</label>
+                        <label for="edit_auto_build_resolution">Resolution</label>
                         <select id="edit_auto_build_resolution" class="form-control">
                             <option value="3840x2160" ${job.auto_build_resolution === '3840x2160' ? 'selected' : ''}>4K (3840x2160)</option>
                             <option value="1920x1080" ${(!job.auto_build_resolution || job.auto_build_resolution === '1920x1080') ? 'selected' : ''}>Full HD (1920x1080)</option>
@@ -1451,11 +1464,11 @@ function renderJobAutoBuildSection(job) {
     `;
 }
 
-function initJobDetailPostRender(job, capturesData) {
+function initJobDetailPostRender(job, capturesData, isCurrent = () => true) {
     const content = document.getElementById('job-detail-content');
     content.scrollTop = 0;
     initializeEditTimePickers(job);
-    initEditJobOverlay(job);
+    initEditJobOverlay(job, isCurrent);
     
     // Populate capture resolution dropdown from persisted source dimensions
     if (job.source_width && job.source_height) {
@@ -1468,7 +1481,8 @@ function initJobDetailPostRender(job, capturesData) {
     
     // Load device list for device-type jobs
     if (job.stream_type === 'device') {
-        refreshDevices('edit_device_path').then(() => {
+        refreshDevices('edit_device_path', isCurrent).then(() => {
+            if (!isCurrent()) return;
             const sel = document.getElementById('edit_device_path');
             if (sel) sel.value = job.url;
         });
@@ -1477,6 +1491,7 @@ function initJobDetailPostRender(job, capturesData) {
     // Add native resolution option to auto-build dropdown
     if (job.capture_count > 0) {
         fetch(`${API_BASE}/captures/job/${job.id}/time-range`).then(r => r.json()).then(tr => {
+            if (!isCurrent()) return;
             if (tr.native_resolution) {
                 const sel = document.getElementById('edit_auto_build_resolution');
                 if (sel && !sel.querySelector(`option[value="${tr.native_resolution}"]`)) {
@@ -1498,11 +1513,6 @@ function initJobDetailPostRender(job, capturesData) {
     });
     
     setupJobEditChangeTracking(job);
-}
-
-// Compatibility wrapper for internal calls that need to navigate to job detail
-function showJobDetails(jobId) {
-    navigateTo(`/jobs/${jobId}`);
 }
 
 async function createJob(event) {
@@ -1624,6 +1634,7 @@ function setupJobEditChangeTracking(originalJob) {
 
     // Initially disabled
     setButtonState(saveBtn, true);
+    saveBtn.dataset.editReady = 'false';
 
     // Snapshot initial form values to compare against
     const getFormSnapshot = () => {
@@ -1642,6 +1653,7 @@ function setupJobEditChangeTracking(originalJob) {
 
     const trackedFields = [
         'edit_interval_seconds',
+        'edit_framerate',
         'edit_end_datetime',
         'edit_time_window_enabled',
         'edit_time_window_start_time',
@@ -1670,7 +1682,10 @@ function setupJobEditChangeTracking(originalJob) {
 
     // Take snapshot after a tick so DOM values are fully populated
     let initialSnapshot = null;
-    setTimeout(() => { initialSnapshot = getFormSnapshot(); }, 50);
+    setTimeout(() => {
+        initialSnapshot = getFormSnapshot();
+        saveBtn.dataset.editReady = 'true';
+    }, 50);
 
     const checkForChanges = () => {
         if (!initialSnapshot) { setButtonState(saveBtn, true); return; }
@@ -1762,69 +1777,6 @@ async function updateJobStatus(jobId, status, jobName) {
     }
 }
 
-async function updateJobEndTime(jobId) {
-    const endDatetimeInput = document.getElementById('edit_end_datetime');
-    const rawValue = endDatetimeInput.value || null;
-    const endDatetime = rawValue ? datetimeLocalToISO(rawValue) : null;
-    
-    if (endDatetime) {
-        const endTime = new Date(endDatetime);
-        if (endTime <= new Date()) {
-            showNotification('End time must be in the future', 'error');
-            return;
-        }
-    }
-    
-    try {
-        await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { end_datetime: endDatetime } });
-        loadJobDetail(jobId);
-        loadJobs();
-        showNotification('End time updated successfully');
-    } catch (error) {
-        console.error('Failed to update end time:', error);
-        showNotification(error.message || 'Failed to update end time', 'error');
-    }
-}
-
-async function updateJobUrl(jobId) {
-    const editDeviceEl = document.getElementById('edit_device_path');
-    const url = editDeviceEl ? editDeviceEl.value : document.getElementById('edit_url').value.trim();
-    
-    if (!url) {
-        showNotification('URL cannot be empty', 'error');
-        return;
-    }
-    
-    let stream_type = detectStreamType(url);
-    
-    try {
-        await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { url, stream_type } });
-        showNotification('Stream URL updated successfully');
-        loadJobDetail(jobId);
-    } catch (error) {
-        console.error('Failed to update URL:', error);
-        showNotification(error.message || 'Failed to update URL', 'error');
-    }
-}
-
-async function updateJobInterval(jobId) {
-    const interval = parseInt(document.getElementById('edit_interval_seconds').value);
-    
-    if (!interval || interval < 10) {
-        showNotification('Interval must be at least 10 seconds', 'error');
-        return;
-    }
-    
-    try {
-        await apiRequest(`/jobs/${jobId}`, { method: 'PATCH', body: { interval_seconds: interval } });
-        showNotification('Capture interval updated successfully');
-        loadJobDetail(jobId);
-    } catch (error) {
-        console.error('Failed to update interval:', error);
-        showNotification(error.message || 'Failed to update interval', 'error');
-    }
-}
-
 function toggleEditTimeWindow() {
     toggleFieldGroup('edit_time_window_enabled', 'edit-time-window-fields', {
         requiredIds: ['edit_time_window_start', 'edit_time_window_end']
@@ -1848,6 +1800,7 @@ function setAutoBuildInterval(inputId, hours) {
 async function saveJobChanges(jobId) {
     // Collect all form values
     const interval = parseInt(document.getElementById('edit_interval_seconds').value);
+    const framerate = Number(document.getElementById('edit_framerate').value);
     // URL may come from device picker or text input
     const editDeviceEl = document.getElementById('edit_device_path');
     const url = editDeviceEl ? editDeviceEl.value : document.getElementById('edit_url').value.trim();
@@ -1873,6 +1826,11 @@ async function saveJobChanges(jobId) {
     
     if (!interval || interval < 10) {
         showNotification('Interval must be at least 10 seconds', 'error');
+        return;
+    }
+
+    if (!Number.isInteger(framerate) || framerate < 1 || framerate > 120) {
+        showNotification('Framerate must be between 1 and 120 FPS', 'error');
         return;
     }
     
@@ -1906,6 +1864,7 @@ async function saveJobChanges(jobId) {
     // Build update payload
     const updateData = {
         interval_seconds: interval,
+        framerate: framerate,
         url: url,
         stream_type: stream_type,
         end_datetime: endDatetime,
@@ -1997,12 +1956,13 @@ function setSourceType(type) {
     document.getElementById('device-test-result').innerHTML = '';
 }
 
-async function refreshDevices(selectId) {
+async function refreshDevices(selectId, isCurrent = () => true) {
     const select = document.getElementById(selectId);
     if (!select) return;
     select.innerHTML = '<option value="">Scanning...</option>';
     try {
         const devices = await apiRequest('/devices/');
+        if (!isCurrent()) return;
         select.innerHTML = '';
         if (devices.length === 0) {
             select.innerHTML = '<option value="">No cameras detected</option>';
@@ -2015,6 +1975,7 @@ async function refreshDevices(selectId) {
             select.appendChild(opt);
         }
     } catch (err) {
+        if (!isCurrent()) return;
         select.innerHTML = '<option value="">Error loading devices</option>';
     }
 }
@@ -2285,10 +2246,6 @@ function applyJoinPicker() {
         invalidateJoinCheck();
     }
     closeJoinPicker();
-}
-
-function joinMoveClip(index, delta) {
-    joinReorderClip(index, index + delta);
 }
 
 function joinReorderClip(index, target) {
@@ -2698,18 +2655,9 @@ async function submitVideoJoin(event) {
             showNotification('Joining started. Original videos are unchanged.');
             return;
         }
-        // Replace the modal's history entry instead of racing history.back()
-        // against navigation to the new video.
         state.creating = false;
-        const closingFromPopstate = _closingFromPopstate;
-        try {
-            _closingFromPopstate = true;
-            closeModal('join-video-modal');
-        } finally {
-            _closingFromPopstate = closingFromPopstate;
-        }
-        if (_modalHistoryDepth > 0) _modalHistoryDepth--;
-        navigateTo(`/timelapses/${video.id}`, true);
+        closeModal('join-video-modal');
+        navigateTo(`/timelapses/${video.id}`);
         loadVideos();
         showNotification('Joining started. Original videos are unchanged.');
     } catch (error) {
@@ -2747,10 +2695,11 @@ async function submitVideoJoin(event) {
 }
 
 function handleJoinModalKeydown(event) {
-    if (!_joinState) return;
+    if (!_joinState || document.getElementById('confirm-modal')?.classList.contains('active')) return;
     if (event.key === 'Escape' && (_joinState?.pickerOpen || _joinState?.drag)) {
         event.preventDefault();
         event.stopPropagation();
+        if (event.repeat) return;
         if (_joinState.drag) cancelJoinDrag();
         else closeJoinPicker();
         return;
@@ -2967,7 +2916,6 @@ function updateLoadMoreButton() {
             btn.onclick = showMoreVideos;
             document.getElementById('videos-list').insertAdjacentElement('afterend', btn);
         }
-        const next = Math.min(remaining, VIDEO_PAGE_SIZE);
         btn.textContent = `Load More (${remaining} remaining)`;
         btn.style.display = '';
     } else if (btn) {
@@ -3045,8 +2993,21 @@ let _currentVideoDetailId = null;
 let _videoDetailPollInterval = null;
 
 async function loadVideoDetail(videoId) {
+    const route = parseRoute();
+    if (currentView !== 'video-detail' || route.view !== 'video-detail' || route.id !== Number(videoId)) return;
+    const version = ++_videoDetailRequestVersion;
+    const routeVersion = _routeVersion;
+    const isCurrent = () => {
+        const route = parseRoute();
+        return routeVersion === _routeVersion && version === _videoDetailRequestVersion &&
+            currentView === 'video-detail' && route.view === 'video-detail' && route.id === Number(videoId);
+    };
+    if (!isCurrent()) return;
+    clearTimeout(_videoDetailPollInterval);
+    _videoDetailPollInterval = null;
     try {
         const video = await apiRequest(`/videos/${videoId}`);
+        if (!isCurrent()) return;
         _currentVideoDetailId = video.id;
         
         const title = document.getElementById('video-detail-title');
@@ -3086,22 +3047,15 @@ async function loadVideoDetail(videoId) {
                         <div class="progress-fill" style="width:${video.progress}%;"></div>
                     </div>
                 </div>`;
-            // Auto-refresh while processing
-            if (!_videoDetailPollInterval) {
-                _videoDetailPollInterval = setInterval(() => {
-                    const route = parseRoute();
-                    if (route.view === 'video-detail' && route.id) {
-                        loadVideoDetail(route.id);
-                    } else {
-                        clearInterval(_videoDetailPollInterval);
-                        _videoDetailPollInterval = null;
-                    }
-                }, 3000);
-            }
+            // Schedule after completion so a slow request cannot overlap or starve.
+            _videoDetailPollInterval = setTimeout(() => {
+                _videoDetailPollInterval = null;
+                if (isCurrent()) loadVideoDetail(videoId);
+            }, 3000);
         } else {
             progressContainer.innerHTML = video.error_message ? `<p class="join-error" role="alert">${escapeHtml(video.error_message)}</p>` : '';
             if (_videoDetailPollInterval) {
-                clearInterval(_videoDetailPollInterval);
+                clearTimeout(_videoDetailPollInterval);
                 _videoDetailPollInterval = null;
             }
         }
@@ -3131,12 +3085,9 @@ async function loadVideoDetail(videoId) {
         
         // Row 3: Resolution, Framerate, Quality, Frames
         metaHtml += `<dt>Resolution</dt><dd>${video.resolution}</dd><dt>Framerate</dt><dd>${video.framerate} fps</dd>`;
-        const qualityLabel = video.build_source === 'trimmed' ?
-            (video.quality === 'preserved' ? 'Original quality preserved' :
-                video.quality === 'partly_converted' ? 'Boundary re-encoded · High' : 'Re-encoded · High') :
-            video.build_source === 'joined' ?
-            (video.quality === 'preserved' ? 'Original quality preserved' :
-                video.quality === 'partly_converted' ? 'Partly converted · High' : 'Converted · High') :
+        const qualityLabel = video.quality === 'preserved' ? 'Original quality preserved' :
+            video.quality === 'partly_converted' ? 'Partly converted · High' :
+            video.build_source === 'joined' ? 'Converted · High' :
             escapeHtml(video.quality);
         metaHtml += `<dt>Quality</dt><dd>${qualityLabel}</dd><dt>Frames</dt><dd>${video.total_frames.toLocaleString()}</dd>`;
         
@@ -3148,8 +3099,8 @@ async function loadVideoDetail(videoId) {
             const currentTagIds = (video.tags || []).map(t => t.id);
             tagsContainer.innerHTML = `
                 <div style="margin: 0.5rem 0;">
-                    <label style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Tags</label>
-                    <div class="tag-picker" id="video-detail-tag-picker"></div>
+                    <div id="video-detail-tags-label" style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.25rem;">Tags</div>
+                    <div class="tag-picker" id="video-detail-tag-picker" role="group" aria-labelledby="video-detail-tags-label"></div>
                 </div>
             `;
             tagsContainer.style.display = 'block';
@@ -3187,6 +3138,7 @@ async function loadVideoDetail(videoId) {
             }
         }
     } catch (error) {
+        if (!isCurrent()) return;
         console.error('Failed to load video details:', error);
         showNotification('Failed to load video details', 'error');
         navigateTo('/timelapses');
@@ -3577,7 +3529,7 @@ async function showVideoTrim(videoId) {
 }
 
 function handleTrimModalKeydown(event) {
-    if (!_trimState) return;
+    if (!_trimState || document.getElementById('confirm-modal')?.classList.contains('active')) return;
     if (event.key === 'Escape') {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -3634,7 +3586,7 @@ function cleanupVideoTrim() {
             showNotification(`Preview fullscreen could not close: ${error.message}`, 'error');
         });
     }
-    state.returnFocus?.focus();
+    restoreModalFocus(state.returnFocus);
 }
 
 async function submitVideoTrim(event) {
@@ -3654,15 +3606,8 @@ async function submitVideoTrim(event) {
         } });
         if (_trimState === state) {
             state.creating = false;
-            const closingFromPopstate = _closingFromPopstate;
-            try {
-                _closingFromPopstate = true;
-                closeModal('trim-video-modal');
-            } finally {
-                _closingFromPopstate = closingFromPopstate;
-            }
-            if (_modalHistoryDepth > 0) _modalHistoryDepth--;
-            navigateTo(`/timelapses/${video.id}`, true);
+            closeModal('trim-video-modal');
+            navigateTo(`/timelapses/${video.id}`);
         }
         loadVideos();
         refreshEventsSoon();
@@ -3771,7 +3716,7 @@ async function showVideoJobPicker(videoId, currentJobId) {
         .concat(jobs.map(j => `<option value="${j.id}" ${j.id === currentJobId ? 'selected' : ''}>${escapeHtml(j.name)}</option>`));
 
     jobDd.innerHTML = `
-        <select id="video-job-select" class="form-control" style="font-size:0.8rem;padding:0.15rem 0.3rem;display:inline-block;width:auto;max-width:160px;">
+        <select id="video-job-select" aria-label="Video job" class="form-control" style="font-size:0.8rem;padding:0.15rem 0.3rem;display:inline-block;width:auto;max-width:160px;">
             ${options.join('')}
         </select>
         <button class="btn-icon" onclick="saveVideoJob(${videoId})" title="Save" style="padding:0 0.25rem;color:var(--success);vertical-align:middle;">
@@ -3828,7 +3773,7 @@ function gifPopoverHTML(videoId, videoName) {
                 <div class="gif-popover-row">
                     <span style="font-size:0.8rem;font-weight:500;">Loop</span>
                     <label class="toggle-switch">
-                        <input type="checkbox" id="gif-loop-toggle" checked>
+                        <input type="checkbox" id="gif-loop-toggle" aria-label="Loop GIF" checked>
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
@@ -3967,20 +3912,7 @@ async function openComparison() {
 }
 
 function closeComparison() {
-    const modal = document.getElementById('comparison-modal');
-    const wasActive = modal.classList.contains('active');
-    const { players, animFrame } = comparisonState;
-    players.forEach(p => { p.pause(); p.currentTime = 0; });
-    if (animFrame) cancelAnimationFrame(animFrame);
-    comparisonState.playing = false;
-    comparisonState.animFrame = null;
-    comparisonState.players = [];
-    modal.classList.remove('active');
-    
-    if (wasActive && _modalHistoryDepth > 0 && !_closingFromPopstate) {
-        _modalHistoryDepth--;
-        history.back();
-    }
+    closeModal('comparison-modal');
 }
 
 function toggleComparisonPlay() {
@@ -4046,7 +3978,7 @@ async function showProcessVideoModal(jobId, jobName) {
         // Reset form
         document.getElementById('process-video-form').reset();
         document.getElementById('use_range').checked = false;
-        document.getElementById('capture-range-fields').classList.add('disabled');
+        toggleFieldGroup('use_range', 'capture-range-fields');
         document.getElementById('video-duration-estimate').innerHTML = '<span style="color: var(--text-secondary); font-size: 0.85rem;">No job selected</span>';
         document.getElementById('available-range-info').style.display = 'none';
         // Reset text overlay
@@ -4270,7 +4202,7 @@ async function populateVideoFormFromJob(jobId, jobName) {
     
     // Reset the use_range checkbox
     document.getElementById('use_range').checked = false;
-    document.getElementById('capture-range-fields').classList.add('disabled');
+    toggleFieldGroup('use_range', 'capture-range-fields');
     
     // Calculate and display initial duration
     updateVideoDurationEstimate();
@@ -4448,41 +4380,45 @@ function generateOverlayHTML(prefix, opts = {}) {
         : '<option value="DejaVu Sans">DejaVu Sans</option>';
 
     const controlsHtml = `
-            <div style="display:flex; gap:0.75rem; align-items:center;">
+            <div class="overlay-controls-row">
                 <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.35rem;">
-                    <div style="display:flex; gap:0.5rem; align-items:flex-end;">
+                    <div class="overlay-text-controls">
                         <div style="flex: 1 1 0; min-width:0;">
-                            <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Text</label>
+                            <label for="${prefix}-overlay-text" style="font-size:0.7rem; margin-bottom:2px; display:block;">Text</label>
                             <input type="text" id="${prefix}-overlay-text" class="form-control" value="{job_name}" placeholder="{job_name}"${inputEvent}>
                         </div>
                         <div style="flex: 0 0 163px;">
-                            <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Font</label>
+                            <label for="${prefix}-overlay-font" style="font-size:0.7rem; margin-bottom:2px; display:block;">Font</label>
                             <select id="${prefix}-overlay-font" class="form-control"${inputEvent}>${fontOpts}</select>
                         </div>
                         <div style="flex:0 0 56px;">
-                            <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Size</label>
+                            <label for="${prefix}-overlay-size" style="font-size:0.7rem; margin-bottom:2px; display:block;">Size</label>
                             <input type="number" id="${prefix}-overlay-size" class="form-control" value="5" min="1" max="20" step="1"${inputEvent}>
                         </div>
                         <div style="flex:0 0 36px;">
-                            <label style="font-size:0.7rem; margin-bottom:2px; display:block;">Bold</label>
+                            <label for="${prefix}-overlay-bold" style="font-size:0.7rem; margin-bottom:2px; display:block;">Bold</label>
                             <input type="checkbox" id="${prefix}-overlay-bold"${onchangeAttr} style="margin-top:10px; margin-left:6px;">
                         </div>
                     </div>
                     <small style="color: var(--text-secondary); font-size:0.6rem;">${renderDocLink('Variable reference')}</small>
-                    <div style="display:flex; gap:0.3rem; align-items:center;">
+                    <div class="overlay-color-controls">
+                      <div class="overlay-color-row" role="group" aria-label="Overlay text appearance">
                         <span style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">Text:</span>
-                        <input type="color" id="${prefix}-overlay-color" value="#FFFFFF" style="border:none;padding:0;height:18px;width:18px;border-radius:50%;cursor:pointer;background:none;"${inputEvent}>
-                        <input type="range" id="${prefix}-overlay-color-opacity" min="0" max="100" value="100" style="flex:1; height:14px;"${inputEvent}>
+                        <input type="color" id="${prefix}-overlay-color" aria-label="Overlay text color" value="#FFFFFF" style="border:none;padding:0;height:18px;width:18px;border-radius:50%;cursor:pointer;background:none;"${inputEvent}>
+                        <input type="range" id="${prefix}-overlay-color-opacity" aria-label="Overlay text opacity" min="0" max="100" value="100" style="flex:1; height:14px;"${inputEvent}>
                         <span id="${prefix}-overlay-color-opacity-label" style="width:30px;text-align:right;font-size:0.75rem;color:var(--text-secondary);">100%</span>
-                        <input type="checkbox" id="${prefix}-overlay-bg" checked${onchangeAttr} style="margin:0 0 0 0.25rem;">
+                      </div>
+                      <div class="overlay-color-row" role="group" aria-label="Overlay background appearance">
+                        <input type="checkbox" id="${prefix}-overlay-bg" aria-label="Enable overlay background" checked${onchangeAttr} style="margin:0 0 0 0.25rem;">
                         <span style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">Background:</span>
-                        <input type="color" id="${prefix}-overlay-bg-color" value="#000000" style="border:none;padding:0;height:18px;width:18px;border-radius:50%;cursor:pointer;background:none;"${inputEvent}>
-                        <input type="range" id="${prefix}-overlay-bg-opacity" min="0" max="100" value="50" style="flex:1; height:14px;"${inputEvent}>
+                        <input type="color" id="${prefix}-overlay-bg-color" aria-label="Overlay background color" value="#000000" style="border:none;padding:0;height:18px;width:18px;border-radius:50%;cursor:pointer;background:none;"${inputEvent}>
+                        <input type="range" id="${prefix}-overlay-bg-opacity" aria-label="Overlay background opacity" min="0" max="100" value="50" style="flex:1; height:14px;"${inputEvent}>
                         <span id="${prefix}-overlay-opacity-label" style="width:30px;text-align:right;font-size:0.75rem;color:var(--text-secondary);">50%</span>
+                      </div>
                     </div>
                 </div>
                 <div style="flex:0 0 auto;">
-                    <div class="overlay-position-grid" id="${prefix}-overlay-grid">${gridBtns}</div>
+                    <div class="overlay-position-grid" id="${prefix}-overlay-grid" role="group" aria-label="Overlay position">${gridBtns}</div>
                 </div>
             </div>`;
 
@@ -4503,11 +4439,11 @@ function generateOverlayHTML(prefix, opts = {}) {
         <div class="form-group" style="margin-top: 0.5rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <input type="checkbox" id="${prefix}-overlay-enabled"${onchangeAttr}>
-                <span>${label}</span>
+                <label for="${prefix}-overlay-enabled" style="margin:0;">${label}</label>
                 <small style="color: var(--text-secondary); font-weight: normal; font-size: 0.75rem;">Burn text into each frame during rendering</small>
             </div>
         </div>
-        <div id="${prefix}-overlay-fields" class="toggle-fields disabled">
+        <div id="${prefix}-overlay-fields" class="toggle-fields disabled" inert>
             ${fieldsInner}
         </div>`;
 }
@@ -4529,15 +4465,12 @@ function initOverlayWidget(prefix, opts = {}) {
     const cb = document.getElementById(`${prefix}-overlay-enabled`);
     const fields = document.getElementById(`${prefix}-overlay-fields`);
     if (!cb || !fields) return;
+    toggleFieldGroup(`${prefix}-overlay-enabled`, `${prefix}-overlay-fields`);
 
     // Toggle visibility
     cb.addEventListener('change', () => {
-        if (cb.checked) {
-            fields.classList.remove('disabled');
-            if (!_overlayFontsLoaded) loadOverlayFonts();
-        } else {
-            fields.classList.add('disabled');
-        }
+        toggleFieldGroup(`${prefix}-overlay-enabled`, `${prefix}-overlay-fields`);
+        if (cb.checked && !_overlayFontsLoaded) loadOverlayFonts();
         if (opts.onToggle) opts.onToggle(cb.checked);
     });
 
@@ -4595,13 +4528,7 @@ function writeOverlayConfig(prefix, config) {
     const el = id => document.getElementById(`${prefix}-overlay-${id}`);
     if (el('enabled')) el('enabled').checked = !!config.enabled;
     const fields = document.getElementById(`${prefix}-overlay-fields`);
-    if (fields) {
-        if (config.enabled) {
-            fields.classList.remove('disabled');
-        } else {
-            fields.classList.add('disabled');
-        }
-    }
+    if (fields && el('enabled')) toggleFieldGroup(`${prefix}-overlay-enabled`, `${prefix}-overlay-fields`);
     if (el('text')) el('text').value = config.text || '';
     if (el('font')) el('font').value = config.font || 'DejaVu Sans';
     if (el('size')) el('size').value = config.font_size || 5;
@@ -4726,13 +4653,15 @@ function initCreateJobOverlay() {
 
 let _editOverlayPreviewTimeout = null;
 
-function initEditJobOverlay(job) {
+function initEditJobOverlay(job, isCurrent = () => true) {
     // Store job context for preview
     window._editOverlayJob = job;
 
     const triggerEditPreview = () => {
         clearTimeout(_editOverlayPreviewTimeout);
-        _editOverlayPreviewTimeout = setTimeout(() => updateGenericOverlayPreview('edit-ab', job), 300);
+        _editOverlayPreviewTimeout = setTimeout(() => {
+            if (isCurrent()) updateGenericOverlayPreview('edit-ab', job, isCurrent);
+        }, 300);
     };
 
     mountOverlayWidget('edit-ab-overlay-container', 'edit-ab', {
@@ -4755,10 +4684,10 @@ function initEditJobOverlay(job) {
     }
 
     // Load preview image from latest capture
-    loadOverlayPreviewImage('edit-ab', job);
+    loadOverlayPreviewImage('edit-ab', job, isCurrent);
 }
 
-async function loadOverlayPreviewImage(prefix, job) {
+async function loadOverlayPreviewImage(prefix, job, isCurrent = () => true) {
     const img = document.getElementById(`${prefix}-overlay-preview-img`);
     const placeholder = document.getElementById(`${prefix}-overlay-preview-placeholder`);
     if (!img) return;
@@ -4768,6 +4697,7 @@ async function loadOverlayPreviewImage(prefix, job) {
     try {
         // Use the job's latest capture for the preview
         const capsData = await apiRequest('/captures/', { query: { job_id: job.id, page_size: 1, sort_order: 'desc' } });
+        if (!isCurrent()) return;
         if (capsData.captures && capsData.captures.length > 0) {
             const cap = capsData.captures[0];
             img._captureId = cap.id;
@@ -4778,13 +4708,16 @@ async function loadOverlayPreviewImage(prefix, job) {
             // If overlay is already enabled, render preview
             const cb = document.getElementById(`${prefix}-overlay-enabled`);
             if (cb && cb.checked) {
-                setTimeout(() => updateGenericOverlayPreview(prefix, job), 200);
+                setTimeout(() => {
+                    if (isCurrent()) updateGenericOverlayPreview(prefix, job, isCurrent);
+                }, 200);
             }
         } else {
             // No captures -- try to fetch from the job's URL
             showOverlayPreviewPlaceholder(prefix, 'No captures yet', job.url);
         }
     } catch (e) {
+        if (!isCurrent()) return;
         console.error('loadOverlayPreviewImage error:', e);
         showOverlayPreviewPlaceholder(prefix, 'Preview unavailable');
     }
@@ -4850,7 +4783,8 @@ async function fetchOverlayPreviewFromUrl(prefix) {
     }
 }
 
-async function updateOverlayFromUrl(prefix) {
+async function updateOverlayFromUrl(prefix, isCurrent = () => true) {
+    if (!isCurrent()) return;
     const config = readOverlayConfig(prefix);
     const img = document.getElementById(`${prefix}-overlay-preview-img`);
     if (!img) return;
@@ -4880,6 +4814,7 @@ async function updateOverlayFromUrl(prefix) {
         });
         if (!resp.ok) throw new Error('Preview failed');
         const blob = await resp.blob();
+        if (!isCurrent()) return;
         const url = URL.createObjectURL(blob);
         if (img._overlayUrl) URL.revokeObjectURL(img._overlayUrl);
         img._overlayUrl = url;
@@ -4887,13 +4822,14 @@ async function updateOverlayFromUrl(prefix) {
     } catch (e) { console.error('Overlay preview error:', e); }
 }
 
-async function updateGenericOverlayPreview(prefix, job) {
+async function updateGenericOverlayPreview(prefix, job, isCurrent = () => true) {
+    if (!isCurrent()) return;
     const config = readOverlayConfig(prefix);
     const img = document.getElementById(`${prefix}-overlay-preview-img`);
     if (!img) return;
     // Delegate to URL-based previewer if we have base64 but no capture
     if (!img._captureId && img._base64) {
-        return updateOverlayFromUrl(prefix);
+        return updateOverlayFromUrl(prefix, isCurrent);
     }
     if (!img._captureId) return;
     if (!config) {
@@ -4910,6 +4846,7 @@ async function updateGenericOverlayPreview(prefix, job) {
         });
         if (!resp.ok) { console.error('Overlay preview API error:', resp.status); return; }
         const blob = await resp.blob();
+        if (!isCurrent()) return;
         const url = URL.createObjectURL(blob);
         if (img._overlayUrl) URL.revokeObjectURL(img._overlayUrl);
         img._overlayUrl = url;
@@ -4952,8 +4889,6 @@ async function processVideo(event) {
     
     try {
         const video = await apiRequest('/videos/', { method: 'POST', body: formData });
-        document.getElementById('process-video-modal').classList.remove('active');
-        if (_modalHistoryDepth > 0) _modalHistoryDepth--;
         document.getElementById('process-video-form').reset();
         navigateTo(`/timelapses/${video.id}`);
         showNotification('Video processing started');
@@ -4968,11 +4903,113 @@ function navigateToJob(jobId) {
 }
 
 // Modal management
-let _modalHistoryDepth = 0;
+let _pendingModalBacks = 0;
+let _modalHistoryBackInFlight = false;
+let _modalHistoryNavigation = null;
+const _modalOpenState = new Map();
+const _modalInertState = new Map();
+
+function drainModalHistory() {
+    if (_modalHistoryBackInFlight) return;
+    if (_pendingModalBacks > 0) {
+        // Browsers may coalesce overlapping back() calls into one popstate.
+        _modalHistoryBackInFlight = true;
+        history.back();
+        return;
+    }
+    if (_modalHistoryNavigation) {
+        const navigate = _modalHistoryNavigation;
+        _modalHistoryNavigation = null;
+        navigate();
+        return;
+    }
+    // Reopened dialogs are immediately usable, but cannot push onto an index
+    // that an earlier close is still traversing. Closed deferred openings vanish.
+    let depth = 0;
+    _modalOpenState.forEach(state => {
+        depth++;
+        if (!state.historyPushed) {
+            history.pushState({ modal: true, depth }, '');
+            state.historyPushed = true;
+        }
+    });
+}
+
+function getTopModal() {
+    const active = [...document.querySelectorAll('.modal.active')];
+    // Confirmation is visually above every standard dialog regardless of DOM order.
+    const confirm = active.find(modal => modal.id === 'confirm-modal');
+    if (confirm) return confirm;
+    return [..._modalOpenState.keys()].reverse().find(modal => active.includes(modal)) ||
+        active[active.length - 1] || null;
+}
+
+function syncModalInert() {
+    _modalInertState.forEach((inert, node) => { node.inert = inert; });
+    _modalInertState.clear();
+    const top = getTopModal();
+    if (!top) return;
+    let branch = top;
+    while (branch && branch !== document.body) {
+        const parent = branch.parentElement;
+        if (!parent) break;
+        [...parent.children].forEach(node => {
+            if (node !== branch) {
+                _modalInertState.set(node, node.inert);
+                node.inert = true;
+            }
+        });
+        branch = parent;
+    }
+}
+
+function canFocusModalTarget(node) {
+    return node?.isConnected && !node.matches(':disabled') && !node.closest('[inert]') &&
+        !node.hidden && node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden';
+}
+
+function modalFocusables(modal) {
+    return [...modal.querySelectorAll(
+        'a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])'
+    )].filter(node => node.getAttribute('tabindex') !== '-1' && canFocusModalTarget(node));
+}
+
+function focusModal(modal) {
+    const preferred = modal.querySelector('[data-modal-initial-focus]');
+    const target = canFocusModalTarget(preferred) ? preferred : modalFocusables(modal)[0];
+    if (target) target.focus();
+    else {
+        modal.setAttribute('tabindex', '-1');
+        modal.focus();
+    }
+}
+
+function restoreModalFocus(target) {
+    if (canFocusModalTarget(target)) target.focus();
+    else {
+        const top = getTopModal();
+        if (top) focusModal(top);
+    }
+}
+
+function closeModalsForNavigation(traverseHistory = false) {
+    const wasClosing = _closingFromPopstate;
+    _closingFromPopstate = wasClosing || !traverseHistory;
+    try {
+        let top;
+        while ((top = getTopModal())) closeModal(top.id);
+    } finally {
+        _closingFromPopstate = wasClosing;
+    }
+}
 
 function showModal(modalId) {
     const modal = document.getElementById(modalId);
+    if (modal.classList.contains('active')) return;
+    _modalOpenState.set(modal, { returnFocus: document.activeElement, historyPushed: false });
     modal.classList.add('active');
+    syncModalInert();
+    focusModal(getTopModal());
     
     // Always scroll to top when opening any modal
     const modalContent = modal.querySelector('.modal-content');
@@ -4981,36 +5018,53 @@ function showModal(modalId) {
     }
     
     // Push history state so back button can close modal
-    _modalHistoryDepth++;
-    history.pushState({ modal: true, depth: _modalHistoryDepth }, '');
+    drainModalHistory();
 }
 
 let _closingFromPopstate = false;
 
 function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    const wasActive = modal.classList.contains('active');
+    const state = _modalOpenState.get(modal);
+    const returnFocus = state?.returnFocus ||
+        (modalId === 'join-video-modal' ? _joinState?.returnFocus :
+            modalId === 'trim-video-modal' ? _trimState?.returnFocus : null);
     if (modalId === 'join-video-modal' && _joinState?.creating) {
         showNotification('Your confirmed join is still being submitted. Closing does not cancel it.', 'info');
     }
     if (modalId === 'trim-video-modal' && _trimState?.creating) {
         showNotification('Your trim is still being submitted. Closing does not cancel it.', 'info');
     }
-    const wasActive = document.getElementById(modalId).classList.contains('active');
-    document.getElementById(modalId).classList.remove('active');
+    modal.classList.remove('active');
+    _modalOpenState.delete(modal);
+    syncModalInert();
     if (modalId === 'trim-video-modal') cleanupVideoTrim();
 
     if (modalId === 'join-video-modal') {
         clearTimeout(_joinSearchTimer);
         document.removeEventListener('keydown', handleJoinModalKeydown, true);
         clearJoinDrag();
-        const returnFocus = _joinState?.returnFocus;
         _joinState = null;
-        returnFocus?.focus();
     }
+    if (modalId === 'comparison-modal') {
+        const { players, animFrame } = comparisonState;
+        players.forEach(player => { player.pause(); player.currentTime = 0; });
+        if (animFrame) cancelAnimationFrame(animFrame);
+        comparisonState.playing = false;
+        comparisonState.animFrame = null;
+        comparisonState.players = [];
+    }
+    if (modalId === 'capture-preview-modal') {
+        capturesState.currentCaptureId = null;
+        document.removeEventListener('keydown', handleCaptureNavKeys);
+    }
+    if (modalId === 'maintenance-modal') maintenanceData = null;
     
     // Pop history entry if we pushed one and this isn't from popstate
-    if (wasActive && _modalHistoryDepth > 0 && !_closingFromPopstate) {
-        _modalHistoryDepth--;
-        history.back();
+    if (wasActive && state?.historyPushed && !_closingFromPopstate) {
+        _pendingModalBacks++;
+        drainModalHistory();
     }
     
     // Clear form when closing create job modal
@@ -5050,11 +5104,37 @@ function closeModal(modalId) {
         window._overlayPreviewCaptureId = null;
         window._overlayJobName = null;
     }
+    restoreModalFocus(returnFocus);
+    if (modalId === 'confirm-modal' && confirmCallback) {
+        const callback = confirmCallback;
+        confirmCallback = null;
+        callback(false);
+    }
 }
 
-// Close the topmost active modal on Escape key
+// Join and Trim keep their capture-phase keyboard behavior; legacy dialogs share this handler.
 document.addEventListener('keydown', function(e) {
+    const topModal = getTopModal();
+    if (e.key === 'Tab' && topModal) {
+        if (['join-video-modal', 'trim-video-modal'].includes(topModal.id)) return;
+        const controls = modalFocusables(topModal);
+        const first = controls[0], last = controls[controls.length - 1];
+        if (!controls.length) {
+            e.preventDefault();
+            focusModal(topModal);
+        } else if (!topModal.contains(document.activeElement)) {
+            e.preventDefault();
+            (e.shiftKey ? last : first).focus();
+        } else if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+        }
+    }
     if (e.key === 'Escape') {
+        if (e.repeat) return;
         // Close lightbox first if open
         const lightbox = document.querySelector('.overlay-lightbox');
         if (lightbox) {
@@ -5062,17 +5142,8 @@ document.addEventListener('keydown', function(e) {
             return;
         }
         
-        // Check custom modals first (confirm dialog)
-        const confirmModal = document.getElementById('confirm-modal');
-        if (confirmModal && confirmModal.classList.contains('active')) {
-            confirmModal.classList.remove('active');
-            return;
-        }
-        
-        // Close the last opened standard modal
-        const modals = document.querySelectorAll('.modal.active');
-        if (modals.length > 0) {
-            const topModal = modals[modals.length - 1];
+        if (topModal) {
+            e.preventDefault();
             closeModal(topModal.id);
         }
     }
@@ -5278,7 +5349,7 @@ async function loadImportBrowse(path) {
         }).join('');
     } catch (error) {
         document.getElementById('import-browse-list').innerHTML =
-            `<div style="padding:1rem;text-align:center;color:var(--danger);font-size:0.85rem;">${escapeHtml(error.message || 'Failed to browse')}</div>`;
+            `<div style="padding:1rem;text-align:center;color:var(--danger-color);font-size:0.85rem;">${escapeHtml(error.message || 'Failed to browse')}</div>`;
         document.getElementById('import-scan-btn').disabled = true;
     }
 }
@@ -5345,7 +5416,7 @@ async function showImportPreview() {
             ? '<br>' + m.tags.map(t => `<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:0.75rem;background:${escapeAttr(t.color)}22;color:${escapeAttr(t.color)};border:1px solid ${escapeAttr(t.color)}44;margin:2px 2px 0 0;">${escapeHtml(t.name)}</span>`).join('')
             : '';
         metaBanner.innerHTML = `
-            <div class="info-box" style="margin-bottom:0.75rem;border-left:3px solid var(--primary);">
+            <div class="info-box" style="margin-bottom:0.75rem;border-left:3px solid var(--primary-color);">
                 <strong>ChronoSnap Export Detected</strong><br>
                 <small style="color:var(--text-secondary);">
                     Original job: "${escapeHtml(m.name || 'Unknown')}"${details.length ? '<br>' + details.join(' · ') : ''}
@@ -5422,14 +5493,14 @@ async function showImportPreview() {
                         ? `<img src="${thumbUrl}" alt="" style="width:60px;height:44px;object-fit:cover;border-radius:4px;flex-shrink:0;">`
                         : '<span style="font-size:1.5rem;flex-shrink:0;">🎬</span>'}
                     <div class="video-meta" style="flex:1;min-width:0;">
-                        <input type="text" class="form-control" value="${escapeAttr(baseName)}" data-file="${escapeAttr(v.file_name)}" style="font-size:0.85rem;padding:0.25rem 0.5rem;margin-bottom:0.25rem;">
-                        <select class="form-control import-video-job" data-file="${escapeAttr(v.file_name)}" style="font-size:0.75rem;padding:0.15rem 0.3rem;margin-bottom:0.25rem;">
+                        <input type="text" class="form-control" aria-label="Imported video name: ${escapeAttr(baseName)}" value="${escapeAttr(baseName)}" data-file="${escapeAttr(v.file_name)}" style="font-size:0.85rem;padding:0.25rem 0.5rem;margin-bottom:0.25rem;">
+                        <select class="form-control import-video-job" aria-label="Job for ${escapeAttr(baseName)}" data-file="${escapeAttr(v.file_name)}" style="font-size:0.75rem;padding:0.15rem 0.3rem;margin-bottom:0.25rem;">
                             <option value="">No job (Imported)</option>
                             ${_importJobs.map(j => `<option value="${j.id}">${escapeHtml(j.name)}</option>`).join('')}
                         </select>
                         <small>${[res, dur, formatBytes(v.file_size), v.codec].filter(Boolean).join(' · ')}</small>
                     </div>
-                    <button class="btn-icon" onclick="removeImportVideo(this)" title="Remove" style="flex-shrink:0;color:var(--danger);padding:0.25rem;">
+                    <button class="btn-icon" onclick="removeImportVideo(this)" title="Remove" style="flex-shrink:0;color:var(--danger-color);padding:0.25rem;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                 </div>`;
@@ -5602,7 +5673,7 @@ function showNamingValidation(previewEl, pattern) {
     if (!previewEl) return;
     const err = validateNamingPattern(pattern);
     if (err) {
-        previewEl.innerHTML = `<span style="color:var(--danger,#ef4444);">${err}</span>`;
+        previewEl.innerHTML = `<span style="color:var(--danger-color);">${err}</span>`;
     }
 }
 
@@ -5620,7 +5691,7 @@ function updateSettingsNamingPreview() {
     const el = document.getElementById('settings-naming-preview');
     if (el) el.textContent = `Example: ${buildNamingExample(pattern, 'MyJob')}.jpg`;
     const err = validateNamingPattern(raw);
-    if (err && el) el.innerHTML = `<span style="color:var(--danger,#ef4444);">${err}</span>`;
+    if (err && el) el.innerHTML = `<span style="color:var(--danger-color);">${err}</span>`;
     const btn = document.getElementById('save-naming-pattern-btn');
     if (btn) btn.disabled = !!err || raw === _savedNamingPattern || !raw.trim();
 }
@@ -5655,11 +5726,11 @@ async function showCreateJobModal() {
     
     // Reset time window
     document.getElementById('time_window_enabled').checked = false;
-    document.getElementById('time-window-fields').classList.add('disabled');
+    toggleTimeWindow();
     
     // Reset auto-build
     document.getElementById('auto_build_enabled').checked = false;
-    document.getElementById('auto-build-fields').classList.add('disabled');
+    toggleAutoBuildFields();
     
     showModal('create-job-modal');
     
@@ -5769,10 +5840,8 @@ async function duplicateJob(jobId) {
         
         // Copy time window settings
         const twEnabled = document.getElementById('time_window_enabled');
-        const twFields = document.getElementById('time-window-fields');
         if (job.time_window_enabled) {
             twEnabled.checked = true;
-            twFields.classList.remove('disabled');
             if (job.time_window_start) {
                 document.getElementById('time_window_start_time').value = job.time_window_start;
                 document.getElementById('time_window_start_time').dispatchEvent(new Event('change'));
@@ -5783,15 +5852,13 @@ async function duplicateJob(jobId) {
             }
         } else {
             twEnabled.checked = false;
-            twFields.classList.add('disabled');
         }
+        toggleTimeWindow();
         
         // Copy auto-build settings
         const abEnabled = document.getElementById('auto_build_enabled');
-        const abFields = document.getElementById('auto-build-fields');
         if (job.auto_build_enabled) {
             abEnabled.checked = true;
-            abFields.classList.remove('disabled');
             document.getElementById('auto_build_interval_hours').value = job.auto_build_interval_hours || 168;
             document.getElementById('auto_build_fps').value = job.auto_build_fps || 30;
             document.getElementById('auto_build_quality').value = job.auto_build_quality || 'medium';
@@ -5813,8 +5880,8 @@ async function duplicateJob(jobId) {
             }
         } else {
             abEnabled.checked = false;
-            abFields.classList.add('disabled');
         }
+        toggleAutoBuildFields();
         
         updateEndDateMin();
         showModal('create-job-modal');
@@ -5854,49 +5921,6 @@ function getStreamHost(url) {
 }
 
 // ===== DateTime Utility Functions =====
-// 
-// TIMEZONE APPROACH:
-// - Backend stores datetimes in ISO format with timezone (e.g., "2025-12-22T14:30:00-06:00")
-// - Frontend custom pickers work in user's local browser time
-// - When sending to backend: browser Date objects automatically include timezone
-// - When displaying from backend: formatDateTime() parses ISO string and displays in browser's local time
-// - This ensures timestamps are always shown in the user's local time while maintaining timezone info
-//
-// DATETIME FORMAT:
-// - Always use 24-hour format for display (00:00 - 23:59)
-// - Custom pickers use dropdowns (date picker + hour/minute selects) to avoid locale issues
-// - Hidden inputs store values in ISO format for API submission
-
-function toUTCString(localDateTimeString) {
-    // Convert datetime-local format (YYYY-MM-DDTHH:mm) to ISO string format
-    // Note: Backend stores in local time, not UTC, so we format as local ISO
-    // Seconds are set to :00 for start times (schedule grid alignment)
-    // and :59 for end times to be more inclusive
-    if (!localDateTimeString) return null;
-    const date = new Date(localDateTimeString);
-    // Format as ISO but without timezone info to match backend's datetime.now() format
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
-}
-
-function toISOStringForQuery(localDateTimeString, isEndTime) {
-    // Convert datetime-local format to ISO string for database queries
-    // For end times, add 59 seconds to include the entire minute
-    if (!localDateTimeString) return null;
-    const date = new Date(localDateTimeString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = isEndTime ? '59' : '00';  // Use 59 for end times to be inclusive
-    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
-}
 
 function formatDateTime(isoString, { showSeconds = true } = {}) {
     if (!isoString) return 'N/A';
@@ -6156,8 +6180,9 @@ window.addEventListener('mouseup', function(e) {
     if (_modalMouseDownTarget &&
         _modalMouseDownTarget === e.target &&
         e.target.classList.contains('modal') &&
-        e.target.id !== 'confirm-modal') {
-        e.target.classList.remove('active');
+        e.target.id !== 'confirm-modal' &&
+        e.target === getTopModal()) {
+        closeModal(e.target.id);
     }
     _modalMouseDownTarget = null;
 }, true);
@@ -6224,10 +6249,10 @@ async function performMaintenanceScan(jobId, jobName) {
         console.error('Maintenance scan failed:', error);
         content.innerHTML = `
             <div style="text-align: center; padding: 2rem;">
-                <div style="font-size: 2rem; margin-bottom: 1rem; color: var(--danger);">
+                <div style="font-size: 2rem; margin-bottom: 1rem; color: var(--danger-color);">
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                 </div>
-                <p style="color: var(--danger);">Failed to scan captures</p>
+                <p style="color: var(--danger-color);">Failed to scan captures</p>
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
                 </p>
@@ -6255,7 +6280,7 @@ function displayMaintenanceResults(jobId, jobName) {
     } else {
         // Issues found - show details
         const missingList = data.missing_files && data.missing_files.length > 0 ? data.missing_files.map(file => `
-            <div style="padding: 0.4rem 0.5rem; background: var(--card-bg); border-radius: 3px; margin-bottom: 0.25rem; border-left: 2px solid var(--danger);">
+            <div style="padding: 0.4rem 0.5rem; background: var(--card-bg); border-radius: 3px; margin-bottom: 0.25rem; border-left: 2px solid var(--danger-color);">
                 <div style="font-size: 0.8rem; color: var(--text-primary); word-break: break-all; font-family: monospace; line-height: 1.3;">
                     ${escapeHtml(file.file_path)}
                 </div>
@@ -6271,7 +6296,7 @@ function displayMaintenanceResults(jobId, jobName) {
                     <h3 style="margin-bottom: 0.5rem;">Sync Results</h3>
                 </div>
                 
-                <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                <div style="background: var(--bg-subtle); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
                         <div>
                             <div style="font-size: 0.875rem; color: var(--text-secondary);">DB Records</div>
@@ -6279,7 +6304,7 @@ function displayMaintenanceResults(jobId, jobName) {
                         </div>
                         <div>
                             <div style="font-size: 0.875rem; color: var(--text-secondary);">Records Without Files</div>
-                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--danger);">${data.missing_count}</div>
+                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--danger-color);">${data.missing_count}</div>
                         </div>
                         <div>
                             <div style="font-size: 0.875rem; color: var(--text-secondary);">Files Without Records</div>
@@ -6408,7 +6433,7 @@ async function performMaintenanceActions(jobId, jobName) {
             <div style="text-align: center; padding: 2rem;">
                 <h3 style="margin-bottom: 0.5rem;">Maintenance Complete</h3>
                 <p style="color: var(--text-secondary); margin-bottom: 1rem;">Successfully processed all actions</p>
-                <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; display: inline-block; text-align: left;">
+                <div style="background: var(--bg-subtle); padding: 1rem; border-radius: 8px; display: inline-block; text-align: left;">
         `;
         
         if (cleanupResult) {
@@ -6453,7 +6478,7 @@ async function performMaintenanceActions(jobId, jobName) {
         console.error('Maintenance failed:', error);
         content.innerHTML = `
             <div style="text-align: center; padding: 2rem;">
-                <p style="color: var(--danger);">Failed to complete maintenance</p>
+                <p style="color: var(--danger-color);">Failed to complete maintenance</p>
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
                 </p>
@@ -6464,125 +6489,8 @@ async function performMaintenanceActions(jobId, jobName) {
     }
 }
 
-async function performMaintenanceImport(jobId, jobName) {
-    const content = document.getElementById('maintenance-content');
-    
-    content.innerHTML = `
-        <div style="text-align: center; padding: 2rem;">
-            <div style="font-size: 2rem; margin-bottom: 1rem;">📥</div>
-            <p>Importing orphaned files...</p>
-        </div>
-    `;
-    
-    try {
-        const result = await apiRequest(`/jobs/${jobId}/maintenance/import`, {
-            method: 'POST',
-            body: { orphaned_files: maintenanceData.orphaned_files }
-        });
-        
-        // Show success
-        content.innerHTML = `
-            <div style="text-align: center; padding: 2rem;">
-                <h3 style="margin-bottom: 0.5rem;">Import Complete</h3>
-                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                    Imported ${result.imported_count} file(s) into the database
-                </p>
-                <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; display: inline-block; text-align: left;">
-                    <div style="margin-bottom: 0.5rem;">
-                        <strong>Files imported:</strong> ${result.imported_count}
-                    </div>
-                    <div style="margin-bottom: 0.5rem;">
-                        <strong>Total captures:</strong> ${result.new_capture_count}
-                    </div>
-                    <div>
-                        <strong>Total storage:</strong> ${formatBytes(result.new_storage_size)}
-                    </div>
-                </div>
-                <div style="margin-top: 1.5rem;">
-                    <button class="btn btn-primary" onclick="closeMaintenance(); loadJobs()">Close</button>
-                </div>
-            </div>
-        `;
-        
-        showNotification(`Successfully imported ${result.imported_count} file(s) for "${jobName}"`, 'success');
-        
-    } catch (error) {
-        console.error('Maintenance import failed:', error);
-        content.innerHTML = `
-            <div style="text-align: center; padding: 2rem;">
-                <p style="color: var(--danger);">Failed to import files</p>
-                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
-                    ${escapeHtml(error.message)}
-                </p>
-                <button class="btn btn-secondary mt-lg" onclick="closeMaintenance()">Close</button>
-            </div>
-        `;
-        showNotification('Maintenance import failed', 'error');
-    }
-}
-
-async function performMaintenanceCleanup(jobId, jobName) {
-    const content = document.getElementById('maintenance-content');
-    
-    // Show cleaning message
-    content.innerHTML = `
-        <div style="text-align: center; padding: 2rem;">
-            <p>Cleaning up database records...</p>
-        </div>
-    `;
-    
-    try {
-        const captureIds = maintenanceData.missing_files.map(f => f.id);
-        
-        const result = await apiRequest(`/jobs/${jobId}/maintenance/cleanup`, {
-            method: 'POST',
-            body: { capture_ids: captureIds }
-        });
-        
-        // Show success
-        content.innerHTML = `
-            <div style="text-align: center; padding: 2rem;">
-                <h3 style="margin-bottom: 0.5rem;">Cleanup Complete</h3>
-                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                    Removed ${result.deleted_count} database record(s)
-                </p>
-                <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; display: inline-block; text-align: left;">
-                    <div style="margin-bottom: 0.5rem;">
-                        <strong>Size recovered:</strong> ${formatBytes(result.size_recovered)}
-                    </div>
-                    <div style="margin-bottom: 0.5rem;">
-                        <strong>Remaining captures:</strong> ${result.new_capture_count}
-                    </div>
-                    <div>
-                        <strong>Current storage:</strong> ${formatBytes(result.new_storage_size)}
-                    </div>
-                </div>
-                <div style="margin-top: 1.5rem;">
-                    <button class="btn btn-primary" onclick="closeMaintenance(); loadJobs()">Close</button>
-                </div>
-            </div>
-        `;
-        
-        showNotification(`Successfully cleaned up ${result.deleted_count} missing file record(s)`, 'success');
-        
-    } catch (error) {
-        console.error('Maintenance cleanup failed:', error);
-        content.innerHTML = `
-            <div style="text-align: center; padding: 2rem;">
-                <p style="color: var(--danger);">Failed to cleanup records</p>
-                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
-                    ${escapeHtml(error.message)}
-                </p>
-                <button class="btn btn-secondary mt-lg" onclick="closeMaintenance()">Close</button>
-            </div>
-        `;
-    }
-}
-
 function closeMaintenance() {
-    const modal = document.getElementById('maintenance-modal');
-    modal.classList.remove('active');
-    maintenanceData = null;
+    closeModal('maintenance-modal');
 }
 
 // ===== Custom 24-Hour Time Picker Functions =====
@@ -6617,33 +6525,6 @@ function setupTimeInputSync(baseId) {
     };
     
     timeInput.addEventListener('change', syncValue);
-}
-
-function setupDateTimePickerSync(baseId, hiddenId) {
-    const dateInput = document.getElementById(`${baseId}_date`);
-    const hourSelect = document.getElementById(`${baseId}_hour`);
-    const minuteSelect = document.getElementById(`${baseId}_minute`);
-    const hiddenInput = document.getElementById(hiddenId || `${baseId}_datetime`);
-    
-    if (!dateInput || !hourSelect || !minuteSelect || !hiddenInput) return;
-    
-    const syncValue = () => {
-        const date = dateInput.value;
-        const hour = hourSelect.value;
-        const minute = minuteSelect.value;
-        
-        if (date && hour && minute) {
-            hiddenInput.value = `${date}T${hour}:${minute}`;
-        } else {
-            hiddenInput.value = '';
-        }
-        // Dispatch change event so listeners on hidden input get notified
-        hiddenInput.dispatchEvent(new Event('change'));
-    };
-    
-    dateInput.addEventListener('change', syncValue);
-    hourSelect.addEventListener('change', syncValue);
-    minuteSelect.addEventListener('change', syncValue);
 }
 
 function setDefaultStartTime() {
@@ -6683,30 +6564,6 @@ function setTimeInputValue(baseId, timeString) {
         timeInput.value = timeString;
         timeInput.dispatchEvent(new Event('change'));
     }
-}
-
-function setDateTimePickerValue(baseId, datetimeString, hiddenId) {
-    if (!datetimeString) return;
-    
-    const dt = new Date(datetimeString);
-    // Use local date components to avoid UTC conversion issues
-    const year = dt.getFullYear();
-    const month = String(dt.getMonth() + 1).padStart(2, '0');
-    const day = String(dt.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
-    const hour = dt.getHours().toString().padStart(2, '0');
-    const minute = dt.getMinutes().toString().padStart(2, '0');
-    
-    const dateInput = document.getElementById(`${baseId}_date`);
-    const hourSelect = document.getElementById(`${baseId}_hour`);
-    const minuteSelect = document.getElementById(`${baseId}_minute`);
-    
-    if (dateInput) dateInput.value = dateStr;
-    if (hourSelect) hourSelect.value = hour;
-    if (minuteSelect) minuteSelect.value = minute;
-    
-    // Trigger sync
-    if (dateInput) dateInput.dispatchEvent(new Event('change'));
 }
 
 // Initialize time pickers on page load
@@ -7316,10 +7173,7 @@ function renderTagList() {
 
     container.innerHTML = allTags.map(tag => `
         <div class="tag-list-item" data-tag-id="${tag.id}">
-            <span class="tag-chip" style="background: ${tag.color}22; color: ${tag.color}; border: 1px solid ${tag.color}44;">
-                <span style="width:8px;height:8px;border-radius:50%;background:${tag.color};display:inline-block;"></span>
-                ${escapeHtml(tag.name)}
-            </span>
+            ${tagChipHTML(tag)}
             <span class="tag-usage">${tag.job_count} job${tag.job_count !== 1 ? 's' : ''}, ${tag.video_count} video${tag.video_count !== 1 ? 's' : ''}</span>
             <span class="tag-actions">
                 <button onclick="editTagInline(${tag.id})" title="Edit" class="tag-action-btn">
@@ -7362,7 +7216,7 @@ function editTagInline(tagId) {
     if (!item) return;
 
     item.innerHTML = `
-        <input type="text" class="form-control" value="${escapeAttr(tag.name)}" id="tag-edit-name-${tagId}" style="flex:1;max-width:150px;font-size:0.85rem;padding:0.25rem 0.5rem;">
+        <input type="text" class="form-control" aria-label="Tag name" value="${escapeAttr(tag.name)}" id="tag-edit-name-${tagId}" style="flex:1;max-width:150px;font-size:0.85rem;padding:0.25rem 0.5rem;">
         ${colorSwatchHTML(`tag-edit-swatches-${tagId}`, tag.color)}
         <button class="btn btn-sm btn-accent" onclick="saveTagEdit(${tagId})">Save</button>
         <button class="btn btn-sm btn-secondary" onclick="renderTagList()">Cancel</button>
@@ -7404,8 +7258,7 @@ async function deleteTag(tagId, tagName) {
 // Tag chip HTML helper
 function tagChipHTML(tag, small = false) {
     const sizeStyle = small ? 'font-size:0.6rem;padding:0.1rem 0.4rem;' : '';
-    return `<span class="tag-chip" style="${sizeStyle}background:${tag.color}22;color:${tag.color};border:1px solid ${tag.color}44;">
-        <span style="width:6px;height:6px;border-radius:50%;background:${tag.color};display:inline-block;"></span>
+    return `<span class="tag-chip" style="${sizeStyle}--tag-color:${escapeAttr(tag.color)};">
         ${escapeHtml(tag.name)}</span>`;
 }
 
@@ -7420,11 +7273,10 @@ function renderTagPicker(containerId, selectedTagIds = [], onToggle = null) {
 
     container.innerHTML = allTags.map(tag => {
         const isSelected = selectedTagIds.includes(tag.id);
-        return `<span class="tag-chip ${isSelected ? 'selected' : ''}" data-tag-id="${tag.id}"
-            style="background:${tag.color}22;color:${tag.color};border:1px solid ${tag.color}44;cursor:pointer;opacity:${isSelected ? '1' : '0.4'};"
+        return `<button type="button" class="tag-chip ${isSelected ? 'selected' : ''}" data-tag-id="${tag.id}" aria-pressed="${isSelected}"
+            style="--tag-color:${escapeAttr(tag.color)};"
             onclick="toggleTagInPicker(this)">
-            <span style="width:6px;height:6px;border-radius:50%;background:${tag.color};display:inline-block;"></span>
-            ${escapeHtml(tag.name)}</span>`;
+            ${escapeHtml(tag.name)}</button>`;
     }).join('');
 
     // Render footer: form always in flow (reserves height), button overlays it
@@ -7438,9 +7290,9 @@ function renderTagPicker(containerId, selectedTagIds = [], onToggle = null) {
         `<span class="color-swatch${c === '#6366f1' ? ' selected' : ''}" style="background:${c};" data-color="${c}" onclick="selectSwatch(this)"></span>`
     ).join('');
     footer.innerHTML = `
-        <span class="tag-create-btn" onclick="showInlineTagCreate('${containerId}')" title="Create new tag">＋ New Tag</span>
+        <button type="button" class="tag-create-btn" onclick="showInlineTagCreate('${containerId}')" title="Create new tag">＋ New Tag</button>
         <div class="tag-inline-form" style="visibility:hidden;">
-            <input type="text" class="form-control" placeholder="New tag name..." maxlength="50" tabindex="-1">
+            <input type="text" class="form-control" aria-label="New tag name" placeholder="New tag name..." maxlength="50" tabindex="-1">
             <div class="color-swatch-row">${swatchesHTML}</div>
             <button type="button" class="btn btn-accent btn-sm" tabindex="-1">Add Tag</button>
             <button type="button" class="btn btn-secondary btn-sm" tabindex="-1">Cancel</button>
@@ -7517,7 +7369,7 @@ async function submitInlineTag(containerId) {
 
 function toggleTagInPicker(el) {
     el.classList.toggle('selected');
-    el.style.opacity = el.classList.contains('selected') ? '1' : '0.4';
+    el.setAttribute('aria-pressed', String(el.classList.contains('selected')));
     // Fire auto-save callback if present
     const container = el.closest('.tag-picker');
     if (container?._tagOnToggle) {
@@ -7547,7 +7399,7 @@ function renderTagFilter(wrapId, onChange) {
         </div>
         <div class="tag-filter-dropdown" id="${wrapId}-dropdown">
             <div class="tag-filter-search">
-                <input type="text" placeholder="Search tags..." oninput="filterTagDropdown('${wrapId}', this.value)">
+                <input type="text" aria-label="Search tags" placeholder="Search tags..." oninput="filterTagDropdown('${wrapId}', this.value)">
             </div>
             <div class="tag-filter-list" id="${wrapId}-list"></div>
         </div>
@@ -7663,7 +7515,7 @@ const JOB_STATUSES = [
     { value: 'sleeping', label: 'Sleeping', color: 'var(--primary-color)' },
     { value: 'warning', label: 'Warning', color: 'var(--warning-color)' },
     { value: 'completed', label: 'Completed', color: 'var(--text-secondary)' },
-    { value: 'disabled', label: 'Disabled', color: 'var(--text-muted, #666)' },
+    { value: 'disabled', label: 'Disabled', color: 'var(--text-secondary)' },
 ];
 
 function renderStatusFilter(wrapId, onChange) {
@@ -7813,11 +7665,17 @@ const captureSelection = new SelectionManager({
 });
 
 async function loadCaptures() {
+    const version = ++_capturesLoadVersion;
+    const routeVersion = _routeVersion;
+    const isCurrent = () => version === _capturesLoadVersion && routeVersion === _routeVersion &&
+        currentView === 'captures' && parseRoute().view === 'captures';
+    if (!isCurrent()) return;
     try {
         // Load job filter options first time
         const jobSelect = document.getElementById('captures-job-filter');
         if (jobSelect.options.length === 1) {
             const jobs = await apiRequest('/jobs/');
+            if (!isCurrent()) return;
             jobs.forEach(job => {
                 const option = document.createElement('option');
                 option.value = job.id;
@@ -7834,6 +7692,7 @@ async function loadCaptures() {
         
         await loadCapturesPage();
     } catch (error) {
+        if (!isCurrent()) return;
         console.error('Failed to load captures:', error);
         showNotification('Failed to load captures', 'error');
     }
@@ -7863,10 +7722,10 @@ async function scanOrphanedCaptures() {
         console.error('Orphaned scan failed:', error);
         content.innerHTML = `
             <div style="text-align: center; padding: 2rem;">
-                <div style="font-size: 2rem; margin-bottom: 1rem; color: var(--danger);">
+                <div style="font-size: 2rem; margin-bottom: 1rem; color: var(--danger-color);">
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                 </div>
-                <p style="color: var(--danger);">Failed to scan for orphaned captures</p>
+                <p style="color: var(--danger-color);">Failed to scan for orphaned captures</p>
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
                     ${escapeHtml(error.message)}
                 </p>
@@ -8020,6 +7879,18 @@ async function deleteAllOrphanedCaptures() {
 }
 
 async function loadCapturesPage() {
+    const version = ++_capturesPageRequestVersion;
+    const routeVersion = _routeVersion;
+    // This gallery uses replacement pagination, never an append response.
+    const filterSnapshot = () => JSON.stringify([
+        capturesState.currentPage, capturesState.pageSize, capturesState.sortOrder,
+        capturesState.jobFilter, capturesState.startTime, capturesState.endTime,
+        capturesState.favoritesOnly, capturesState.tagFilter
+    ]);
+    const filters = filterSnapshot();
+    const isCurrent = () => version === _capturesPageRequestVersion && routeVersion === _routeVersion &&
+        currentView === 'captures' && parseRoute().view === 'captures' && filters === filterSnapshot();
+    if (!isCurrent()) return;
     try {
         const query = {
             page: capturesState.currentPage,
@@ -8048,6 +7919,7 @@ async function loadCapturesPage() {
         }
         
         const data = await apiRequest('/captures/', { query });
+        if (!isCurrent()) return;
         
         const countEl = document.getElementById('captures-count');
         countEl.textContent = `${data.total} captures`;
@@ -8057,6 +7929,7 @@ async function loadCapturesPage() {
         renderPagination(data);
         captureSelection.updateControls();
     } catch (error) {
+        if (!isCurrent()) return;
         console.error('Failed to load captures page:', error);
         showNotification('Failed to load captures', 'error');
     }
@@ -8242,13 +8115,11 @@ function showNextCapture() {
 }
 
 function closeCapturePreview() {
-    document.getElementById('capture-preview-modal').classList.remove('active');
-    capturesState.currentCaptureId = null;
-    document.removeEventListener('keydown', handleCaptureNavKeys);
+    closeModal('capture-preview-modal');
 }
 
 function handleCaptureNavKeys(e) {
-    if (!document.getElementById('capture-preview-modal').classList.contains('active')) return;
+    if (getTopModal()?.id !== 'capture-preview-modal') return;
     if (e.key === 'ArrowLeft') { e.preventDefault(); showPrevCapture(); }
     if (e.key === 'ArrowRight') { e.preventDefault(); showNextCapture(); }
 }
@@ -8473,7 +8344,7 @@ function buildVideoCardHtml(v, extraClass) {
     return `
         <div class="homepage-capture-card${extraClass ? ' ' + extraClass : ''}" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeAttr(v.name)}">
             ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy">` :
-                `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-muted);position:absolute;inset:0;">
+                `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-secondary);position:absolute;inset:0;">
                     ${VIDEO_PLACEHOLDER_SVG}
                 </div>`}
             <div class="homepage-card-overlay">
@@ -8633,7 +8504,7 @@ function renderHomepageSpotlight(captureData, allVideos) {
             <div class="homepage-spotlight-card" onclick="navigateTo('/timelapses/${v.id}')" title="${escapeAttr(v.name)}">
                 <div class="homepage-spotlight-badge">Timelapse</div>
                 ${thumbSrc ? `<img src="${thumbSrc}" alt="" loading="lazy">` :
-                    `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-muted);position:absolute;inset:0;">
+                    `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-color);color:var(--text-secondary);position:absolute;inset:0;">
                         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
                     </div>`}
                 <div class="homepage-card-overlay">

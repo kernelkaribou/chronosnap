@@ -194,14 +194,13 @@ def create_trim(video_id: int, request: VideoTrimCreate) -> dict:
             if current != source.revision or get_timelapses_path() != root:
                 raise HTTPException(409, "The source video or storage location changed; open Trim again")
             _require_storage(root, required)
-            quality = "preserved" if plan.mode == "copy" else "partly_converted" if plan.mode == "smart" else "high"
             cursor = conn.execute("""
                 INSERT INTO processed_videos
                 (job_id, job_name, name, file_path, file_size, resolution, framerate,
                  quality, total_frames, duration_seconds, status, build_source, created_at)
                 VALUES (?, ?, ?, '', 0, ?, ?, ?, 0, 0, 'processing', 'trimmed', ?)
             """, (row["job_id"], row["job_name"], name, f"{source.info.width}x{source.info.height}",
-                  source.info.fps, quality, to_iso(get_now())))
+                  source.info.fps, row["quality"], to_iso(get_now())))
             output_id = cursor.lastrowid
             relative = os.path.join("trimmed", f"{output_id}_{sanitized}", f"{sanitized}.mp4")
             conn.execute("UPDATE processed_videos SET file_path=? WHERE id=?", (relative, output_id))
@@ -360,7 +359,7 @@ def _part_info(path: str, operation: TrimOperation):
 
 
 def _render(plan: TrimPlan, operation: TrimOperation, video_id: int,
-            partial: str, working: str, *, smart: bool) -> tuple[media.VideoInfo, str]:
+            partial: str, working: str, *, smart: bool) -> media.VideoInfo:
     source = plan.source
     duration = Fraction(plan.frames, source.info.fps)
     pieces = []
@@ -449,7 +448,7 @@ def _render(plan: TrimPlan, operation: TrimOperation, video_id: int,
     ], operation, video_id, duration, 70, 18)
     if decoded != plan.frames:
         raise TrimCompatibilityError("The trimmed video decoded an unexpected number of frames")
-    return result, "preserved" if smart and plan.mode == "copy" else "partly_converted" if smart else "high"
+    return result
 
 
 def _operation(video_id: int) -> TrimOperation | None:
@@ -480,7 +479,7 @@ def process_trim(video_id: int):
         output, partial, thumbnail, working = _paths(row, operation.root)
         os.makedirs(working)
         try:
-            result, quality = _render(plan, operation, video_id, partial, working, smart=bool(plan.copied_frames))
+            result = _render(plan, operation, video_id, partial, working, smart=bool(plan.copied_frames))
         except (TrimCompatibilityError, media.MediaTimestampError) as exc:
             if not plan.copied_frames:
                 raise
@@ -493,7 +492,7 @@ def process_trim(video_id: int):
             if os.path.isfile(partial):
                 os.remove(partial)
             os.mkdir(working)
-            result, quality = _render(plan, operation, video_id, partial, working, smart=False)
+            result = _render(plan, operation, video_id, partial, working, smart=False)
         media._progress(video_id, 90)
         operation.write_limit = operation.bound
         media._media([
@@ -511,9 +510,9 @@ def process_trim(video_id: int):
                 conn.execute("""
                     UPDATE processed_videos SET status='completed', progress=100,
                     file_size=?, total_frames=?, duration_seconds=?, completed_at=?,
-                    thumbnail_path=?, quality=?, error_message=NULL WHERE id=? AND status='processing'
+                    thumbnail_path=?, error_message=NULL WHERE id=? AND status='processing'
                 """, (os.path.getsize(output), result.frames, float(result.duration), to_iso(get_now()),
-                      make_relative(thumbnail, operation.root), quality, video_id))
+                      make_relative(thumbnail, operation.root), video_id))
             operation.done.set()
         add_event(f"Video '{row['name']}' trim completed", "video", {"video_id": video_id})
     except Exception as exc:

@@ -7,11 +7,16 @@ const noop = () => {};
 const elements = new Map();
 const capturedKeys = new Set();
 function element() {
+    const classes = new Set();
+    const attributes = new Map();
     return {
         innerHTML: '', textContent: '', value: '', disabled: false, hidden: false,
-        style: {}, classList: { add: noop, remove: noop, contains: () => false },
+        style: {}, isConnected: true, children: [],
+        classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name) },
         closest: () => null,
-        setAttribute: noop, getAttribute: () => null, addEventListener: noop,
+        matches: () => false, getClientRects: () => [1],
+        setAttribute: (name, value) => attributes.set(name, value),
+        getAttribute: name => attributes.get(name) ?? null, addEventListener: noop,
         removeEventListener: noop, focus() { document.activeElement = this; }, querySelector: () => null,
         querySelectorAll: () => [], offsetParent: {},
     };
@@ -25,10 +30,12 @@ const document = {
         if (type === 'keydown' && capture) capturedKeys.delete(handler);
     },
     getElementById(id) {
-        if (!elements.has(id)) elements.set(id, element());
+        if (!elements.has(id)) elements.set(id, Object.assign(element(), { id }));
         return elements.get(id);
     },
-    querySelector: () => element(), querySelectorAll: () => [],
+    querySelector: () => element(),
+    querySelectorAll: selector => selector === '.modal.active' ?
+        [...elements.values()].filter(node => node.id.endsWith('-modal') && node.classList.contains('active')) : [],
     createElement() {
         const node = element();
         Object.defineProperty(node, 'innerHTML', { get() {
@@ -44,6 +51,7 @@ const sandbox = {
     location: { pathname: '/', search: '' },
     history: { pushState: noop, replaceState: noop, back: noop },
     matchMedia: () => ({ matches: false }), addEventListener: noop, removeEventListener: noop,
+    getComputedStyle: () => ({ visibility: 'visible' }),
     Image: function () {},
 };
 sandbox.window = sandbox;
@@ -82,6 +90,8 @@ function joinReport() {
 
 (async () => {
     const appHtml = fs.readFileSync('/frontend/index.html', 'utf8');
+    assert(appHtml.includes('type="button" class="close" aria-label="Close join dialog"'),
+        'Join must use the shared modal close theme without losing its accessible button');
     assert(appHtml.includes('onclick="showCreateJobModal()">Create</button>'),
         'The Jobs create action must use the same concise naming as Build and Join');
     assert(appHtml.includes('onclick="scanOrphanedCaptures()">Cleanup</button>'),
@@ -98,6 +108,8 @@ function joinReport() {
         'Completed video details must not depend on transient source history');
     sandbox.cancelVideoRename = noop;
     sandbox.renderTagPicker = noop;
+    sandbox.location.pathname = '/timelapses/99';
+    vm.runInContext("currentView = 'video-detail'", sandbox);
     document.getElementById('video-detail-player').load = noop;
     for (const [quality, label] of [
         ['preserved', 'Original quality preserved'],
@@ -153,7 +165,7 @@ function joinReport() {
 
     setup();
     state().entries.push(state().entries[0]);
-    sandbox.joinMoveClip(2, -1);
+    sandbox.joinReorderClip(2, 1);
     assert.deepStrictEqual(state().entries.map(v => v.id), [1, 1, 2]);
     sandbox.joinRemoveClip(0);
     assert.deepStrictEqual(state().entries.map(v => v.id), [1, 2]);
@@ -317,7 +329,7 @@ function joinReport() {
     setup();
     sandbox.openJoinPicker();
     state().busy = true;
-    sandbox.joinMoveClip(0, 1);
+    sandbox.joinReorderClip(0, 1);
     sandbox.joinRemoveClip(0);
     sandbox.toggleJoinCandidate(1);
     sandbox.applyJoinPicker();
@@ -402,7 +414,7 @@ function joinReport() {
     assert.strictEqual(document.getElementById('join-video-submit').textContent, 'Join');
     assert.strictEqual(document.getElementById('join-video-status').textContent, '');
     assert.match(document.getElementById('join-video-total').textContent, /6s/);
-    sandbox.joinMoveClip(0, 1);
+    sandbox.joinReorderClip(0, 1);
     assert.strictEqual(state().validation, null);
 
     setup();
@@ -426,7 +438,7 @@ function joinReport() {
     assert.strictEqual(state().entries.length, 2);
     assert.strictEqual(state().busy, false);
     assert.strictEqual(state().review, incompatibleReport);
-    sandbox.joinMoveClip(0, 1);
+    sandbox.joinReorderClip(0, 1);
     assert.strictEqual(state().review, null);
     assert(!document.getElementById('join-video-order').innerHTML.includes('join-reviewed-error'));
 
@@ -437,7 +449,7 @@ function joinReport() {
     document.getElementById('join-video-resolution').value = '160x96';
     sandbox.changeJoinResolution();
     assert.strictEqual(state().validation, null);
-    sandbox.joinMoveClip(0, 1);
+    sandbox.joinReorderClip(0, 1);
     assert.strictEqual(state().outputResolution, '160x96');
 
     setup();
@@ -454,7 +466,7 @@ function joinReport() {
     assert.match(resizeOrder, /Resolution decreased to 160x96 · Frame rate changed to 5 FPS · Lossy re-encode/);
     assert(!resizeOrder.includes('Resolution increased'));
     assert(!resizeOrder.includes('speed'));
-    sandbox.joinMoveClip(0, 1);
+    sandbox.joinReorderClip(0, 1);
     assert.strictEqual(state().outputResolution, '160x96');
     assert.match(document.getElementById('join-video-order').innerHTML, /Resolution decreased to 160x96/);
     sandbox.joinRemoveClip(0);
