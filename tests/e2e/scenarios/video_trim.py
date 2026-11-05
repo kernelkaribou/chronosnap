@@ -16,7 +16,7 @@ def run(ctx):
     try:
         _, video = client.post("/api/videos/", json_body={
             "job_id": ctx["job_id"], "name": "e2e-trim-source",
-            "resolution": "320x240", "framerate": 1, "quality": "high",
+            "resolution": "320x240", "framerate": 1, "quality": "medium",
             "start_capture_id": min(ctx["capture_ids"]), "end_capture_id": max(ctx["capture_ids"]),
         }, expect=201)
         created.append(video["id"])
@@ -38,11 +38,13 @@ def run(ctx):
             "name": "e2e-one-second", "trim_start_seconds": amount, "revision": report["revision"],
         }, expect=201)
         created.append(trimmed["id"])
+        assert trimmed["quality"] == source["quality"] == "medium"
         trimmed = wait_video(client, trimmed["id"])
         output = Path("/timelapses") / trimmed["file_path"]
         assert trimmed["status"] == "completed" and trimmed["build_source"] == "trimmed"
         assert trimmed["duration_seconds"] == 1 and len(frame_hashes(str(output))) == 1
         assert trimmed["job_id"] == source["job_id"] and trimmed["start_capture_id"] is None
+        assert trimmed["quality"] == source["quality"]
         assert hashlib.sha256(source_path.read_bytes()).digest() == original
         _, download = client.get(f"/api/videos/{trimmed['id']}/download", raw=True, expect=200)
         assert download == output.read_bytes()
@@ -61,6 +63,7 @@ def run(ctx):
         }, expect=201)
         created.append(again["id"])
         again = wait_video(client, again["id"])
+        assert longer["quality"] == again["quality"] == source["quality"]
         assert again["duration_seconds"] == source["duration_seconds"] - 2
         _, join_report = client.post("/api/videos/join/validate", json_body={
             "video_ids": [again["id"], again["id"]],

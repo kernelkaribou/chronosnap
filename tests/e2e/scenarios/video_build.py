@@ -7,6 +7,9 @@ install, no docker exec, no Docker socket access).
 import os
 import subprocess
 import time
+from io import BytesIO
+
+from PIL import Image
 
 BUILD_TIMEOUT_SECONDS = 90
 
@@ -16,6 +19,17 @@ def run(ctx):
     capture_ids = ctx["capture_ids"]
     assert capture_ids, "no capture_ids in ctx — manual_capture scenario must run first"
 
+    overlay = {"enabled": True, "text": "{job_name}", "font": "DejaVu Sans"}
+    _, preview_bytes = client.post("/api/videos/text-overlay-preview", json_body={
+        "capture_id": min(capture_ids),
+        "config": overlay,
+        "job_name": ctx["job_name"],
+    }, raw=True, expect=200)
+    with Image.open(BytesIO(preview_bytes)) as preview:
+        preview.load()
+        assert preview.format == "JPEG"
+        assert preview.width > 0 and preview.height > 0
+
     payload = {
         "job_id": ctx["job_id"],
         "name": "e2e-test-video",
@@ -24,6 +38,7 @@ def run(ctx):
         "quality": "low",
         "start_capture_id": min(capture_ids),
         "end_capture_id": max(capture_ids),
+        "text_overlay": overlay,
     }
     status, body = client.post("/api/videos/", json_body=payload, expect=201)
     video_id = body["id"]

@@ -13,6 +13,7 @@ function element() {
     const attributes = new Map();
     return {
         innerHTML: '', textContent: '', value: '', disabled: false, hidden: false,
+        isConnected: true, children: [], matches: () => false,
         currentTime: 0, readyState: 1, paused: true,
         style: { setProperty(name, value) { this[name] = value; } },
         classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name) },
@@ -33,10 +34,12 @@ const document = {
     addEventListener(type, handler, capture) { if (type === 'keydown' && capture) capturedKeys.add(handler); },
     removeEventListener(type, handler, capture) { if (type === 'keydown' && capture) capturedKeys.delete(handler); },
     getElementById(id) {
-        if (!elements.has(id)) elements.set(id, element());
+        if (!elements.has(id)) elements.set(id, Object.assign(element(), { id }));
         return elements.get(id);
     },
-    querySelector: () => focusControls[0], querySelectorAll: () => focusControls,
+    querySelector: () => focusControls[0],
+    querySelectorAll: selector => selector === '.modal.active' ?
+        [...elements.values()].filter(node => node.id.endsWith('-modal') && node.classList.contains('active')) : focusControls,
     createElement() {
         const node = element();
         Object.defineProperty(node, 'innerHTML', { get() {
@@ -58,6 +61,7 @@ const sandbox = {
     location: { pathname: '/', search: '' },
     history: { pushState: noop, replaceState: noop, back: noop },
     matchMedia: () => ({ matches: false }), addEventListener: noop, removeEventListener: noop,
+    getComputedStyle: () => ({ visibility: 'visible' }),
     Image: function () {},
 };
 sandbox.window = sandbox;
@@ -99,7 +103,11 @@ function setup(frames = 300, fps = 30) {
     assert(html.includes('aria-label="Seconds removed from start"'));
     assert(html.includes('aria-label="Seconds removed from end"'));
     assert(html.includes('aria-label="Reset start trim"') && html.includes('aria-label="Reset end trim"'));
-    assert(html.includes('Some selections need full re-encoding.'));
+    const trimHtml = html.slice(html.indexOf('<div id="trim-video-modal"'), html.indexOf('<div id="join-video-modal"'));
+    assert.doesNotMatch(trimHtml, /re-?encod|safe regions|original stays unchanged/i,
+        'Trim must not add processing or provenance explanations to the source quality');
+    assert(html.includes('type="button" class="close" aria-label="Close trim dialog"'),
+        'Trim must use the shared modal close theme while preserving keyboard/button semantics');
     assert(!/<video id="trim-video-preview"[^>]*\bcontrols\b/.test(html),
         'The preview must not show the browser clock for the untrimmed source');
     assert(html.includes('aria-label="Preview playback position"'));
@@ -237,10 +245,15 @@ function setup(frames = 300, fps = 30) {
     }
 
     sandbox.cancelVideoRename = sandbox.renderTagPicker = noop;
+    sandbox.location.pathname = '/timelapses/7';
+    vm.runInContext("currentView = 'video-detail'", sandbox);
     for (const [quality, label] of [
         ['preserved', 'Original quality preserved'],
-        ['partly_converted', 'Boundary re-encoded · High'],
-        ['high', 'Re-encoded · High'],
+        ['partly_converted', 'Partly converted · High'],
+        ['low', 'low'],
+        ['medium', 'medium'],
+        ['high', 'high'],
+        ['maximum', 'maximum'],
     ]) {
         sandbox.apiRequest = async () => ({
             id: 7, name: 'Selected', status: 'completed', build_source: 'trimmed',

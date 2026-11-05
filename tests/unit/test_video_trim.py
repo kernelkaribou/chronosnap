@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sqlite3
 import threading
+from unittest.mock import patch
 
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -81,6 +82,25 @@ def test_exact_seconds_at_other_rates_preserve_fractional_remainder(isolated_db,
     assert result["duration_seconds"] == pytest.approx((fps + extra_frames) / fps)
 
 
+@pytest.mark.parametrize("quality", ["low", "medium", "high", "maximum", "preserved", "partly_converted"])
+@pytest.mark.parametrize("mode,gop", [("copy", "5"), ("encode", "250")])
+def test_trim_keeps_source_quality_in_processing_and_completed_records(isolated_db, videos_base, quality, mode, gop):
+    path = encode(Path(videos_base) / "quality.mp4", fps="5", frames=50,
+                  extra=("-g", gop, "-sc_threshold", "0"))
+    source_id = insert_video(path)
+    with get_db() as conn:
+        conn.execute("UPDATE processed_videos SET quality=? WHERE id=?", (quality, source_id))
+    video = trim.create_trim(source_id, request(source_id, start=2, end=3))
+    assert trim._operation(video["id"]).trim.mode == mode
+    assert video["quality"] == quality
+    trim.process_trim(video["id"])
+    result = fetch(video["id"])
+    assert result["status"] == "completed", result
+    assert result["quality"] == quality
+    assert asyncio.run(videos.get_video(video["id"]))["quality"] == quality
+    assert fetch(source_id)["quality"] == quality
+
+
 def test_non_h264_input_does_not_inherit_an_invalid_avc_level(isolated_db, videos_base):
     source = encode(Path(videos_base) / "mpeg4.mp4", fps="5", frames=50,
                     extra=("-c:v", "mpeg4", "-q:v", "2"))
@@ -121,7 +141,7 @@ def test_safe_copy_has_identical_frames_and_no_encoding(isolated_db, videos_base
     video_id = insert_video(path)
     monkeypatch.setattr(trim, "_encode_args", lambda *args: pytest.fail("A safe copy must not encode"))
     result, output = finish(video_id, start=2, end=3)
-    assert result["quality"] == "preserved"
+    assert result["quality"] == fetch(video_id)["quality"] == "high"
     assert hashes(output) == hashes(path)[10:35]
     assert result["duration_seconds"] == 5
     assert not list(output.parent.glob(".trim-work"))
@@ -143,10 +163,12 @@ def test_smart_trim_preserves_every_copied_frame(isolated_db, videos_base, fps, 
     assert plan.mode == "smart" and plan.copied_frames >= fps * 20
     original_bytes = hashlib.sha256(path.read_bytes()).digest()
     original = hashes(path)
-    trim.process_trim(video["id"])
+    with patch.object(trim, "_render", wraps=trim._render) as render:
+        trim.process_trim(video["id"])
+    assert [call.kwargs["smart"] for call in render.call_args_list] == [True]
     result = fetch(video["id"])
     assert result["status"] == "completed", result
-    assert result["quality"] == "partly_converted", "The controlled fixture must exercise actual smart copying, not fallback"
+    assert result["quality"] == fetch(source_id)["quality"]
     output = Path(media.resolve_video_path(result["file_path"]))
     output_hashes = hashes(output)
     offset = plan.copy_start - plan.start
@@ -161,14 +183,18 @@ def test_smart_trim_preserves_every_copied_frame(isolated_db, videos_base, fps, 
 
 
 def test_incompatible_boundary_configuration_uses_high_quality_fallback(clip, monkeypatch):
+    with get_db() as conn:
+        conn.execute("UPDATE processed_videos SET quality='medium' WHERE id=?", (clip[0],))
     original_inspect = trim._inspect
     def inspect(*args):
         plan, row = original_inspect(*args)
         # Force an attempted smart segment that begins between independent keys.
         return trim.TrimPlan(plan.source, plan.start, plan.end, plan.start, plan.end), row
     monkeypatch.setattr(trim, "_inspect", inspect)
-    result, output = finish(clip[0], start=2, end=2)
-    assert result["quality"] == "high"
+    with patch.object(trim, "_render", wraps=trim._render) as render:
+        result, output = finish(clip[0], start=2, end=2)
+    assert [call.kwargs["smart"] for call in render.call_args_list] == [True, False]
+    assert result["quality"] == "medium"
     assert result["duration_seconds"] == 6
     assert len(hashes(output)) == 30
     assert not list(output.parent.glob(".trim-work"))
@@ -374,6 +400,7 @@ def test_completed_trim_remains_independent_and_can_be_trimmed_again(clip):
         schema_before = list(conn.execute("SELECT type,name,sql FROM sqlite_master ORDER BY type,name"))
     first, first_path = finish(clip[0], start=1)
     second, second_path = finish(first["id"], start=1)
+    assert first["quality"] == second["quality"] == fetch(clip[0])["quality"]
     videos.delete_video(clip[0])
     videos.delete_video(first["id"])
     assert not first_path.exists() and second_path.is_file()

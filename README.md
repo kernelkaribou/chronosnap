@@ -8,6 +8,8 @@ A self-hosted timelapse management application that automates the capture, organ
 
 ChronoSnap runs as a single Docker container with a built-in web interface. No external services, no cloud dependencies, no accounts. Everything stays on your hardware.
 
+<img src="docs/screenshots/dashboard.png" alt="Dashboard" width="32%"> <img src="docs/screenshots/capture-job.png" alt="Capture job" width="32%"> <img src="docs/screenshots/timelapse.png" alt="Viewing a timelapse" width="32%">
+
 ### What can you do with it?
 
 - Point it at a security camera and take a daily photo for a year to watch the seasons change
@@ -32,6 +34,9 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 - [Importing and Exporting](#importing-and-exporting)
   - [Importing](#importing)
   - [Exporting](#exporting)
+- [Editing Timelapses](#editing-timelapses)
+  - [Trimming](#trimming)
+  - [Joining](#joining)
 - [Scheduling Guides](#scheduling-guides)
   - [Short-Term Capture](#short-term-capture-hours-to-days)
   - [Long-Term Capture](#long-term-capture-weeks-to-months)
@@ -69,124 +74,6 @@ ChronoSnap runs as a single Docker container with a built-in web interface. No e
 - Join timelapses losslessly where possible, with opt-in selective conversion for mixed sizes or encodings
 - Trim whole seconds from either end of a completed timelapse without changing the original
 
-#### Trimming timelapses
-
-Open a completed video and choose the **Trim** scissors icon between GIF and Delete.
-Drag either timeline handle or enter the seconds to remove from the start/end.
-Each end has its own reset, and the selection must keep at least one second.
-Preview the selection, name the new video, then choose **Trim**.
-The preview clock shows whole seconds within the selected duration, starting at
-zero, rather than the original video's time range. The playback scrubber updates
-at the display's refresh rate; arrow keys still step through individual frames.
-Escape exits a fullscreen preview first; press it again to close Trim.
-
-Trimming preserves the dimensions, playback FPS, display aspect ratio, and color
-information. Independent H.264 regions are copied unchanged where safe; boundary
-regions are encoded at High quality. If their codec configurations cannot be
-safely stitched, the entire selection is encoded at High quality instead.
-This can introduce a small quality loss and is **not guaranteed lossless**.
-Widely spaced keyframes can mean several seconds need encoding, or that a short
-selection needs encoding in full. No additional dependencies are required.
-
-The original is never overwritten. The new video's Quality field reports whether
-its picture data was preserved, only boundary regions were re-encoded, or the
-whole selection was re-encoded. A completed trim is independent of its source and
-can be trimmed again, downloaded as MP4/GIF, or selected for Join.
-Silent, progressive 8-bit SDR video with a supported integer, constant FPS is
-required; unsupported files are rejected explicitly.
-Joining and trimming share one processing slot. Cancellation removes partial
-output; interrupted trims are cleaned up and marked failed at restart.
-
-#### Joining timelapses
-
-Choose **Join**, or select videos first and use the join action.
-The editable name defaults to `Joined_Timelapse_YYYYMMDD_HHMM`, using your
-local time when the dialog opens.
-Use **Add +** to replace the ordering list with a full-width searchable preview
-gallery. The video name and output settings stay visible for reference. Toggle
-the circular checkbox at the top left, or click a card, to select each clip once.
-Selection uses the same theme colors as the video and capture galleries.
-Choose **Add** to apply the selection and return to ordering; the picker’s ×
-button or Escape cancels selection changes. Existing playback order is retained,
-with newly selected clips appended in selection order. Choose 2-100 clips,
-drag the left-hand grip to arrange playback order, choose a playback FPS and
-output resolution, then click **Review**. Actual-file checks mark clips green when
-their FPS, resolution, and encoding already match the output, FPS changes blue,
-re-encoded clips amber, and incompatible clips red, with details beside each clip.
-Click **Join** to approve a successful review and start joining.
-Changing the order, selected clips, FPS, or resolution requires a fresh review.
-The grip also supports
-arrow keys, Home, and End. On phones, clip details span the card width while
-the grip and remove button retain 44px touch targets. Remove a clip
-with its × icon. The API also supports repeated entries. Joining creates an independent
-MP4; originals are unchanged and may be deleted after the join completes.
-
-Lossless joining supports compatible silent H.264/MP4 streams with constant integer
-frame rates, preserving matching limited- or full-range 8-bit 4:2:0 color.
-Choose an output FPS from the selected clips' rates. Every original frame is
-retained: increasing FPS speeds a clip up and shortens it; decreasing FPS slows
-it down and lengthens it. Source metadata and requested frame-rate changes are
-shown beside each clip; the total duration updates before confirmation.
-FPS-only normalization changes timing metadata, not image
-quality: there is no frame dropping, duplication, or interpolation.
-Internal timestamp normalization at unchanged FPS is joining bookkeeping, not a
-playback-setting change; matching clips remain green with **No changes needed**.
-Compatibility is checked against actual codec configuration,
-resolution, color/display information, and packet timing, not just
-file extensions or quality labels. The original codec's browser playback
-limitations remain unchanged for preserved streams.
-
-For mixed resolutions or encodings, choose an output size from the selected
-clips. The default is the largest pixel count, and an explicit choice is kept
-when reordering. Clips fit within that canvas with their display aspect ratio
-preserved, adding black padding rather than stretching or cropping. Upscaling
-does not restore detail; downscaling discards detail.
-Proportionally halving a 16:9 clip into a 16:9 output adds no padding. Different
-display aspect ratios can require padding even when pixel dimensions are
-proportional, because pixel-aspect metadata also affects how a clip is displayed.
-Requested resolution changes appear immediately beside each clip, using stored
-pixel dimensions. The actual-file check updates source metadata and confirms any
-padding and encoding work using display-aspect metadata before approval.
-
-The joiner first tries to preserve the largest compatible group by total frame
-count and convert only outliers to its exact stream configuration. Each entry
-shows **No changes needed** or a concise list of changed output parameters, such
-as resolution or frame rate, rather than internal timestamp bookkeeping.
-Converted clips are marked **Lossy re-encode**, with **Padding** and codec changes
-where applicable. This flag indicates potential quality loss; its tooltip
-explains the risk before the explicit **Join** approval.
-If selective encoding cannot be reproduced safely,
-review marks every clip for re-encoding and explains why, never a silent fallback.
-All converted streams use capped High-quality H.264 encoding; each distinct
-source is encoded once, reused for repetitions, and the final join is a stream
-copy, not a second encoding pass. Original files are never modified.
-
-Conversion supports decodable, progressive 8-bit SDR YUV video with constant
-integer FPS, including other installed FFmpeg codecs and containers. Audio,
-HDR, interlacing, fractional/variable FPS, rotated videos, and unsupported
-display metadata remain explicit errors rather than being silently discarded.
-Missing color tags use standard SDR assumptions: BT.709 primaries/transfer,
-BT.709 matrix for HD or BT.470BG for SD, and limited range unless full range
-is tagged. Existing target pixel-aspect metadata is respected when preserving
-a reference stream. Video details show whether quality was preserved or some/all
-clips were converted, without retaining source playback history.
-
-One join runs at a time; additional requests receive a busy response rather than
-being queued. Sources cannot be renamed/deleted while in use. Progress includes a
-decode-only validation phase, which checks the new file without re-encoding it.
-Cancellation removes partial output; application restarts mark interrupted joins
-failed and release their sources. Success/failure is recorded in Events; manual
-joins do not send automatic completion webhooks.
-
-Allow additional space on the timelapse volume for the new file, approximately
-the combined input sizes including repetitions plus container overhead.
-Timing copies additionally need approximately the size of the distinct input
-clips. Conversion space is admitted using the encoder's bitrate/buffer bounds
-for both temporary clips and the final file, including repetitions; converted
-files can exceed the original sizes. Free space is monitored during conversion.
-Working files are removed on completion, cancellation, or restart recovery.
-Source files are not reduced in size. Post-creation trimming is not included.
-
 ### Organization
 
 - Tags, favorites, filtering, and side-by-side capture comparison
@@ -196,7 +83,7 @@ Source files are not reduced in size. Post-creation trimming is not included.
 
 ### Interface
 
-- Dark and light mode with five visual themes
+- Dark and light mode with six visual themes
 - Installable as a Progressive Web App (PWA) on mobile and desktop
 - REST API with built-in Swagger UI at `/docs`
 
@@ -456,6 +343,26 @@ Exported archives can be re-imported into the same or a different ChronoSnap ins
 
 ---
 
+## Editing Timelapses
+
+Completed timelapses can be trimmed or joined into a new video. Both operations run in the background, show progress in the video library, and leave the originals unchanged. The result is a standalone MP4 that can be downloaded, exported as GIF, or edited again.
+
+### Trimming
+
+Set how many whole seconds to remove from each end, preview the remaining section, and save it as a new video. Either end can be reset independently, and at least one second must remain.
+
+The new video keeps the original resolution, FPS, and Quality value. Trimming can still introduce a small quality loss.
+
+### Joining
+
+Choose 2-100 clips, arrange their playback order, and select the output FPS and resolution. Review the result before starting; any conversion that may reduce quality is flagged for approval.
+
+Compatible clips retain their original picture quality. Changing FPS changes playback speed and duration. Different sizes are fitted to the output without stretching or cropping.
+
+Only one Join or Trim can run at a time. Allow extra storage for the new video and temporary files. Cancelling removes the unfinished output.
+
+---
+
 ## Scheduling Guides
 
 ### Short-Term Capture (Hours to Days)
@@ -559,11 +466,12 @@ The SQLite database holds job configuration, capture metadata, video records, ta
 
 ### Security and Privacy
 
-ChronoSnap is designed for self-hosted use. No data leaves your network unless you explicitly configure webhooks.
+ChronoSnap is designed for self-hosted use. Camera footage is not uploaded to external services. Capture sources, optional webhooks, the release check, and API documentation assets make the network requests described below.
 
 **Authentication:**
-- All API endpoints require an API key (auto-generated, visible in Settings)
-- The web interface is exempt from key requirements when accessed from the same origin
+- External API requests require an API key (auto-generated, visible in Settings)
+- The bundled web interface uses a same-origin convenience bypass based on request headers. These headers can be forged by non-browser clients, so the API key is **not a hardened access boundary**
+- Keep the application on a trusted network or VPN, or put it behind an authenticated reverse proxy. Do not expose it directly to the internet
 
 **Network hardening:**
 - Security response headers on all requests (content type enforcement, frame embedding prevention, referrer restrictions, permission restrictions)
@@ -579,11 +487,13 @@ ChronoSnap is designed for self-hosted use. No data leaves your network unless y
 
 **Data privacy:**
 - Stream URLs (which may contain camera credentials) are redacted from all exports
-- No telemetry or analytics calls. The only automatic outbound request the app makes on its own is a check against the GitHub releases API for update notifications, triggered when the Settings page loads. Set `VERSION_CHECK=false` to disable it entirely
+- No telemetry or analytics calls. The server checks the GitHub releases API for update notifications when Settings loads. Set `VERSION_CHECK=false` to disable that check
+- The main web interface uses locally installed system fonts and serves its scripts and styles locally; it makes no external font requests
+- The optional API documentation at `/docs` loads Swagger UI assets from `cdn.jsdelivr.net` and its favicon from `fastapi.tiangolo.com`
 
 ### API
 
-The full API is documented interactively at `/docs` (Swagger UI) when the application is running. All endpoints are under `/api/` and require authentication via the `X-API-Key` header or `api_key` query parameter.
+The full API is documented interactively at `/docs` (Swagger UI) when the application is running. Endpoints are under `/api/`; external clients should supply the `X-API-Key` header or `api_key` query parameter. The same-origin bypass and access-control limitations described above also apply to these endpoints.
 
 **Example: Create a capture job**
 
@@ -628,50 +538,93 @@ curl http://localhost:8080/api/jobs/ \
   -H "X-API-Key: YOUR_KEY"
 ```
 
-**Join API:** `POST /api/videos/join/validate` accepts
-`{"video_ids":[12,8,12],"output_fps":30}` and returns per-entry compatibility diagnostics,
-actual source FPS/frame counts, adjusted durations/speed ratios, and
-revision tokens. If compatible, `POST /api/videos/join` accepts
-`{"name":"Combined","video_ids":[12,8,12],"output_fps":30,"revisions":["TOKEN_1","TOKEN_2","TOKEN_3"]}`.
-`output_fps` must be an actual selected source rate. Omitting it keeps the
-original strict matching-FPS behavior with no speed changes.
-Adding `"output_resolution":"1920x1080"` enables conversion planning. The size
-must match an actual selected source's even-sized dimensions. Validation returns
-`mode` (`copy`, `selective`, or `all`), available resolutions, actual per-source
-dimensions/codecs, and each entry's `action` (`copy`, `retime`, or `reencode`).
-An incompatible report may instead contain explicit unsupported-input errors.
-Re-encoding creation requires the matching `mode` and `plan_token` from the
-confirmed report, alongside the same resolution, FPS, ordered IDs and revisions.
-The token binds the encoding settings and source order; stale or missing consent
-returns `409`. Omitting the resolution retains the original copy-only contract.
-Copy each token from the matching ordered validation entry. Creation revalidates
-the files and returns a processing video; poll `GET /api/videos/{id}` and use its
-normal download/cancel endpoints. Ordered inputs, revision checks, conversion
-plans, and source protection are temporary in-memory state, discarded when joining
-ends. Joining adds no tables, columns, indexes, or migrations; only the ordinary
-video record is stored, using the existing `quality` field for `preserved`,
-`partly_converted`, or `high` (all clips converted). There is no source-history
-field in the video response. Interrupted joins are marked failed and cleaned up
-at startup, not resumed.
-Busy/stale/in-use requests return
-`409`, incompatible inputs `422`, insufficient output space `507`, and concurrent
-compatibility inspections `429`. The picker uses the videos list's `search`,
-`limit`, and `offset` parameters.
+#### Join API
 
-**Trim API:** `POST /api/videos/{id}/trim/validate` accepts
-`{"trim_start_seconds":2,"trim_end_seconds":1}` (both default to zero).
-Values must be nonnegative integer **amounts removed**, not absolute timestamps.
-The response includes the real frame count/FPS, selected duration, maximum total
-removable whole seconds, proposed copy/encoding mode, and a source `revision`.
-To start, `POST /api/videos/{id}/trim` accepts the same amounts plus
-`{"name":"Trimmed video","revision":"TOKEN_FROM_VALIDATION"}`.
-Creation re-inspects the source and returns a new processing video with
-`build_source: "trimmed"`. Poll its normal detail endpoint and use the existing
-download, thumbnail, GIF, and cancellation endpoints. The final `quality` is
-`preserved`, `partly_converted`, or `high`, reflecting the actual processing.
-The plan is transient; no source-history fields or database schema are added.
-Busy/stale/in-use requests return `409`, invalid/unsupported selections `422`,
-insufficient storage `507`, and a concurrent inspection `429`.
+| Step | Endpoint |
+|------|----------|
+| Validate clips and output settings | `POST /api/videos/join/validate` |
+| Create the reviewed join | `POST /api/videos/join` |
+
+**Validation request**
+
+```json
+{
+  "video_ids": [12, 8],
+  "output_fps": 30
+}
+```
+
+Validation returns compatibility results, per-clip changes, durations, and a revision token for each ordered entry.
+
+**Creation request**
+
+```json
+{
+  "name": "Combined",
+  "video_ids": [12, 8],
+  "output_fps": 30,
+  "revisions": ["REVISION_12", "REVISION_8"]
+}
+```
+
+Use the same ordered clips and settings as validation. Repeated clip IDs are supported.
+
+| Option | Requirement |
+|--------|-------------|
+| `output_fps` | Must match a selected clip's actual FPS. Omit it to require matching source rates with no speed changes. |
+| `output_resolution` | Optional, such as `"1920x1080"`. Must match a selected clip's even-sized dimensions. Omit it for copy-only joining. |
+| `mode`, `plan_token` | When conversion is needed, include both values from the approved validation report, with the same clips, order, revisions, FPS, and resolution. |
+| `revisions` | Copy each token from its matching ordered validation entry. Changed files require fresh validation. |
+
+Conversion validation reports a `mode` of `copy`, `selective`, or `all`, available resolutions, and each clip's `action`: `copy`, `retime`, or `reencode`. Joined videos report `quality` as `preserved`, `partly_converted`, or `high`.
+
+For clip selection, `GET /api/videos/` supports `search`, `limit`, and `offset`.
+
+#### Trim API
+
+| Step | Endpoint |
+|------|----------|
+| Validate the selection | `POST /api/videos/{id}/trim/validate` |
+| Create the trimmed video | `POST /api/videos/{id}/trim` |
+
+**Validation request**
+
+```json
+{
+  "trim_start_seconds": 2,
+  "trim_end_seconds": 1
+}
+```
+
+Both values are nonnegative whole-second **amounts removed**, not timestamps, and default to zero. Creation must remove at least one second and leave at least one second.
+
+Validation returns the source `revision`, real frame count/FPS, selected duration, maximum removable seconds, and proposed processing mode.
+
+**Creation request**
+
+```json
+{
+  "name": "Trimmed video",
+  "trim_start_seconds": 2,
+  "trim_end_seconds": 1,
+  "revision": "REVISION_FROM_VALIDATION"
+}
+```
+
+The new video has `build_source: "trimmed"` and inherits its source's `quality` value, including when it is trimmed again.
+
+#### Progress and errors
+
+Join and Trim return a new processing video. Poll `GET /api/videos/{id}` for progress; the usual download, thumbnail, GIF, and cancellation endpoints apply. Originals remain unchanged, and videos in use cannot be renamed or deleted.
+
+| Status | Meaning |
+|--------|---------|
+| `409` | Busy operation, changed source, video in use, or missing/stale conversion approval |
+| `422` | Invalid selection or unsupported input |
+| `429` | Another compatibility inspection is running |
+| `507` | Insufficient output storage |
+
+Interrupted operations are marked failed and cleaned up at startup, not resumed. Processing plans and source checks are temporary; no source-history fields are added to the video response.
 
 ---
 
@@ -691,11 +644,11 @@ Capture frequency and image resolution are the primary drivers of storage usage.
 
 ### Backup
 
-Back up the `/app/data` directory (contains the database) and the `/captures` volume. The `/timelapses` volume can be recreated from captures if needed. Export archives are a convenient way to create portable backups of individual jobs.
+Back up `/app/data` (contains the database), `/captures`, and `/timelapses`. Joined, trimmed, or imported videos may no longer have all their original sources available and should not be treated as replaceable. Export archives are a convenient way to create portable backups of individual jobs.
 
 ### Job Deletion
 
-Deleting a job removes all its captures, videos, thumbnails, and database records. This is irreversible. Export the job first if you may want the data later.
+Deleting a job permanently removes its captures and job record. Its timelapse videos remain in the library without an associated job and can be deleted separately. Export the job first if you may want its captures or configuration later.
 
 ### Network and Camera Reliability
 
@@ -734,8 +687,8 @@ See the [ha-chronosnap README](https://github.com/kernelkaribou/ha-chronosnap#re
 
 | Component | Technology |
 |-----------|------------|
-| Backend | Python 3.11, FastAPI, Uvicorn |
-| Frontend | Vanilla JavaScript, Alpine.js (minimal), HTML/CSS |
+| Backend | Python 3.13, FastAPI, Uvicorn |
+| Frontend | Vanilla JavaScript, HTML/CSS |
 | Database | SQLite with WAL journaling |
 | Video Processing | ffmpeg |
 | Container | Docker (Python slim base image) |
@@ -752,3 +705,5 @@ Maintained by [kernelkaribou](https://github.com/kernelkaribou)
 ## Disclaimer
 
 This was a shell script I had personally made before but wanted something easier to configure and schedule on a larger scale. This application was built almost exclusively using vibe coding. If you are reading this you should know because some people get upset. This was an idea I carried around for a while and AI made it actually happen. I can't imagine that I will be making much changes to it as its more of a utility than an application but intend to keep it functioning as long as I can. Do whatever you want with it, I don't care.
+
+Screenshots use public sample images from [Lorem Picsum](https://picsum.photos).
